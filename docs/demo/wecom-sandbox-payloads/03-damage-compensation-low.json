@@ -1,0 +1,10 @@
+{
+  "source": "wecom_sandbox",
+  "merchantId": "demo_tenant",
+  "channel": "douyin",
+  "externalConversationId": "room_003",
+  "externalMessageId": "msg_003",
+  "senderName": "张女士",
+  "text": "鞋盒压坏了，能补偿点吗？",
+  "receivedAt": "2026-06-04T10:10:00.000Z"
+}

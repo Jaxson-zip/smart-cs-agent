@@ -1,0 +1,10 @@
+{
+  "source": "wecom_sandbox",
+  "merchantId": "demo_tenant",
+  "channel": "taobao",
+  "externalConversationId": "room_002",
+  "externalMessageId": "msg_002",
+  "senderName": "王先生",
+  "text": "帮我查一下我的快递到哪了？",
+  "receivedAt": "2026-06-04T10:05:00.000Z"
+}

@@ -1,0 +1,10 @@
+{
+  "source": "wecom_sandbox",
+  "merchantId": "demo_tenant",
+  "channel": "taobao",
+  "externalConversationId": "room_004",
+  "externalMessageId": "msg_004",
+  "senderName": "李先生",
+  "text": "30元太少了吧，鞋盒都这样了我还怎么送人？",
+  "receivedAt": "2026-06-04T10:15:00.000Z"
+}

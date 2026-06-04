@@ -1,0 +1,10 @@
+{
+  "source": "wecom_sandbox",
+  "merchantId": "demo_tenant",
+  "channel": "taobao",
+  "externalConversationId": "room_005",
+  "externalMessageId": "msg_005",
+  "senderName": "赵女士",
+  "text": "我要投诉你们，给我退款！不退款就差评！",
+  "receivedAt": "2026-06-04T10:20:00.000Z"
+}
