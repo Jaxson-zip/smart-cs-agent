@@ -19,193 +19,126 @@ import {
   UserRoundCheck,
   Wand2,
 } from "lucide-react";
+import type {
+  AfterSalesCase,
+  AfterSalesCategory,
+  RiskLevel,
+  AutomationMode,
+  AfterSalesAction,
+} from "@smart-cs-agent/shared";
 
 gsap.registerPlugin(useGSAP);
 
 type ChannelId = "all" | "taobao" | "douyin" | "shopify" | "wechat";
-type WorkState = "needs_confirm" | "customer_declined" | "needs_human" | "manual";
-type RiskLevel = "low" | "medium" | "high";
-type ActionId =
-  | "modifyAddress"
-  | "issueCoupon"
-  | "upgradeCoupon"
-  | "urgeLogistics"
-  | "refund"
-  | "handoff";
 
-type WorkItem = {
-  id: string;
-  channelId: Exclude<ChannelId, "all">;
-  channel: string;
-  customer: string;
-  orderId: string;
-  subject: string;
-  state: WorkState;
-  risk: RiskLevel;
+type UiCase = AfterSalesCase & {
   waitTime: string;
   product: string;
   amount: string;
   orderStatus: string;
-  incoming: string;
   systemResult: string;
-  reply: string;
-  rewrite: string;
-  operatorHint: string;
-  actions: ActionId[];
-  primaryAction: ActionId;
   facts: string[];
+  operatorHint: string;
 };
 
 const channelTabs: Array<{ id: ChannelId; label: string; count: number }> = [
-  { id: "all", label: "全部", count: 9 },
-  { id: "taobao", label: "淘宝", count: 4 },
-  { id: "douyin", label: "抖音", count: 2 },
+  { id: "all", label: "全部", count: 4 },
+  { id: "taobao", label: "淘宝", count: 2 },
+  { id: "douyin", label: "抖音", count: 1 },
   { id: "shopify", label: "Shopify", count: 1 },
-  { id: "wechat", label: "微信", count: 2 },
 ];
 
-const workItems: WorkItem[] = [
+const mockCases: UiCase[] = [
   {
-    id: "W-1001",
-    channelId: "taobao",
-    channel: "淘宝",
-    customer: "林女士",
+    caseId: "C-1001",
+    merchantId: "demo",
+    channel: "taobao",
+    customerName: "林女士",
     orderId: "TB73921",
-    subject: "包装破损补偿",
-    state: "needs_confirm",
-    risk: "medium",
+    category: "damage_compensation",
+    riskLevel: "medium",
+    automationMode: "human_confirm",
+    customerMessage: "鞋盒压坏了，鞋子没问题，但这是送人的，能不能补偿一下？",
+    customerReply: "非常抱歉影响您的送礼体验。我们可以为您补偿 30 元无门槛券，稍后会发放到您的淘宝账户。",
+    actions: [{ type: "issue_coupon", amount: 30 }],
     waitTime: "02:18",
     product: "Nike Air Force 1 联名款",
     amount: "¥899",
     orderStatus: "已签收",
-    incoming: "鞋盒压坏了，鞋子没问题，但这是送人的，能不能补偿一下？",
     systemResult: "系统已核对订单：商品未损坏，订单未补偿过，可发 30 元券。",
-    reply:
-      "非常抱歉影响您的送礼体验。我们可以为您补偿 30 元无门槛券，稍后会发放到您的淘宝账户。",
-    rewrite:
-      "真的很抱歉，送礼场景里包装受损确实会影响体验。我们可以先为您补偿 30 元无门槛券，确认后直接发到淘宝账户。",
-    operatorHint: "中风险补偿，需要客服确认后发送。客户拒绝时可升级一次。",
-    actions: ["issueCoupon", "upgradeCoupon", "handoff"],
-    primaryAction: "issueCoupon",
+    operatorHint: "中风险补偿，需要确认后发送。",
     facts: ["近 30 天无补偿记录", "商品本体未损坏", "补偿金额低于店铺上限"],
   },
   {
-    id: "W-1002",
-    channelId: "taobao",
-    channel: "淘宝",
-    customer: "林女士",
+    caseId: "C-1002",
+    merchantId: "demo",
+    channel: "taobao",
+    customerName: "林女士",
     orderId: "TB73921",
-    subject: "拒绝首次补偿",
-    state: "customer_declined",
-    risk: "medium",
+    category: "compensation_rejected",
+    riskLevel: "medium",
+    automationMode: "human_confirm",
+    customerMessage: "30 元太少了吧，鞋盒都这样了我还怎么送人？",
+    customerReply: "我理解您觉得 30 元补偿不够。我们可以为您升级到 50 元无门槛券，确认后会直接发放到您的淘宝账户。",
+    actions: [{ type: "issue_coupon", amount: 50 }],
     waitTime: "03:04",
     product: "Nike Air Force 1 联名款",
     amount: "¥899",
     orderStatus: "已签收",
-    incoming: "30 元太少了吧，鞋盒都这样了我还怎么送人？",
     systemResult: "客户拒绝首次补偿。系统建议升级为 50 元券；如仍拒绝，转主管。",
-    reply:
-      "我理解您觉得 30 元补偿不够。我们可以为您升级到 50 元无门槛券，确认后会直接发放到您的淘宝账户。",
-    rewrite:
-      "您说得有道理，送人的商品包装受损确实比较影响体验。我帮您升级到 50 元无门槛券，确认后直接发放。",
-    operatorHint: "这是第二轮协商。不要继续自动加价，仍拒绝就转主管。",
-    actions: ["upgradeCoupon", "handoff"],
-    primaryAction: "upgradeCoupon",
+    operatorHint: "这是第二轮协商。仍拒绝就转主管。",
     facts: ["客户拒绝 30 元券", "允许二轮补偿", "超过二轮需主管确认"],
   },
   {
-    id: "W-1003",
-    channelId: "douyin",
-    channel: "抖音",
-    customer: "陈先生",
+    caseId: "C-1003",
+    merchantId: "demo",
+    channel: "douyin",
+    customerName: "陈先生",
     orderId: "DY11804",
-    subject: "修改收货地址",
-    state: "needs_confirm",
-    risk: "low",
-    waitTime: "00:58",
+    category: "address_change",
+    riskLevel: "low",
+    automationMode: "auto_execute", // Auto-resolved cases shouldn't be in main queue normally, but we might keep it in history.
+    customerMessage: "还没发货的话帮我改到公司，公司前台可以代收。",
+    customerReply: "可以改的。麻烦您补充完整公司地址、收件人和手机号，我确认后为您同步到仓库。",
+    actions: [{ type: "change_address", status: "success" }],
+    waitTime: "00:00",
     product: "通勤双肩包",
     amount: "¥329",
     orderStatus: "待发货",
-    incoming: "还没发货的话帮我改到公司，公司前台可以代收。",
-    systemResult: "订单待发货，仓库未锁单。缺少完整新地址，需要追问。",
-    reply: "可以的，请您把新的完整公司地址、收件人和手机号发我，我马上帮您修改。",
-    rewrite: "可以改的。麻烦您补充完整公司地址、收件人和手机号，我确认后为您同步到仓库。",
-    operatorHint: "信息不完整，不能直接改地址。先追问客户。",
-    actions: ["modifyAddress", "handoff"],
-    primaryAction: "modifyAddress",
-    facts: ["订单待发货", "仓库未锁单", "缺少完整地址"],
+    systemResult: "系统已自动收集并修改地址。",
+    operatorHint: "低风险，系统自动处理。",
+    facts: ["订单待发货", "仓库未锁单"],
   },
   {
-    id: "W-1004",
-    channelId: "shopify",
-    channel: "Shopify",
-    customer: "Mia",
+    caseId: "C-1004",
+    merchantId: "demo",
+    channel: "shopify",
+    customerName: "Mia",
     orderId: "SH44018",
-    subject: "定制商品退款",
-    state: "needs_human",
-    risk: "high",
+    category: "refund_return",
+    riskLevel: "high",
+    automationMode: "human_takeover",
+    customerMessage: "The dress is custom made but it does not fit. I need a cash refund.",
+    customerReply: "I checked your order. Because this is a made-to-measure item already in production, this request needs a manual review. A specialist will follow up in this channel.",
+    actions: [{ type: "create_supervisor_review", reason: "高风险现金退款" }],
     waitTime: "07:05",
     product: "Made-to-measure dress",
     amount: "$420",
     orderStatus: "生产中",
-    incoming: "The dress is custom made but it does not fit. I need a cash refund.",
     systemResult: "定制商品已进入生产，现金退款需要主管审核。",
-    reply:
-      "I checked your order. Because this is a made-to-measure item already in production, this request needs a manual review. A specialist will follow up in this channel.",
-    rewrite:
-      "I understand your concern. Since this made-to-measure item is already in production, I will have a specialist review the best available option and follow up here.",
     operatorHint: "高风险退款，不允许自动发送退款承诺。",
-    actions: ["refund", "handoff"],
-    primaryAction: "handoff",
     facts: ["定制商品", "已进入生产", "现金退款需主管确认"],
-  },
-  {
-    id: "W-1005",
-    channelId: "wechat",
-    channel: "微信",
-    customer: "王女士",
-    orderId: "WX50217",
-    subject: "物流停滞",
-    state: "needs_confirm",
-    risk: "low",
-    waitTime: "01:14",
-    product: "儿童保温杯",
-    amount: "¥219",
-    orderStatus: "运输中",
-    incoming: "物流三天没动了，是不是丢件了？",
-    systemResult: "物流停滞 68 小时，未超过赔付阈值。建议催派并告知客户。",
-    reply:
-      "我已为您查询物流，目前包裹在中转站等待更新。我会同步提交催派，后续物流变化会在微信里通知您。",
-    rewrite:
-      "我刚帮您看了物流，包裹还在中转站等待更新。我现在先提交催派，后续有变化会第一时间在微信通知您。",
-    operatorHint: "低风险，可确认发送并执行催派。",
-    actions: ["urgeLogistics", "handoff"],
-    primaryAction: "urgeLogistics",
-    facts: ["物流停滞 68 小时", "未超过赔付时限", "客户无历史投诉"],
   },
 ];
 
-const actionMeta: Record<ActionId, { label: string; icon: typeof Home }> = {
-  modifyAddress: { label: "改地址", icon: Home },
-  issueCoupon: { label: "发券", icon: CreditCard },
-  upgradeCoupon: { label: "升级补偿", icon: CreditCard },
-  urgeLogistics: { label: "催物流", icon: Truck },
-  refund: { label: "退款申请", icon: PackageCheck },
-  handoff: { label: "转人工", icon: UserRoundCheck },
-};
-
-const stateText: Record<WorkState, string> = {
-  needs_confirm: "待确认",
-  customer_declined: "客户拒绝",
-  needs_human: "需主管",
-  manual: "人工中",
-};
-
-const stateClass: Record<WorkState, string> = {
-  needs_confirm: "bg-sky-50 text-sky-700",
-  customer_declined: "bg-violet-50 text-violet-700",
-  needs_human: "bg-rose-50 text-rose-700",
-  manual: "bg-amber-50 text-amber-700",
+const categoryText: Record<AfterSalesCategory, string> = {
+  address_change: "改地址",
+  logistics: "查物流",
+  damage_compensation: "破损补偿",
+  refund_return: "退款退货",
+  compensation_rejected: "拒绝补偿",
+  complaint_escalation: "客诉升级",
+  unknown: "未知识别",
 };
 
 const riskText: Record<RiskLevel, string> = {
@@ -220,31 +153,39 @@ const riskClass: Record<RiskLevel, string> = {
   high: "bg-rose-50 text-rose-700",
 };
 
-export default function SupportInboxDemo() {
+export default function OperatorWorkbench() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [selectedChannel, setSelectedChannel] = useState<ChannelId>("all");
-  const [selectedId, setSelectedId] = useState(workItems[0].id);
+  
+  // Filter queue: only waiting confirmation, customer rejected, human takeover, send failed
+  // Hide auto_execute
+  const queueItems = useMemo(() => {
+    return mockCases.filter((c) => c.automationMode !== "auto_execute");
+  }, []);
+
+  const [selectedId, setSelectedId] = useState(queueItems[0]?.caseId);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>(
-    Object.fromEntries(workItems.map((item) => [item.id, item.reply])),
+    Object.fromEntries(mockCases.map((item) => [item.caseId, item.customerReply ?? ""])),
   );
   const [sentIds, setSentIds] = useState<string[]>([]);
+  const [takeoverIds, setTakeoverIds] = useState<string[]>([]);
 
   const visibleItems = useMemo(() => {
-    if (selectedChannel === "all") return workItems;
-    return workItems.filter((item) => item.channelId === selectedChannel);
-  }, [selectedChannel]);
+    if (selectedChannel === "all") return queueItems;
+    return queueItems.filter((item) => item.channel === selectedChannel);
+  }, [selectedChannel, queueItems]);
 
   const selected = useMemo(() => {
     return (
-      visibleItems.find((item) => item.id === selectedId) ??
+      visibleItems.find((item) => item.caseId === selectedId) ??
       visibleItems[0] ??
-      workItems[0]
+      queueItems[0]
     );
-  }, [selectedId, visibleItems]);
+  }, [selectedId, visibleItems, queueItems]);
 
-  const currentDraft = replyDrafts[selected.id] ?? selected.reply;
-  const sent = sentIds.includes(selected.id);
-  const needsApproval = selected.state === "needs_human";
+  const currentDraft = replyDrafts[selected?.caseId] ?? selected?.customerReply ?? "";
+  const isSent = sentIds.includes(selected?.caseId);
+  const isTakeover = takeoverIds.includes(selected?.caseId) || selected?.automationMode === "human_takeover";
 
   useGSAP(
     () => {
@@ -261,21 +202,43 @@ export default function SupportInboxDemo() {
 
   function selectChannel(id: ChannelId) {
     setSelectedChannel(id);
-    const next = id === "all" ? workItems[0] : workItems.find((item) => item.channelId === id);
-    if (next) setSelectedId(next.id);
+    const nextList = id === "all" ? queueItems : queueItems.filter((c) => c.channel === id);
+    if (nextList.length > 0) setSelectedId(nextList[0].caseId);
   }
 
   function sendReply() {
-    if (!sentIds.includes(selected.id)) {
-      setSentIds((items) => [...items, selected.id]);
+    if (selected && !sentIds.includes(selected.caseId)) {
+      setSentIds((items) => [...items, selected.caseId]);
     }
   }
 
-  function rewriteReply() {
-    setReplyDrafts((drafts) => ({
-      ...drafts,
-      [selected.id]: selected.rewrite,
-    }));
+  function handleTakeover() {
+    if (selected && !takeoverIds.includes(selected.caseId)) {
+      setTakeoverIds((items) => [...items, selected.caseId]);
+    }
+  }
+
+  function getStatusLabel(item: UiCase) {
+    if (sentIds.includes(item.caseId)) return "系统已发送";
+    if (takeoverIds.includes(item.caseId) || item.automationMode === "human_takeover") {
+      return item.riskLevel === "high" ? "需主管审核" : "需人工接管";
+    }
+    if (item.automationMode === "auto_execute") return "自动处理完成";
+    if (item.category === "compensation_rejected") return "客户拒绝";
+    return "待确认回复";
+  }
+
+  function getStatusClass(item: UiCase) {
+    if (sentIds.includes(item.caseId)) return "bg-emerald-50 text-emerald-700";
+    if (takeoverIds.includes(item.caseId) || item.automationMode === "human_takeover") {
+      return "bg-rose-50 text-rose-700";
+    }
+    if (item.category === "compensation_rejected") return "bg-violet-50 text-violet-700";
+    return "bg-sky-50 text-sky-700";
+  }
+
+  if (!selected) {
+    return <div className="p-8">No active cases in queue.</div>;
   }
 
   return (
@@ -296,9 +259,6 @@ export default function SupportInboxDemo() {
                 </p>
                 <h1 className="mt-1 text-xl font-semibold">待处理会话</h1>
               </div>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                自动中
-              </span>
             </div>
             <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
               <Search size={15} />
@@ -308,10 +268,10 @@ export default function SupportInboxDemo() {
 
           <section className="shrink-0 border-b border-slate-200 px-3 py-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-              只显示需要客服看的
+              需要客服看的工单
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {channelTabs.map((tab) => (
+            <div className="grid grid-cols-2 gap-2">
+              {channelTabs.slice(0, 2).map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => selectChannel(tab.id)}
@@ -322,39 +282,32 @@ export default function SupportInboxDemo() {
                   }`}
                 >
                   <div className="text-sm font-semibold">{tab.label}</div>
-                  <div
-                    className={`mt-1 text-xs ${
-                      selectedChannel === tab.id ? "text-slate-300" : "text-slate-500"
-                    }`}
-                  >
-                    {tab.count}
-                  </div>
+                </button>
+              ))}
+              {channelTabs.slice(2).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => selectChannel(tab.id)}
+                  className={`rounded-md border px-3 py-2 text-left transition ${
+                    selectedChannel === tab.id
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="text-sm font-semibold">{tab.label}</div>
                 </button>
               ))}
             </div>
           </section>
 
-          <div className="grid shrink-0 grid-cols-3 border-b border-slate-200">
-            {[
-              ["待确认", 5],
-              ["客户拒绝", 2],
-              ["需主管", 2],
-            ].map(([label, value]) => (
-              <div key={label} className="border-r border-slate-100 px-4 py-3 last:border-r-0">
-                <div className="text-lg font-semibold">{value}</div>
-                <div className="mt-1 text-xs text-slate-500">{label}</div>
-              </div>
-            ))}
-          </div>
-
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {visibleItems.map((item) => {
-              const active = item.id === selected.id;
+              const active = item.caseId === selected.caseId;
 
               return (
                 <button
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
+                  key={item.caseId}
+                  onClick={() => setSelectedId(item.caseId)}
                   className={`mb-2 w-full rounded-md border px-4 py-3 text-left transition ${
                     active
                       ? "border-slate-950 bg-slate-950 text-white"
@@ -363,28 +316,28 @@ export default function SupportInboxDemo() {
                 >
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{item.customer}</div>
+                      <div className="truncate text-sm font-semibold">{item.customerName}</div>
                       <div className={active ? "mt-1 text-xs text-slate-300" : "mt-1 text-xs text-slate-500"}>
                         {item.channel} / {item.orderId}
                       </div>
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
-                        active ? "bg-white/10 text-white" : stateClass[item.state]
+                        active ? "bg-white/10 text-white" : getStatusClass(item)
                       }`}
                     >
-                      {stateText[item.state]}
+                      {getStatusLabel(item)}
                     </span>
                   </div>
                   <p className={active ? "text-sm text-slate-200" : "text-sm text-slate-700"}>
-                    {item.subject}
+                    {categoryText[item.category]}
                   </p>
                   <div className="mt-3 flex items-center justify-between text-xs">
                     <span className={active ? "text-slate-300" : "text-slate-500"}>
                       等待 {item.waitTime}
                     </span>
                     <span className={active ? "text-amber-200" : "text-amber-600"}>
-                      {riskText[item.risk]}
+                      {riskText[item.riskLevel]}
                     </span>
                   </div>
                 </button>
@@ -397,20 +350,23 @@ export default function SupportInboxDemo() {
           <header className="flex min-h-[64px] shrink-0 flex-col justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center lg:px-5">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">{selected.customer}</h2>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${stateClass[selected.state]}`}>
-                  {stateText[selected.state]}
+                <h2 className="text-lg font-semibold">{selected.customerName}</h2>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusClass(selected)}`}>
+                  {getStatusLabel(selected)}
                 </span>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${riskClass[selected.risk]}`}>
-                  {riskText[selected.risk]}
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${riskClass[selected.riskLevel]}`}>
+                  {riskText[selected.riskLevel]}
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-500">
-                {selected.channel} / {selected.orderId} / {selected.subject}
+                {selected.channel} / {selected.orderId} / {categoryText[selected.category]}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button 
+                onClick={handleTakeover}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
                 <Headphones size={15} />
                 接管
               </button>
@@ -426,8 +382,8 @@ export default function SupportInboxDemo() {
               <div className="mx-auto flex max-w-4xl flex-col gap-3">
                 <div className="flex justify-start">
                   <div className="max-w-[84%] rounded-lg rounded-tl-sm bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-                    <div className="mb-1 text-xs text-slate-500">{selected.customer}</div>
-                    <p className="text-[15px] leading-7 text-slate-900">{selected.incoming}</p>
+                    <div className="mb-1 text-xs text-slate-500">{selected.customerName}</div>
+                    <p className="text-[15px] leading-7 text-slate-900">{selected.customerMessage}</p>
                   </div>
                 </div>
 
@@ -441,7 +397,7 @@ export default function SupportInboxDemo() {
                   </div>
                 </div>
 
-                {sent ? (
+                {isSent && currentDraft ? (
                   <div className="flex justify-end">
                     <div className="max-w-[84%] rounded-lg rounded-tr-sm bg-slate-950 px-4 py-3 text-white shadow-sm">
                       <div className="mb-1 text-xs text-slate-300">已发送给客户</div>
@@ -457,34 +413,20 @@ export default function SupportInboxDemo() {
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-semibold">
                     <Sparkles size={16} className="text-violet-600" />
-                    {sent
+                    {isSent
                       ? "系统已发送"
-                      : needsApproval
+                      : isTakeover
                         ? "接管后回复"
                         : "待确认回复"}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={rewriteReply}
-                      className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      <Wand2 size={15} />
-                      改写
-                    </button>
-                    <button
-                      onClick={() => setSelectedId("W-1002")}
-                      className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
-                    >
-                      <AlertTriangle size={15} />
-                      客户不接受
-                    </button>
-                    <button
                       onClick={sendReply}
-                      disabled={sent || needsApproval}
+                      disabled={isSent || (isTakeover && selected.riskLevel === "high")}
                       className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
-                      {sent ? <Check size={15} /> : <Send size={15} />}
-                      {sent ? "已发送" : needsApproval ? "需主管确认" : "确认发送"}
+                      {isSent ? <Check size={15} /> : <Send size={15} />}
+                      {isSent ? "已发送" : (isTakeover && selected.riskLevel === "high") ? "需主管确认" : "确认发送"}
                     </button>
                   </div>
                 </div>
@@ -493,29 +435,33 @@ export default function SupportInboxDemo() {
                   onChange={(event) =>
                     setReplyDrafts((drafts) => ({
                       ...drafts,
-                      [selected.id]: event.target.value,
+                      [selected.caseId]: event.target.value,
                     }))
                   }
-                  disabled={sent || needsApproval}
+                  disabled={isSent}
                   className="h-24 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-[15px] leading-6 text-slate-850 outline-none focus:border-slate-400 disabled:bg-slate-100 disabled:text-slate-500 xl:h-28"
+                  placeholder={isTakeover ? "请输入您的回复内容..." : "系统未提供建议回复"}
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {selected.actions.map((actionId) => {
-                    const action = actionMeta[actionId];
-                    const Icon = action.icon;
-                    const primary = actionId === selected.primaryAction;
-
+                  {selected.actions?.map((action, idx) => {
+                    let label = "";
+                    let Icon = Home;
+                    switch (action.type) {
+                      case "change_address": label = "改地址"; Icon = Home; break;
+                      case "issue_coupon": label = "发券"; Icon = CreditCard; break;
+                      case "query_logistics": label = "催物流"; Icon = Truck; break;
+                      case "create_handoff": label = "转人工"; Icon = UserRoundCheck; break;
+                      case "create_supervisor_review": label = "主管审核"; Icon = UserRoundCheck; break;
+                      case "send_channel_reply": label = "发消息"; Icon = Send; break;
+                      default: label = action.type; break;
+                    }
                     return (
                       <button
-                        key={actionId}
-                        className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
-                          primary
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
+                        key={idx}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
                         <Icon size={15} />
-                        {action.label}
+                        {label}
                       </button>
                     );
                   })}
@@ -584,3 +530,4 @@ export default function SupportInboxDemo() {
     </main>
   );
 }
+
