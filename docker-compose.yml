@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: smart-cs-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartcs
+      POSTGRES_PASSWORD: smartcs
+      POSTGRES_DB: smartcs
+    ports:
+      - "5433:5432"
+    volumes:
+      - smart-cs-agent-postgres:/var/lib/postgresql/data
+
+volumes:
+  smart-cs-agent-postgres:
