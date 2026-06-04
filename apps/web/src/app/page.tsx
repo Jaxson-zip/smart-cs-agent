@@ -65,16 +65,16 @@ const mockCases: UiCase[] = [
     product: "Nike Air Force 1 联名款",
     amount: "¥899",
     orderStatus: "已签收",
-    systemResult: "系统已核对订单：商品未损坏，订单未补偿过，可发 30 元券。",
-    operatorHint: "中风险补偿，需要确认后发送。",
+    systemResult: "系统已核对订单：商品未损坏，订单未补偿过，建议补偿 30 元券。",
+    operatorHint: "中风险补偿，建议确认后发送。",
     facts: ["近 30 天无补偿记录", "商品本体未损坏", "补偿金额低于店铺上限"],
   },
   {
     caseId: "C-1002",
     merchantId: "demo",
     channel: "taobao",
-    customerName: "林女士",
-    orderId: "TB73921",
+    customerName: "张先生",
+    orderId: "TB88291",
     category: "compensation_rejected",
     riskLevel: "medium",
     automationMode: "human_confirm",
@@ -82,32 +82,12 @@ const mockCases: UiCase[] = [
     customerReply: "我理解您觉得 30 元补偿不够。我们可以为您升级到 50 元无门槛券，确认后会直接发放到您的淘宝账户。",
     actions: [{ type: "issue_coupon", amount: 50 }],
     waitTime: "03:04",
-    product: "Nike Air Force 1 联名款",
-    amount: "¥899",
+    product: "Apple AirPods Pro",
+    amount: "¥1899",
     orderStatus: "已签收",
-    systemResult: "客户拒绝首次补偿。系统建议升级为 50 元券；如仍拒绝，转主管。",
-    operatorHint: "这是第二轮协商。仍拒绝就转主管。",
-    facts: ["客户拒绝 30 元券", "允许二轮补偿", "超过二轮需主管确认"],
-  },
-  {
-    caseId: "C-1003",
-    merchantId: "demo",
-    channel: "douyin",
-    customerName: "陈先生",
-    orderId: "DY11804",
-    category: "address_change",
-    riskLevel: "low",
-    automationMode: "auto_execute", // Auto-resolved cases shouldn't be in main queue normally, but we might keep it in history.
-    customerMessage: "还没发货的话帮我改到公司，公司前台可以代收。",
-    customerReply: "可以改的。麻烦您补充完整公司地址、收件人和手机号，我确认后为您同步到仓库。",
-    actions: [{ type: "change_address", status: "success" }],
-    waitTime: "00:00",
-    product: "通勤双肩包",
-    amount: "¥329",
-    orderStatus: "待发货",
-    systemResult: "系统已自动收集并修改地址。",
-    operatorHint: "低风险，系统自动处理。",
-    facts: ["订单待发货", "仓库未锁单"],
+    systemResult: "客户拒绝首次 30 元补偿。系统建议升级为 50 元券；如仍拒绝，建议转人工接管。",
+    operatorHint: "这是第二轮协商。仍拒绝就建议点击“接管”进行人工话术处理。",
+    facts: ["客户拒绝 30 元券", "允许二轮补偿", "该客户为金牌会员"],
   },
   {
     caseId: "C-1004",
@@ -119,26 +99,66 @@ const mockCases: UiCase[] = [
     riskLevel: "high",
     automationMode: "human_takeover",
     customerMessage: "The dress is custom made but it does not fit. I need a cash refund.",
-    customerReply: "I checked your order. Because this is a made-to-measure item already in production, this request needs a manual review. A specialist will follow up in this channel.",
-    actions: [{ type: "create_supervisor_review", reason: "高风险现金退款" }],
+    customerReply: "您好，由于这是定制商品且已进入生产环节，您的退款申请需要主管人工审核。我们会尽快为您处理。",
+    actions: [{ type: "create_supervisor_review", reason: "高风险定制品现金退款" }],
     waitTime: "07:05",
-    product: "Made-to-measure dress",
+    product: "定制礼服 (Made-to-measure)",
     amount: "$420",
     orderStatus: "生产中",
-    systemResult: "定制商品已进入生产，现金退款需要主管审核。",
-    operatorHint: "高风险退款，不允许自动发送退款承诺。",
-    facts: ["定制商品", "已进入生产", "现金退款需主管确认"],
+    systemResult: "定制商品已进入生产。根据政策不支持无理由退货。需人工介入解释。",
+    operatorHint: "高风险退款。请点击“接管”或“转主管”手动处理。",
+    facts: ["定制商品", "已进入生产", "现金退款"],
+  },
+  {
+    caseId: "C-1005",
+    merchantId: "demo",
+    channel: "douyin",
+    customerName: "王小二",
+    orderId: "DY99281",
+    category: "complaint_escalation",
+    riskLevel: "high",
+    automationMode: "human_takeover",
+    customerMessage: "你们这服务太差了，我要去消协投诉你们！马上给我退全款！",
+    customerReply: "十分抱歉给您带来如此糟糕的体验。我是售后高级专员，已接手处理您的问题。",
+    actions: [{ type: "create_handoff", reason: "客诉升级风险" }],
+    waitTime: "01:20",
+    product: "高级面部精华",
+    amount: "¥1299",
+    orderStatus: "已签收",
+    systemResult: "识别到“投诉”、“消协”等高风险词汇。建议立即人工接管。",
+    operatorHint: "高风险客诉。建议直接点击“接管”并安抚客户。",
+    facts: ["提及投诉消协", "情绪指数极低", "高客单价订单"],
+  },
+  {
+    caseId: "C-1006",
+    merchantId: "demo",
+    channel: "wechat",
+    customerName: "李思思",
+    orderId: "WC55123",
+    category: "unknown",
+    riskLevel: "high",
+    automationMode: "human_takeover",
+    customerMessage: "那个东西能不能快点？",
+    customerReply: "您好，请问您是指哪个订单的配送进度？您可以提供一下订单号吗？",
+    actions: [{ type: "create_handoff", reason: "无法识别意图" }],
+    waitTime: "10:45",
+    product: "未知",
+    amount: "未知",
+    orderStatus: "未知",
+    systemResult: "语义模糊，无法匹配具体订单或售后类别。需要人工询问。",
+    operatorHint: "意图不明。请接管会话进行询问。",
+    facts: ["无有效订单关联", "意图不明确"],
   },
 ];
 
 const categoryText: Record<AfterSalesCategory, string> = {
-  address_change: "改地址",
-  logistics: "查物流",
-  damage_compensation: "破损补偿",
-  refund_return: "退款退货",
-  compensation_rejected: "拒绝补偿",
+  address_change: "修改地址",
+  logistics: "物流查询",
+  damage_compensation: "破损赔偿",
+  refund_return: "退货退款",
+  compensation_rejected: "拒绝方案",
   complaint_escalation: "客诉升级",
-  unknown: "未知识别",
+  unknown: "未知分类",
 };
 
 const riskText: Record<RiskLevel, string> = {
@@ -148,9 +168,9 @@ const riskText: Record<RiskLevel, string> = {
 };
 
 const riskClass: Record<RiskLevel, string> = {
-  low: "bg-emerald-50 text-emerald-700",
-  medium: "bg-amber-50 text-amber-700",
-  high: "bg-rose-50 text-rose-700",
+  low: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  medium: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  high: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
 };
 
 export default function OperatorWorkbench() {
@@ -171,8 +191,11 @@ export default function OperatorWorkbench() {
   const [takeoverIds, setTakeoverIds] = useState<string[]>([]);
 
   const visibleItems = useMemo(() => {
-    if (selectedChannel === "all") return queueItems;
-    return queueItems.filter((item) => item.channel === selectedChannel);
+    let items = queueItems;
+    if (selectedChannel !== "all") {
+      items = items.filter((item) => item.channel === selectedChannel);
+    }
+    return items;
   }, [selectedChannel, queueItems]);
 
   const selected = useMemo(() => {
@@ -220,21 +243,22 @@ export default function OperatorWorkbench() {
 
   function getStatusLabel(item: UiCase) {
     if (sentIds.includes(item.caseId)) return "系统已发送";
-    if (takeoverIds.includes(item.caseId) || item.automationMode === "human_takeover") {
-      return item.riskLevel === "high" ? "需主管审核" : "需人工接管";
-    }
-    if (item.automationMode === "auto_execute") return "自动处理完成";
+    if (takeoverIds.includes(item.caseId)) return "接管后回复";
+    if (item.automationMode === "human_takeover") return "需人工接管";
+    if (item.actions?.some(a => a.type === "create_supervisor_review")) return "需主管审核";
     if (item.category === "compensation_rejected") return "客户拒绝";
-    return "待确认回复";
+    if (item.automationMode === "human_confirm") return "待确认回复";
+    return "处理中";
   }
 
   function getStatusClass(item: UiCase) {
     if (sentIds.includes(item.caseId)) return "bg-emerald-50 text-emerald-700";
-    if (takeoverIds.includes(item.caseId) || item.automationMode === "human_takeover") {
-      return "bg-rose-50 text-rose-700";
-    }
+    if (takeoverIds.includes(item.caseId)) return "bg-sky-50 text-sky-700";
+    if (item.automationMode === "human_takeover") return "bg-rose-50 text-rose-700";
+    if (item.actions?.some(a => a.type === "create_supervisor_review")) return "bg-amber-50 text-amber-700";
     if (item.category === "compensation_rejected") return "bg-violet-50 text-violet-700";
-    return "bg-sky-50 text-sky-700";
+    if (item.automationMode === "human_confirm") return "bg-sky-50 text-sky-700";
+    return "bg-slate-50 text-slate-700";
   }
 
   if (!selected) {
