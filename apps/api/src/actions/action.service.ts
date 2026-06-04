@@ -21,8 +21,6 @@ export class ActionService {
         return { ...action, status: "pending" } as AfterSalesAction;
       case "send_channel_reply":
         return { ...action, status: "success" } as AfterSalesAction;
-      default:
-        return { ...action, status: "failed" } as any;
     }
   }
 }

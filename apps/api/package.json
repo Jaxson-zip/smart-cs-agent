@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prestart": "npm run build --workspace @smart-cs-agent/shared",
+    "prebuild": "npm run build --workspace @smart-cs-agent/shared",
+    "pretypecheck": "npm run build --workspace @smart-cs-agent/shared",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "build": "nest build",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "tsx --test \"src/**/*.spec.ts\""
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",
@@ -31,6 +34,7 @@
     "@typescript-eslint/eslint-plugin": "^8.49.0",
     "@typescript-eslint/parser": "^8.49.0",
     "eslint": "^9",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }

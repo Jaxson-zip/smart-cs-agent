@@ -50,3 +50,4 @@ coverage
 .env.*.local
 .superpowers/
 *.log
+*.pid

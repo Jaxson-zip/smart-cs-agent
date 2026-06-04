@@ -3,7 +3,7 @@ import { AfterSalesCategory, RiskLevel, AutomationMode } from "@smart-cs-agent/s
 
 @Injectable()
 export class RiskService {
-  evaluate(category: AfterSalesCategory, text: string, amount?: number): { riskLevel: RiskLevel; automationMode: AutomationMode } {
+  evaluate(category: AfterSalesCategory, _text: string, amount?: number): { riskLevel: RiskLevel; automationMode: AutomationMode } {
     if (category === "address_change") return { riskLevel: "low", automationMode: "auto_execute" };
     if (category === "logistics") return { riskLevel: "low", automationMode: "auto_execute" };
     
