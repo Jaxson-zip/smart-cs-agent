@@ -9,8 +9,8 @@ type ChatRequestBody = {
   messages: ModelMessage[];
 };
 
-const shippedStatus = "宸插彂璐?";
-const refundedStatus = "宸查€€娆?";
+const shippedStatus = "已发货";
+const refundedStatus = "已退款";
 
 export async function POST(req: Request) {
   const { messages } = (await req.json()) as ChatRequestBody;
