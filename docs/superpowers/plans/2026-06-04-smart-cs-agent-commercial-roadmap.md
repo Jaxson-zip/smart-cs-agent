@@ -2,7 +2,9 @@
 
 ## Current Truth
 
-The product is currently in V1.1 work, not V2.0.
+The product has completed the V1.1 WeCom sandbox proof loop.
+
+The next target is V1.2: sandbox data, audit trail, configurable rules, and real-shaped adapters without real customer sendback.
 
 V2.0 should only be used after the product has real multi-tenant operations, permissions, rule management, audit, billing, and production-ready reliability. A simulated UI plus reserved APIs is not V2.0.
 
@@ -19,6 +21,7 @@ V2.0 should only be used after the product has real multi-tenant operations, per
 
 ### V1.1 - Complete Simulated Business Loop
 
+- Status: completed through WeCom sandbox validation.
 - Compensation refusal flow
 - Human handoff queue
 - Processing history
