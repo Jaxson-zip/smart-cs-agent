@@ -26,6 +26,7 @@ git switch -c feat/wecom-sandbox-channel
 
 ## Owner Packets
 
+- Dispatch sheet: [Team Dispatch Sheet](./DISPATCH.md)
 - Owner 1: [Shared Contracts And Data](./owner-1-shared-contracts.md)
 - Owner 2: [WeCom Sandbox Channel](./owner-2-wecom-channel.md)
 - Owner 3: [Agent Risk And Actions](./owner-3-agent-risk-actions.md)
