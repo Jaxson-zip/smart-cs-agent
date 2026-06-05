@@ -2,26 +2,30 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR2 - Tenant Context Baseline
+## Current Stage: PR3 - Operator API Key Guard
 
 Status: complete
 
-PR2 starts turning the deployable sandbox into a SaaS-shaped system by making tenant context explicit on operator-facing APIs.
+PR3 turns the PR2 tenant header boundary into a minimal protected operator boundary for sandbox and pre-production demos.
 
-### PR2 Scope
+### PR3 Scope
 
-- Require `x-tenant-id` on operator-facing APIs that read cases or rules.
-- Filter cases by merchant/tenant to prevent cross-tenant data exposure.
-- Prevent `GET /v1/rules/:tenantId` from reading a tenant different from the request context.
-- Keep WeCom sandbox webhook body-based merchant routing intact.
-- Use the webhook/request tenant when loading classification and risk rules.
-- Update frontend and smoke scripts to send explicit demo tenant headers.
+- Support `OPERATOR_API_KEYS` as JSON-configured operator credentials.
+- Accept `Authorization: Bearer <key>` or `x-api-key` for operator-facing APIs.
+- Derive tenant, operator, and role from the matched key instead of trusting browser-supplied identity.
+- Block mismatched `x-tenant-id` headers with 403.
+- Keep local insecure header fallback only for sandbox development.
+- Reject production operator access when no key is configured unless `ALLOW_INSECURE_OPERATOR_HEADERS=true` is explicitly set.
+- Update Web, smoke script, and docs to use the sandbox key.
+- Protect legacy `/v2/*` operator APIs with the same request context.
+- Protect `/v1/wecom/webhook/send` and verify body `merchantId` matches the request tenant.
+- Enforce `WECOM_SANDBOX_ENABLED` so production does not accidentally expose the sandbox event intake.
 
-### Out Of Scope For PR2
+### Out Of Scope For PR3
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full authentication, SSO, JWT, sessions, and billing.
+- Full authentication, SSO, JWT, sessions, RBAC UI, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -33,10 +37,13 @@ PR2 starts turning the deployable sandbox into a SaaS-shaped system by making te
 - [x] PR1 final verification and push.
 - [x] PR2 tenant request context and API filtering.
 - [x] PR2 tests, docs, verification, and push.
+- [x] PR3 operator API key guard.
+- [x] PR3 docs, verification, and push.
+- [ ] PR4 public API surface lockdown.
 
 ## Verification Gate
 
-Do not claim PR2 tenant context complete until these pass:
+Do not claim PR3 operator API key guard complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -57,3 +64,7 @@ Do not claim PR2 tenant context complete until these pass:
 | 2026-06-06 | `.env` fallback could silently affect CI/production | Disabled default `.env` loading when `CI=true` or `NODE_ENV=production` |
 | 2026-06-06 | `/v1/cases` returned all merchants and `/v1/rules/:tenantId` could read arbitrary tenants | PR2 adds explicit tenant request context and tenant filtering |
 | 2026-06-06 | Agent rules still defaulted to `demo_tenant` during webhook decisions | Passed tenant ID into classification and risk evaluation |
+| 2026-06-06 | `x-tenant-id` can be spoofed by any browser/client | PR3 adds sandbox operator API keys and blocks tenant mismatch |
+| 2026-06-06 | Public browser key is not real commercial authentication | Documented it as sandbox/pre-production only; real production still needs session/JWT/BFF |
+| 2026-06-06 | Legacy `/v2/*` and `/v1/wecom/webhook/send` were outside the new operator guard | PR3 now requires request context for those operator-facing APIs |
+| 2026-06-06 | `WECOM_SANDBOX_ENABLED` existed but did not gate the event intake | PR3 now blocks `/v1/wecom/events` when the sandbox endpoint is disabled or production has not explicitly enabled it |

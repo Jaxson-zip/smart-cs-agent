@@ -16,3 +16,10 @@
 - Updated frontend API client and smoke script to send explicit demo tenant/operator headers.
 - Passed tenant context through WeCom event handling into Agent classification/risk rules.
 - Final PR2 verification passed: API tests, typecheck, lint, db generate, build, smoke syntax, unreachable API smoke error path, and browser layout checks.
+- Started PR3 operator API key guard.
+- Added `OPERATOR_API_KEYS` parsing, Bearer/`x-api-key` support, tenant mismatch blocking, and production default rejection for insecure operator headers.
+- Updated Web and smoke script to send the sandbox operator key when configured.
+- Updated demo and production-readiness docs to prefer Bearer key access for operator-facing APIs.
+- Extended PR3 guard coverage to legacy `/v2/*` operator endpoints and `/v1/wecom/webhook/send`.
+- Added a runtime gate for `/v1/wecom/events` through `WECOM_SANDBOX_ENABLED`.
+- Changed insecure operator header fallback to default `false` in config and `.env.example`.

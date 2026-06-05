@@ -1,5 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import {
+  ForbiddenException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AgentService } from "../agent/agent.service";
 import { ActionService } from "../actions/action.service";
@@ -353,5 +357,94 @@ describe("WecomController", () => {
       ["event_received"],
     );
     assert.strictEqual(prisma.normalizedEvents.length, 0);
+  });
+
+  it("blocks sandbox events when the WeCom sandbox endpoint is disabled", async () => {
+    const previous = process.env.WECOM_SANDBOX_ENABLED;
+    process.env.WECOM_SANDBOX_ENABLED = "false";
+    try {
+      const controller = new WecomController(
+        {
+          normalizeIncoming: async (input: unknown) => input as NormalizedChannelEvent,
+          sendMessage: async () => ({ success: true, messageId: "reply_1" }),
+        } as unknown as WecomSandboxProvider,
+        {} as AgentService,
+        {} as ActionService,
+        new InMemoryPrisma() as unknown as PrismaService,
+      );
+
+      await assert.rejects(
+        () => controller.handleEvent({}),
+        (error: unknown) => {
+          assert.ok(error instanceof ForbiddenException);
+          assert.strictEqual(error.getStatus(), 403);
+          return true;
+        },
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.WECOM_SANDBOX_ENABLED;
+      } else {
+        process.env.WECOM_SANDBOX_ENABLED = previous;
+      }
+    }
+  });
+
+  it("requires operator context before sending a sandbox webhook reply", async () => {
+    const controller = new WecomController(
+      {
+        sendMessage: async () => ({ success: true, messageId: "reply_1" }),
+      } as unknown as WecomSandboxProvider,
+      {} as AgentService,
+      {} as ActionService,
+      new InMemoryPrisma() as unknown as PrismaService,
+    );
+
+    await assert.rejects(
+      () =>
+        controller.handleSend(
+          {},
+          {
+            merchantId: "demo",
+            channel: "taobao",
+            externalConversationId: "conv_1",
+            text: "hello",
+          },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+  });
+
+  it("blocks sandbox webhook replies for a different tenant", async () => {
+    const controller = new WecomController(
+      {
+        sendMessage: async () => ({ success: true, messageId: "reply_1" }),
+      } as unknown as WecomSandboxProvider,
+      {} as AgentService,
+      {} as ActionService,
+      new InMemoryPrisma() as unknown as PrismaService,
+    );
+
+    await assert.rejects(
+      () =>
+        controller.handleSend(
+          { "x-tenant-id": "tenant_a" },
+          {
+            merchantId: "tenant_b",
+            channel: "taobao",
+            externalConversationId: "conv_1",
+            text: "hello",
+          },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
   });
 });

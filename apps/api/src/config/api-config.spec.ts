@@ -13,6 +13,8 @@ describe("loadApiConfig", () => {
       webOrigin: "http://localhost:3000",
       databaseUrl: "postgresql://user:pass@localhost:5432/smart_cs_agent",
       wecomSandboxEnabled: true,
+      operatorApiKeys: "[]",
+      allowInsecureOperatorHeaders: false,
     });
   });
 
@@ -77,6 +79,17 @@ describe("loadApiConfig", () => {
           WECOM_SANDBOX_ENABLED: "yes",
         }),
       /Invalid API configuration/,
+    );
+  });
+
+  it("rejects malformed operator API key configuration", () => {
+    assert.throws(
+      () =>
+        loadApiConfig({
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+          OPERATOR_API_KEYS: "not-json",
+        }),
+      /OPERATOR_API_KEYS/,
     );
   });
 });

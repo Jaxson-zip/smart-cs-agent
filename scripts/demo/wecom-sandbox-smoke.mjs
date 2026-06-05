@@ -57,6 +57,7 @@ for (const arg of process.argv.slice(2)) {
 const apiBase = String(args.get("--api") ?? process.env.API_URL ?? "http://localhost:4100").replace(/\/$/, "");
 const tenantId = String(args.get("--tenant") ?? "demo_tenant");
 const operatorId = String(args.get("--operator") ?? "sandbox_operator");
+const operatorApiKey = args.get("--operator-api-key") ?? process.env.OPERATOR_API_KEY;
 const keepIds = args.has("--keep-ids");
 const timeoutMs = Number(args.get("--timeout-ms") ?? 5000);
 const runId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
@@ -77,6 +78,7 @@ async function requestJson(url, options = {}) {
         Accept: "application/json",
         "x-tenant-id": tenantId,
         "x-operator-id": operatorId,
+        ...(operatorApiKey ? { authorization: `Bearer ${operatorApiKey}` } : {}),
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...options.headers,
       },

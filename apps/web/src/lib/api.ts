@@ -4,6 +4,7 @@ import type { ApiAfterSalesCase } from "./cases";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || "demo_tenant";
 const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID || "sandbox_operator";
+const OPERATOR_API_KEY = process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
 const REQUEST_TIMEOUT_MS = 2500;
 
 export type ApiReadiness = {
@@ -60,6 +61,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
       headers: {
         "x-tenant-id": TENANT_ID,
         "x-operator-id": OPERATOR_ID,
+        ...(OPERATOR_API_KEY ? { authorization: `Bearer ${OPERATOR_API_KEY}` } : {}),
       },
     });
   } finally {

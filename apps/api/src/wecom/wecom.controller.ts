@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
@@ -7,6 +15,11 @@ import {
 } from "@smart-cs-agent/shared";
 import { ActionService } from "../actions/action.service";
 import { AgentService } from "../agent/agent.service";
+import {
+  requireRequestContext,
+  requireTenantParamAccess,
+  type RequestHeaders,
+} from "../auth/request-context";
 import { WecomSandboxProvider } from "./wecom-sandbox.provider";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -37,6 +50,8 @@ export class WecomController {
   @Post("events")
   @HttpCode(HttpStatus.OK)
   async handleEvent(@Body() body: unknown) {
+    assertWecomSandboxEnabled();
+
     const normalizedEvent = await this.wecomProvider.normalizeIncoming(body);
     const caseId = `case_${normalizedEvent.externalMessageId}`;
     const auditEntries: AuditEntry[] = [
@@ -203,8 +218,13 @@ export class WecomController {
 
   @Post("webhook/send")
   @HttpCode(HttpStatus.OK)
-  async handleSend(@Body() body: unknown) {
+  async handleSend(
+    @Headers() headers: RequestHeaders,
+    @Body() body: unknown,
+  ) {
+    const context = requireRequestContext(headers);
     const parsed = sendMessageBodySchema.parse(body);
+    requireTenantParamAccess(context, parsed.merchantId);
 
     return this.wecomProvider.sendMessage({
       merchantId: parsed.merchantId,
@@ -212,5 +232,16 @@ export class WecomController {
       externalConversationId: parsed.externalConversationId,
       text: parsed.text,
     });
+  }
+}
+
+function assertWecomSandboxEnabled(env: NodeJS.ProcessEnv = process.env) {
+  const explicitlyEnabled = env.WECOM_SANDBOX_ENABLED === "true";
+  const explicitlyDisabled = env.WECOM_SANDBOX_ENABLED === "false";
+  const productionDefaultDisabled =
+    env.NODE_ENV === "production" && !explicitlyEnabled;
+
+  if (explicitlyDisabled || productionDefaultDisabled) {
+    throw new ForbiddenException("WeCom sandbox endpoint is disabled");
   }
 }

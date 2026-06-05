@@ -18,6 +18,7 @@
 - Docker Desktop 已启动。
 - 本地 Postgres 使用 `docker-compose.yml` 中的 `postgres` 服务，端口为 `5433`。
 - `.env` 至少包含 `.env.example` 中的 `DATABASE_URL` 和 `PORT=4100`。
+- `.env.example` 已内置沙盒客服台 key：`dev_operator_key`。如果你修改了 `OPERATOR_API_KEYS`，也要同步 `NEXT_PUBLIC_OPERATOR_API_KEY` 或 smoke 脚本的 `--operator-api-key`。
 
 首次启动：
 
@@ -82,7 +83,7 @@ npm.cmd run demo:smoke
 脚本会执行：
 
 1. `GET /health`，确认 API 在 `4100` 可用。
-2. `GET /v1/rules/demo_tenant`，携带 `x-tenant-id: demo_tenant`，确认规则接口可读。
+2. `GET /v1/rules/demo_tenant`，优先携带 `Authorization: Bearer dev_operator_key`，确认规则接口可读。
 3. 读取 `docs/demo/wecom-sandbox-payloads/*.json` 的 5 个 payload。
 4. 逐个 `POST /v1/wecom/events`。该 webhook 路径按 payload body 中的 `merchantId` 路由，不需要 operator header。
 5. 输出每个场景的 `category`、`riskLevel`、`automationMode` 是否符合预期。
@@ -97,6 +98,12 @@ npm.cmd run demo:smoke -- --keep-ids
 
 ```powershell
 npm.cmd run demo:smoke -- --api=http://localhost:4100
+```
+
+如果你换了沙盒客服台 key：
+
+```powershell
+npm.cmd run demo:smoke -- --operator-api-key=your_key
 ```
 
 ## 手动发送单个场景
@@ -143,6 +150,7 @@ curl.exe -X POST http://localhost:4100/v1/wecom/events ^
 
 ```powershell
 curl.exe http://localhost:4100/v1/rules/demo_tenant ^
+  -H "Authorization: Bearer dev_operator_key" ^
   -H "x-tenant-id: demo_tenant" ^
   -H "x-operator-id: sandbox_operator"
 ```
@@ -164,6 +172,7 @@ curl.exe http://localhost:4100/v1/rules/demo_tenant ^
 
 ```powershell
 curl.exe http://localhost:4100/v1/cases ^
+  -H "Authorization: Bearer dev_operator_key" ^
   -H "x-tenant-id: demo_tenant" ^
   -H "x-operator-id: sandbox_operator"
 ```
@@ -177,7 +186,8 @@ curl.exe http://localhost:4100/v1/cases ^
 | `API is not reachable at http://localhost:4100` | API 没启动或端口不是 4100 | 运行 `npm.cmd run dev:api`，确认 `.env` 中 `PORT=4100` |
 | Prisma 连接失败、`P1001`、`ECONNREFUSED 5433` | Docker Desktop 或 Postgres 容器没启动 | 运行 `docker compose up -d postgres` |
 | `relation does not exist` 或事件 POST 返回 500 | 迁移未执行 | 运行 `npm.cmd run db:migrate` |
-| `/v1/cases` 返回 401 | 缺少 `x-tenant-id` 请求头 | 按上方 curl 示例带上 `x-tenant-id: demo_tenant` |
+| `/v1/cases` 返回 401 | 配置了 `OPERATOR_API_KEYS` 但请求没有带 key，或 key 不匹配 | 按上方 curl 示例带上 `Authorization: Bearer dev_operator_key`，或确认 `.env` 中的 key 一致 |
+| `/v1/cases` 返回 403 | key 所属租户和请求的 `x-tenant-id` 不一致 | 确认 `OPERATOR_API_KEYS`、`NEXT_PUBLIC_TENANT_ID` 和 curl 请求租户一致 |
 | `/v1/cases` 没有演示数据 | seed 未执行、被清空或 tenant header 不匹配 | 运行 `npm.cmd run db:seed`，并确认 `x-tenant-id` 是 `demo_tenant` |
 | 手动 curl 第二次发送同一文件后只看到一张工单 | 这是幂等复用行为，系统会刷新同一张 `case_${externalMessageId}` 工单 | 若想每次生成新工单，使用 `npm.cmd run demo:smoke` 的默认运行后缀 |
 | Web 使用 3100 时实时连接失败 | API CORS 仍允许 3000 | 设置 `WEB_ORIGIN=http://localhost:3100` 后重启 API |

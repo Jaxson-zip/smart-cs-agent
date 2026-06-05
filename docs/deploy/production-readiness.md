@@ -44,11 +44,14 @@ NEXT_PUBLIC_WS_URL=http://localhost:4100
 - `OPENAI_API_KEY`：PR1 可以为空；为空时不得把 LLM 能力视为已上线。
 - `WEB_ORIGIN`：允许访问 API/WebSocket 的前端 origin。
 - `PORT`：API 监听端口，默认 `4100`。
-- `WECOM_SANDBOX_ENABLED`：沙盒入口开关，PR1 期望为 `true`。
+- `WECOM_SANDBOX_ENABLED`：沙盒入站模拟入口开关。本地演示可以为 `true`；生产环境未显式设为 `true` 时，`/v1/wecom/events` 默认不可用。
 - `NEXT_PUBLIC_API_URL`：Web 访问 API 的公开地址。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
 - `NEXT_PUBLIC_TENANT_ID`：沙盒前端请求使用的租户 ID，PR2 默认 `demo_tenant`。
 - `NEXT_PUBLIC_OPERATOR_ID`：沙盒前端请求使用的操作者 ID，PR2 默认 `sandbox_operator`。
+- `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"dev_operator_key","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
+- `ALLOW_INSECURE_OPERATOR_HEADERS`：只用于本地沙盒调试，默认 `false`。生产环境未配置 `OPERATOR_API_KEYS` 时，默认拒绝只靠 `x-tenant-id` 的访问；除非显式设为 `true`。
+- `NEXT_PUBLIC_OPERATOR_API_KEY`：沙盒 Web 用来调用 API 的演示 key，应与 `OPERATOR_API_KEYS` 中的一项匹配。它会暴露在浏览器里，只能用于本地/预生产沙盒；真正商用版本需要服务端 session/JWT/BFF，不应把它当正式鉴权。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
 
@@ -77,8 +80,10 @@ curl http://localhost:4100/health
 PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `/health`：
 
 - `GET /health/ready` 能确认 API 到数据库的路径是否可用；数据库不可用时应返回 HTTP 503。
-- `GET /v1/cases` 携带 `x-tenant-id: demo_tenant` 后能读取 seed 或 smoke 后的售后工单。
-- `GET /v1/rules/demo_tenant` 携带 `x-tenant-id: demo_tenant` 后能读取沙盒规则配置。
+- `GET /v1/cases` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的 seed 或 smoke 后售后工单。
+- `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
+- `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
+- `POST /v1/wecom/webhook/send` 必须携带 operator key，且 key 所属租户必须与 body 中的 `merchantId` 一致。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
 
 真实渠道鉴权状态未来应作为独立 channel readiness 展示，不应阻塞当前沙盒 readiness。

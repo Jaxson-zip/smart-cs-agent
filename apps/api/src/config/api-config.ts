@@ -2,6 +2,28 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
+const operatorApiKeyConfigSchema = z.object({
+  key: z.string().min(8),
+  tenantId: z.string().min(1),
+  operatorId: z.string().min(1),
+  role: z.enum(["admin", "operator", "viewer"]).default("operator"),
+});
+
+const operatorApiKeysEnvSchema = z
+  .string()
+  .optional()
+  .default("[]")
+  .superRefine((value, context) => {
+    try {
+      z.array(operatorApiKeyConfigSchema).parse(JSON.parse(value));
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message: "OPERATOR_API_KEYS must be a JSON array of operator key records",
+      });
+    }
+  });
+
 const apiConfigSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
@@ -9,6 +31,12 @@ const apiConfigSchema = z.object({
   WECOM_SANDBOX_ENABLED: z
     .enum(["true", "false"])
     .default("true")
+    .transform((value) => value === "true"),
+  OPERATOR_API_KEYS: operatorApiKeysEnvSchema,
+  ALLOW_INSECURE_OPERATOR_HEADERS: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
     .transform((value) => value === "true"),
 });
 
@@ -19,6 +47,8 @@ export type ApiConfig = {
   webOrigin: string;
   databaseUrl: string;
   wecomSandboxEnabled: boolean;
+  operatorApiKeys: string;
+  allowInsecureOperatorHeaders: boolean;
 };
 
 type LoadConfigOptions = {
@@ -51,6 +81,8 @@ export function loadApiConfig(
     webOrigin: parsed.data.WEB_ORIGIN,
     databaseUrl: parsed.data.DATABASE_URL,
     wecomSandboxEnabled: parsed.data.WECOM_SANDBOX_ENABLED,
+    operatorApiKeys: parsed.data.OPERATOR_API_KEYS,
+    allowInsecureOperatorHeaders: parsed.data.ALLOW_INSECURE_OPERATOR_HEADERS,
   };
 }
 
