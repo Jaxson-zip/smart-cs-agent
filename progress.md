@@ -26,3 +26,7 @@
 - Started PR4 public API surface lockdown.
 - Disabled legacy Web demo APIs `/api/chat` and `/api/db` by default behind `ENABLE_LEGACY_WEB_DEMO_API`.
 - Added Web route tests and a deployment API surface inventory.
+- Started PR5 server-side operator BFF.
+- Added `/api/operator/cases`, `/api/operator/cases/:id`, and `/api/operator/readiness` Web BFF routes.
+- Updated the operator workbench client to call same-origin BFF routes instead of direct API URLs with browser-public keys.
+- Tightened the mobile workbench layout back to a single viewport with internal scrolling after the BFF fallback path exposed page-level scroll.

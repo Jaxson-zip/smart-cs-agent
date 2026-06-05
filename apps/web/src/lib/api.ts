@@ -1,10 +1,7 @@
 import type { AfterSalesCase } from "@smart-cs-agent/shared";
 import type { ApiAfterSalesCase } from "./cases";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || "demo_tenant";
-const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID || "sandbox_operator";
-const OPERATOR_API_KEY = process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
+const OPERATOR_BFF_URL = "/api/operator";
 const REQUEST_TIMEOUT_MS = 2500;
 
 export type ApiReadiness = {
@@ -13,7 +10,7 @@ export type ApiReadiness = {
 };
 
 export async function fetchCases(): Promise<ApiAfterSalesCase[]> {
-  const res = await fetchWithTimeout(`${API_URL}/v1/cases`);
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/cases`);
 
   if (!res.ok) {
     throw new Error("售后工单暂时无法同步");
@@ -23,7 +20,9 @@ export async function fetchCases(): Promise<ApiAfterSalesCase[]> {
 }
 
 export async function fetchCaseDetails(caseId: string): Promise<AfterSalesCase> {
-  const res = await fetchWithTimeout(`${API_URL}/v1/cases/${caseId}`);
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/cases/${encodeURIComponent(caseId)}`,
+  );
 
   if (!res.ok) {
     throw new Error("售后工单详情暂时无法同步");
@@ -36,7 +35,7 @@ export async function fetchApiReadiness(): Promise<ApiReadiness> {
   const checkedAt = new Date().toISOString();
 
   try {
-    const res = await fetchWithTimeout(`${API_URL}/health/ready`);
+    const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/readiness`);
 
     return {
       status: res.ok ? "ready" : "unavailable",
@@ -58,11 +57,6 @@ async function fetchWithTimeout(url: string): Promise<Response> {
     return await fetch(url, {
       cache: "no-store",
       signal: controller.signal,
-      headers: {
-        "x-tenant-id": TENANT_ID,
-        "x-operator-id": OPERATOR_ID,
-        ...(OPERATOR_API_KEY ? { authorization: `Bearer ${OPERATOR_API_KEY}` } : {}),
-      },
     });
   } finally {
     globalThis.clearTimeout(timeout);

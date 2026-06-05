@@ -2,26 +2,25 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR4 - Public API Surface Lockdown
+## Current Stage: PR5 - Server-Side Operator BFF
 
 Status: complete
 
-PR4 closes leftover public demo/API surfaces so deployable environments do not expose mock order data or mutation-like demo tools.
+PR5 moves operator API access behind a Web server-side BFF so the browser no longer receives the sandbox operator key.
 
-### PR4 Scope
+### PR5 Scope
 
-- Keep `/health` and `/health/ready` public and data-free.
-- Keep operator APIs protected by PR3 operator key guard.
-- Keep `/v1/wecom/events` behind `WECOM_SANDBOX_ENABLED`.
-- Disable legacy Web demo APIs `/api/chat` and `/api/db` by default.
-- Add a public API surface inventory for deployment review.
-- Add Web tests for legacy demo API default-off behavior.
+- Add Web BFF routes for operator case list, case details, and readiness.
+- Keep `OPERATOR_API_KEY` server-side and remove browser use of `NEXT_PUBLIC_OPERATOR_API_KEY`.
+- Make the Web operator client call same-origin `/api/operator/*` routes.
+- Document `API_URL`, `OPERATOR_API_KEY`, `OPERATOR_TENANT_ID`, and `OPERATOR_ID`.
+- Keep this as a pre-production boundary; full user login/session remains next.
 
-### Out Of Scope For PR4
+### Out Of Scope For PR5
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full authentication, SSO, JWT, sessions, RBAC UI, and billing.
+- Full authentication, SSO, JWT, RBAC UI, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -36,11 +35,12 @@ PR4 closes leftover public demo/API surfaces so deployable environments do not e
 - [x] PR3 operator API key guard.
 - [x] PR3 docs, verification, and push.
 - [x] PR4 public API surface lockdown.
-- [ ] PR5 server-side operator session/BFF.
+- [x] PR5 server-side operator BFF.
+- [ ] PR6 real operator session/JWT.
 
 ## Verification Gate
 
-Do not claim PR4 public API surface lockdown complete until these pass:
+Do not claim PR5 server-side operator BFF complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -67,3 +67,4 @@ Do not claim PR4 public API surface lockdown complete until these pass:
 | 2026-06-06 | Legacy `/v2/*` and `/v1/wecom/webhook/send` were outside the new operator guard | PR3 now requires request context for those operator-facing APIs |
 | 2026-06-06 | `WECOM_SANDBOX_ENABLED` existed but did not gate the event intake | PR3 now blocks `/v1/wecom/events` when the sandbox endpoint is disabled or production has not explicitly enabled it |
 | 2026-06-06 | Web `/api/chat` and `/api/db` exposed historical mock order data/actions | PR4 disables those legacy demo APIs by default behind `ENABLE_LEGACY_WEB_DEMO_API` |
+| 2026-06-06 | Browser carried `NEXT_PUBLIC_OPERATOR_API_KEY` for API access | PR5 moves operator API access to server-side `/api/operator/*` BFF routes using `OPERATOR_API_KEY` |

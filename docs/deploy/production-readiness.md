@@ -32,6 +32,8 @@ PORT=4100
 WECOM_SANDBOX_ENABLED=true
 NEXT_PUBLIC_API_URL=http://localhost:4100
 NEXT_PUBLIC_WS_URL=http://localhost:4100
+API_URL=http://localhost:4100
+OPERATOR_API_KEY=dev_operator_key
 ```
 
 如果后续新增需要数据库连接的集成测试，应显式在 CI 中启动 Postgres service，并隔离为 integration/smoke job，避免让 API 单测隐式依赖外部数据库。
@@ -45,13 +47,14 @@ NEXT_PUBLIC_WS_URL=http://localhost:4100
 - `WEB_ORIGIN`：允许访问 API/WebSocket 的前端 origin。
 - `PORT`：API 监听端口，默认 `4100`。
 - `WECOM_SANDBOX_ENABLED`：沙盒入站模拟入口开关。本地演示可以为 `true`；生产环境未显式设为 `true` 时，`/v1/wecom/events` 默认不可用。
-- `NEXT_PUBLIC_API_URL`：Web 访问 API 的公开地址。
+- `API_URL`：Web 服务端 BFF 访问 API 的内部地址，默认可指向 `http://localhost:4100`。
+- `NEXT_PUBLIC_API_URL`：旧健康检查客户端的公开 API 地址；客服台主数据路径不应再依赖它直连 API。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
-- `NEXT_PUBLIC_TENANT_ID`：沙盒前端请求使用的租户 ID，PR2 默认 `demo_tenant`。
-- `NEXT_PUBLIC_OPERATOR_ID`：沙盒前端请求使用的操作者 ID，PR2 默认 `sandbox_operator`。
 - `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"dev_operator_key","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
+- `OPERATOR_API_KEY`：Web 服务端 BFF 调用 API 时使用的 operator key，应匹配 `OPERATOR_API_KEYS` 中的一项。不要使用 `NEXT_PUBLIC_` 前缀。
+- `OPERATOR_TENANT_ID`：Web 服务端 BFF 请求使用的租户 ID，默认 `demo_tenant`。
+- `OPERATOR_ID`：Web 服务端 BFF 请求使用的操作者 ID，默认 `sandbox_operator`。
 - `ALLOW_INSECURE_OPERATOR_HEADERS`：只用于本地沙盒调试，默认 `false`。生产环境未配置 `OPERATOR_API_KEYS` 时，默认拒绝只靠 `x-tenant-id` 的访问；除非显式设为 `true`。
-- `NEXT_PUBLIC_OPERATOR_API_KEY`：沙盒 Web 用来调用 API 的演示 key，应与 `OPERATOR_API_KEYS` 中的一项匹配。它会暴露在浏览器里，只能用于本地/预生产沙盒；真正商用版本需要服务端 session/JWT/BFF，不应把它当正式鉴权。
 - `ENABLE_LEGACY_WEB_DEMO_API`：早期 Web demo 的 `/api/chat` 和 `/api/db` 开关，默认应为 `false`。部署沙盒和生产环境不得打开，除非是隔离的历史演示环境。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
@@ -85,6 +88,7 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
 - `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
 - `POST /v1/wecom/webhook/send` 必须携带 operator key，且 key 所属租户必须与 body 中的 `merchantId` 一致。
+- Web 客服台应通过同源 `/api/operator/cases`、`/api/operator/cases/:id` 和 `/api/operator/readiness` 访问 API；浏览器包中不得包含 operator key。
 - Web 侧 `/api/chat` 和 `/api/db` 默认返回 404；只有显式设置 `ENABLE_LEGACY_WEB_DEMO_API=true` 才会打开旧 demo 接口。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
 
@@ -111,4 +115,5 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `/health` 只说明进程存活；沙盒发布前仍需执行 readiness 检查和 smoke。
 - `OPENAI_API_KEY` 为空时，任何依赖真实模型调用的能力都应视为未启用。
 - 沙盒 smoke payload 是演示数据，不可作为真实售后判责、退款或客服绩效依据。
+- `OPERATOR_API_KEY` 属于服务端 secret，不能使用 `NEXT_PUBLIC_` 前缀，也不能暴露给浏览器。
 - `/api/chat`、`/api/db` 是历史 demo API，不属于当前售后闭环主路径；上线默认关闭。

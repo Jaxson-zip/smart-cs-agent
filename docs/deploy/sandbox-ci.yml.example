@@ -10,6 +10,10 @@ env:
   WEB_ORIGIN: http://localhost:3000
   PORT: "4100"
   WECOM_SANDBOX_ENABLED: "true"
+  API_URL: http://localhost:4100
+  OPERATOR_API_KEY: dev_operator_key
+  OPERATOR_TENANT_ID: demo_tenant
+  OPERATOR_ID: sandbox_operator
   NEXT_PUBLIC_API_URL: http://localhost:4100
   NEXT_PUBLIC_WS_URL: http://localhost:4100
 
@@ -37,6 +41,9 @@ jobs:
 
       - name: Run API tests
         run: npm run test --workspace @smart-cs-agent/api
+
+      - name: Run Web tests
+        run: npm run test --workspace @smart-cs-agent/web
 
       - name: Typecheck workspaces
         run: npm run typecheck --workspaces --if-present -- --pretty false

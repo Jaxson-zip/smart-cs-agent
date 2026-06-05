@@ -24,12 +24,15 @@
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
 | `GET /` | Public web shell | Reads operator data from API only through configured sandbox boundary |
+| `GET /api/operator/cases` | Operator BFF | Server-side `OPERATOR_API_KEY`; browser does not receive the key |
+| `GET /api/operator/cases/:id` | Operator BFF | Server-side `OPERATOR_API_KEY`; browser does not receive the key |
+| `GET /api/operator/readiness` | Operator BFF readiness | Proxies API readiness without tenant data |
 | `POST /api/chat` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
 | `GET /api/db` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
 
 ## Rules
 
 - No route that returns merchant/customer/order/case data should be public.
-- Browser-public env vars are not secrets. `NEXT_PUBLIC_OPERATOR_API_KEY` is a sandbox convenience only.
+- Browser-public env vars are not secrets. Operator keys must stay in server-side env vars such as `OPERATOR_API_KEY`.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real production channel webhooks must add provider signature verification before replacing the sandbox intake.

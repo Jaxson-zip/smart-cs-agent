@@ -240,8 +240,8 @@ export default function OperatorWorkbench() {
   }
 
   return (
-    <main className="cs-workbench min-h-dvh overflow-x-hidden bg-[#f4f6f8] text-slate-950 lg:h-dvh lg:overflow-hidden">
-      <div className="grid min-h-dvh grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)_312px] xl:grid-cols-[300px_minmax(0,1fr)_336px]">
+    <main className="cs-workbench h-dvh overflow-hidden bg-[#f4f6f8] text-slate-950">
+      <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[minmax(180px,34dvh)_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)_312px] lg:grid-rows-1 xl:grid-cols-[300px_minmax(0,1fr)_336px]">
         <aside className="flex min-h-0 min-w-0 flex-col border-b border-slate-200 bg-white lg:border-b-0 lg:border-r">
           <header className="shrink-0 border-b border-slate-200 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -329,7 +329,7 @@ export default function OperatorWorkbench() {
           </section>
         </aside>
 
-        <section className="flex min-h-[620px] min-w-0 flex-col bg-[#f7f9fb] lg:min-h-0">
+        <section className="flex min-h-0 min-w-0 flex-col bg-[#f7f9fb]">
           <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 xl:px-5">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
@@ -493,7 +493,7 @@ export default function OperatorWorkbench() {
           </div>
         </section>
 
-        <aside className="min-h-0 min-w-0 overflow-y-auto border-t border-slate-200 bg-white lg:border-l lg:border-t-0">
+        <aside className="hidden min-h-0 min-w-0 overflow-y-auto border-t border-slate-200 bg-white lg:block lg:border-l lg:border-t-0">
           <div className="space-y-4 p-4 xl:p-5">
             <section className="rounded-xl bg-slate-950 p-4 text-white">
               <div className="flex items-start justify-between gap-4">

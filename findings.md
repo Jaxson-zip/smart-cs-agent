@@ -16,8 +16,9 @@
 - Operator-facing APIs need tenant context before real commercial use. PR2 uses `x-tenant-id` and `x-operator-id` headers as the tenant context boundary until full auth is implemented.
 - Agent classification and risk evaluation must use the event/request tenant's rules, not the default demo tenant. PR2 passes tenant context through AgentService, ClassifierService, and RiskService.
 - PR2's tenant header boundary is still spoofable. PR3 adds `OPERATOR_API_KEYS` so sandbox/pre-production operator APIs can derive tenant/operator/role from a configured key and reject mismatched tenant headers.
-- `NEXT_PUBLIC_OPERATOR_API_KEY` is intentionally only a sandbox convenience because browser-public keys are not secure production auth. A commercial launch still needs server-side sessions/JWT/BFF and real role enforcement.
+- Browser-public operator keys are not secure production auth. PR5 removes `NEXT_PUBLIC_OPERATOR_API_KEY` from the operator workbench path and moves API access behind a server-side BFF, but a commercial launch still needs real sessions/JWT and role enforcement.
 - Malformed `OPERATOR_API_KEYS` must fail closed instead of falling back to insecure tenant headers.
 - Legacy `/v2/*` operation endpoints and `/v1/wecom/webhook/send` are operator-facing and must not stay outside the PR3 guard.
 - `WECOM_SANDBOX_ENABLED` should be a real runtime gate. In production, the sandbox event intake should be disabled unless explicitly enabled for a controlled demo environment.
 - Web `/api/chat` and `/api/db` are historical demo routes. They are not used by the current operator workbench and should stay disabled by default because they expose mock order data and mutation-like tools.
+- Web operator data now flows through `/api/operator/*` BFF routes that use server-side `OPERATOR_API_KEY`; the browser should not receive operator secrets.
