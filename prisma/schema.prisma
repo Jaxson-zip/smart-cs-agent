@@ -79,7 +79,65 @@ model AfterSalesCase {
   automationMode  String
   customerMessage String
   customerReply   String?
-  actions         Json? // Stores the array of actions
+  actions         Json? // Stores the array of actions (legacy, keeping for compatibility if needed)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  messages    CaseMessage[]
+  caseActions CaseAction[]
+  auditLogs   AuditLog[]
+}
+
+model NormalizedChannelEvent {
+  id                     String   @id @default(cuid())
+  source                 String
+  merchantId             String
+  channel                String
+  externalConversationId String
+  externalMessageId      String
+  senderName             String
+  text                   String
+  receivedAt             DateTime
+  createdAt              DateTime @default(now())
+}
+
+model CaseMessage {
+  id         String         @id @default(cuid())
+  caseId     String
+  case       AfterSalesCase @relation(fields: [caseId], references: [id])
+  senderType String // "customer" | "agent" | "operator"
+  text       String
+  createdAt  DateTime       @default(now())
+}
+
+model CaseAction {
+  id        String         @id @default(cuid())
+  caseId    String
+  case      AfterSalesCase @relation(fields: [caseId], references: [id])
+  type      String
+  status    String
+  params    Json?
+  result    Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model AuditLog {
+  id        String          @id @default(cuid())
+  caseId    String?
+  case      AfterSalesCase? @relation(fields: [caseId], references: [id])
+  action    String
+  details   Json?
+  createdAt DateTime        @default(now())
+}
+
+model RuleConfig {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
 }

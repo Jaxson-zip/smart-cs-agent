@@ -27,31 +27,43 @@ export const afterSalesActionSchema = z.discriminatedUnion("type", [
     type: z.literal("change_address"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     newAddress: z.string().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
   z.object({
     type: z.literal("query_logistics"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     logisticsInfo: z.string().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
   z.object({
     type: z.literal("issue_coupon"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     amount: z.number().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
   z.object({
     type: z.literal("create_handoff"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     reason: z.string().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
   z.object({
     type: z.literal("create_supervisor_review"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     reason: z.string().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
   z.object({
     type: z.literal("send_channel_reply"),
     status: z.enum(["success", "failed", "pending"]).optional(),
     replyText: z.string().optional(),
+    orderId: z.string().optional(),
+    channel: z.string().optional(),
   }),
 ]);
 

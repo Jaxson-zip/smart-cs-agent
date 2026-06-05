@@ -20,11 +20,15 @@ async function main() {
 
   console.log(`Seeded tenant ${tenant.name}`);
 
+  await prisma.caseAction.deleteMany();
+  await prisma.caseMessage.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.afterSalesCase.deleteMany();
   await prisma.order.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.policy.deleteMany();
   await prisma.conversation.deleteMany();
+  await prisma.ruleConfig.deleteMany();
 
   // Seed Customers
   const customer1 = await prisma.customer.create({
@@ -148,27 +152,8 @@ async function main() {
 
   console.log(`Seeded policies`);
 
-  // Seed Conversations
-  await prisma.conversation.create({
-    data: {
-      id: "CONV_1",
-      tenantId: "demo_tenant",
-      platform: "wecom_sandbox",
-      externalId: "wecom-room-001",
-      messages: [
-        {
-          senderName: "林女士",
-          text: "你好，我刚拍下的衣服可以改一下地址吗？",
-          receivedAt: new Date().toISOString(),
-        },
-      ],
-    },
-  });
-
-  console.log(`Seeded conversations`);
-
-  // Seed AfterSalesCases
-  await prisma.afterSalesCase.create({
+  // 1. Address change
+  const case1 = await prisma.afterSalesCase.create({
     data: {
       id: "case_001",
       merchantId: "demo_tenant",
@@ -180,40 +165,129 @@ async function main() {
       automationMode: "auto_execute",
       customerMessage: "你好，我刚拍下的衣服可以改一下地址吗？",
       customerReply: "没问题，已经为您修改地址为：[新地址]。",
-      actions: [
-        {
-          type: "change_address",
-          status: "success",
-          newAddress: "北京市朝阳区某某路",
-        },
-      ],
     },
   });
 
-  await prisma.afterSalesCase.create({
+  await prisma.caseMessage.create({
+    data: {
+      caseId: case1.id,
+      senderType: "customer",
+      text: "你好，我刚拍下的衣服可以改一下地址吗？",
+    },
+  });
+
+  await prisma.caseAction.create({
+    data: {
+      caseId: case1.id,
+      type: "change_address",
+      status: "success",
+      params: { newAddress: "北京市朝阳区某某路" },
+    },
+  });
+
+  // 2. Logistics inquiry
+  const case2 = await prisma.afterSalesCase.create({
     data: {
       id: "case_002",
+      merchantId: "demo_tenant",
+      channel: "taobao",
+      customerName: "林女士",
+      orderId: "ORDER_12345",
+      category: "logistics",
+      riskLevel: "low",
+      automationMode: "auto_execute",
+      customerMessage: "帮我查一下我的快递到哪里了？",
+      customerReply: "您的快递正在派送中。",
+    },
+  });
+
+  await prisma.caseMessage.create({
+    data: {
+      caseId: case2.id,
+      senderType: "customer",
+      text: "帮我查一下我的快递到哪里了？",
+    },
+  });
+
+  await prisma.caseAction.create({
+    data: {
+      caseId: case2.id,
+      type: "query_logistics",
+      status: "success",
+      result: { status: "delivering" },
+    },
+  });
+
+  // 3. Damage compensation low
+  const case3 = await prisma.afterSalesCase.create({
+    data: {
+      id: "case_003",
       merchantId: "demo_tenant",
       channel: "douyin",
       customerName: "张先生",
       orderId: "ORDER_67890",
       category: "damage_compensation",
-      riskLevel: "medium",
-      automationMode: "human_confirm",
-      customerMessage: "鞋盒有点压坏了，能补偿点吗？",
-      actions: [
-        {
-          type: "issue_coupon",
-          status: "pending",
-          amount: 20,
-        },
-      ],
+      riskLevel: "low",
+      automationMode: "auto_execute",
+      customerMessage: "鞋盒压坏了，鞋子没问题，但是送人的，能不能补偿一下？",
+      customerReply: "非常抱歉影响您的体验。我们可以为您补偿一张优惠券，稍后会发放到您的账户。",
     },
   });
 
-  await prisma.afterSalesCase.create({
+  await prisma.caseMessage.create({
     data: {
-      id: "case_003",
+      caseId: case3.id,
+      senderType: "customer",
+      text: "鞋盒压坏了，鞋子没问题，但是送人的，能不能补偿一下？",
+    },
+  });
+
+  await prisma.caseAction.create({
+    data: {
+      caseId: case3.id,
+      type: "issue_coupon",
+      status: "success",
+      params: { amount: 20 },
+    },
+  });
+
+  // 4. Compensation rejected medium
+  const case4 = await prisma.afterSalesCase.create({
+    data: {
+      id: "case_004",
+      merchantId: "demo_tenant",
+      channel: "douyin",
+      customerName: "张先生",
+      orderId: "ORDER_67890",
+      category: "compensation_rejected",
+      riskLevel: "medium",
+      automationMode: "human_confirm",
+      customerMessage: "30 元太少了吧，鞋盒都这样了我还怎么送人？我不接受。",
+      customerReply: "我理解您觉得 30 元补偿不够。我们可以为您升级到 50 元无门槛券，确认后会发放到您的淘宝账户。",
+    },
+  });
+
+  await prisma.caseMessage.create({
+    data: {
+      caseId: case4.id,
+      senderType: "customer",
+      text: "30 元太少了吧，鞋盒都这样了我还怎么送人？我不接受。",
+    },
+  });
+
+  await prisma.caseAction.create({
+    data: {
+      caseId: case4.id,
+      type: "issue_coupon",
+      status: "pending",
+      params: { amount: 50 },
+    },
+  });
+
+  // 5. Complaint escalation high
+  const case5 = await prisma.afterSalesCase.create({
+    data: {
+      id: "case_005",
       merchantId: "demo_tenant",
       channel: "taobao",
       customerName: "王女士",
@@ -222,17 +296,27 @@ async function main() {
       riskLevel: "high",
       automationMode: "human_takeover",
       customerMessage: "我要投诉你们，给我退款！不退款就差评！",
-      actions: [
-        {
-          type: "create_handoff",
-          status: "pending",
-          reason: "Customer threatens complaint",
-        },
-      ],
     },
   });
 
-  console.log(`Seeded AfterSalesCases`);
+  await prisma.caseMessage.create({
+    data: {
+      caseId: case5.id,
+      senderType: "customer",
+      text: "我要投诉你们，给我退款！不退款就差评！",
+    },
+  });
+
+  await prisma.caseAction.create({
+    data: {
+      caseId: case5.id,
+      type: "create_handoff",
+      status: "pending",
+      params: { reason: "Customer threatens complaint" },
+    },
+  });
+
+  console.log(`Seeded 5 AfterSalesCases`);
 }
 
 main()

@@ -1,14 +1,19 @@
 import { Injectable } from "@nestjs/common";
 import { AfterSalesCategory, RiskLevel, AutomationMode } from "@smart-cs-agent/shared";
+import { RulesService } from "../rules/rules.service";
 
 @Injectable()
 export class RiskService {
-  evaluate(category: AfterSalesCategory, _text: string, amount?: number): { riskLevel: RiskLevel; automationMode: AutomationMode } {
+  constructor(private readonly rulesService: RulesService) {}
+
+  async evaluate(category: AfterSalesCategory, _text: string, amount?: number): Promise<{ riskLevel: RiskLevel; automationMode: AutomationMode }> {
+    const rules = await this.rulesService.getRules();
+
     if (category === "address_change") return { riskLevel: "low", automationMode: "auto_execute" };
     if (category === "logistics") return { riskLevel: "low", automationMode: "auto_execute" };
     
     if (category === "damage_compensation") {
-      if (amount && amount > 50) return { riskLevel: "medium", automationMode: "human_confirm" };
+      if (amount && amount > rules.couponCompensationLimit) return { riskLevel: "medium", automationMode: "human_confirm" };
       return { riskLevel: "low", automationMode: "auto_execute" };
     }
 

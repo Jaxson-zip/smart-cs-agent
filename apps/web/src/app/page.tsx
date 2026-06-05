@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import {
@@ -15,135 +15,24 @@ import {
   Sparkles,
   Truck,
   UserRoundCheck,
+  History,
 } from "lucide-react";
 import type {
-  AfterSalesAction,
-  AfterSalesCase,
   AfterSalesCategory,
   RiskLevel,
 } from "@smart-cs-agent/shared";
+import { fetchCases } from "../lib/api";
+import { fallbackCases, mapApiCaseToUiCase, UiCase } from "../lib/cases";
 
 gsap.registerPlugin(useGSAP);
 
 type ChannelId = "all" | "taobao" | "douyin" | "shopify";
-
-type QueueStatus =
-  | "waiting_confirm"
-  | "customer_rejected"
-  | "human_takeover"
-  | "send_failed"
-  | "auto_resolved";
-
-type UiCase = AfterSalesCase & {
-  status: QueueStatus;
-  waitTime: string;
-  product: string;
-  amount: string;
-  orderStatus: string;
-  systemResult: string;
-  facts: string[];
-  operatorHint: string;
-};
 
 const channelTabs: Array<{ id: ChannelId; label: string }> = [
   { id: "all", label: "全部" },
   { id: "taobao", label: "淘宝" },
   { id: "douyin", label: "抖音" },
   { id: "shopify", label: "Shopify" },
-];
-
-const mockCases: UiCase[] = [
-  {
-    caseId: "C-1001",
-    merchantId: "demo",
-    channel: "taobao",
-    customerName: "林女士",
-    orderId: "TB73921",
-    category: "damage_compensation",
-    riskLevel: "medium",
-    automationMode: "human_confirm",
-    status: "waiting_confirm",
-    customerMessage: "鞋盒压坏了，鞋子没问题，但是这是送人的，能不能补偿一下？",
-    customerReply:
-      "非常抱歉影响您的送礼体验。我们可以为您补偿 30 元无门槛券，确认后会发放到您的淘宝账户。",
-    actions: [{ type: "issue_coupon", amount: 30 }],
-    waitTime: "02:18",
-    product: "Nike Air Force 1 联名款",
-    amount: "¥899",
-    orderStatus: "已签收",
-    systemResult:
-      "订单未申请过补偿，商品本体未损坏，补偿金额低于店铺自动上限。需要客服确认后发送。",
-    operatorHint: "中风险补偿，确认后可发送给客户。",
-    facts: ["近 30 天无补偿记录", "商品本体未损坏", "补偿金额低于自动上限"],
-  },
-  {
-    caseId: "C-1002",
-    merchantId: "demo",
-    channel: "taobao",
-    customerName: "林女士",
-    orderId: "TB73921",
-    category: "compensation_rejected",
-    riskLevel: "medium",
-    automationMode: "human_confirm",
-    status: "customer_rejected",
-    customerMessage: "30 元太少了吧，鞋盒都这样了我还怎么送人？",
-    customerReply:
-      "我理解您觉得 30 元补偿不够。我们可以为您升级到 50 元无门槛券，确认后会发放到您的淘宝账户。",
-    actions: [{ type: "issue_coupon", amount: 50 }],
-    waitTime: "03:04",
-    product: "Nike Air Force 1 联名款",
-    amount: "¥899",
-    orderStatus: "已签收",
-    systemResult: "客户拒绝首次补偿。系统建议升级到 50 元券；如仍拒绝，转主管处理。",
-    operatorHint: "这是第二轮协商。客户仍不接受时转主管。",
-    facts: ["客户拒绝 30 元券", "允许二轮补偿", "超过二轮需主管确认"],
-  },
-  {
-    caseId: "C-1003",
-    merchantId: "demo",
-    channel: "douyin",
-    customerName: "陈先生",
-    orderId: "DY11804",
-    category: "address_change",
-    riskLevel: "low",
-    automationMode: "auto_execute",
-    status: "auto_resolved",
-    customerMessage: "还没发货的话帮我改到公司，公司前台可以代收。",
-    customerReply: "可以的。订单尚未发货，地址已同步到仓库。",
-    actions: [
-      { type: "change_address", status: "success" },
-      { type: "send_channel_reply", status: "success", replyText: "地址已修改成功。" },
-    ],
-    waitTime: "00:00",
-    product: "通勤双肩包",
-    amount: "¥329",
-    orderStatus: "待发货",
-    systemResult: "订单待发货，系统已自动修改地址并回传抖音原会话。",
-    operatorHint: "低风险，系统已自动处理。",
-    facts: ["订单待发货", "仓库未锁单", "已回传原渠道"],
-  },
-  {
-    caseId: "C-1004",
-    merchantId: "demo",
-    channel: "shopify",
-    customerName: "Mia",
-    orderId: "SH44018",
-    category: "refund_return",
-    riskLevel: "high",
-    automationMode: "human_takeover",
-    status: "human_takeover",
-    customerMessage: "The dress is custom made but it does not fit. I need a cash refund.",
-    customerReply:
-      "I checked your order. Because this is a made-to-measure item already in production, this request needs a manual review. A specialist will follow up in this channel.",
-    actions: [{ type: "create_supervisor_review", reason: "高风险现金退款" }],
-    waitTime: "07:05",
-    product: "Made-to-measure dress",
-    amount: "$420",
-    orderStatus: "生产中",
-    systemResult: "定制商品已进入生产，现金退款需主管审核，系统不会自动承诺退款。",
-    operatorHint: "高风险退款，必须人工接管。",
-    facts: ["定制商品", "已进入生产", "现金退款需主管确认"],
-  },
 ];
 
 const categoryText: Record<AfterSalesCategory, string> = {
@@ -168,7 +57,7 @@ const riskClass: Record<RiskLevel, string> = {
   high: "bg-rose-50 text-rose-700",
 };
 
-const statusText: Record<QueueStatus, string> = {
+const statusText: Record<string, string> = {
   waiting_confirm: "待确认回复",
   customer_rejected: "客户不接受",
   human_takeover: "需人工接管",
@@ -176,7 +65,7 @@ const statusText: Record<QueueStatus, string> = {
   auto_resolved: "自动处理完成",
 };
 
-const statusClass: Record<QueueStatus, string> = {
+const statusClass: Record<string, string> = {
   waiting_confirm: "bg-sky-50 text-sky-700",
   customer_rejected: "bg-violet-50 text-violet-700",
   human_takeover: "bg-rose-50 text-rose-700",
@@ -184,7 +73,7 @@ const statusClass: Record<QueueStatus, string> = {
   auto_resolved: "bg-emerald-50 text-emerald-700",
 };
 
-const actionLabels: Record<AfterSalesAction["type"], { label: string; Icon: typeof Home }> = {
+const actionLabels: Record<string, { label: string; Icon: typeof Home }> = {
   change_address: { label: "修改地址", Icon: Home },
   query_logistics: { label: "查物流", Icon: Truck },
   issue_coupon: { label: "发补偿券", Icon: CreditCard },
@@ -195,14 +84,33 @@ const actionLabels: Record<AfterSalesAction["type"], { label: string; Icon: type
 
 export default function OperatorWorkbench() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [mockCases, setMockCases] = useState<UiCase[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCases()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setMockCases(data.map(mapApiCaseToUiCase));
+        } else {
+          setMockCases(fallbackCases);
+        }
+      })
+      .catch((e) => {
+        console.warn("Failed to fetch API cases, using fallback data", e);
+        setMockCases(fallbackCases);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
   const [selectedChannel, setSelectedChannel] = useState<ChannelId>("all");
   const attentionQueue = useMemo(
     () => mockCases.filter((item) => item.status !== "auto_resolved"),
-    [],
+    [mockCases],
   );
   const autoResolved = useMemo(
     () => mockCases.filter((item) => item.status === "auto_resolved"),
-    [],
+    [mockCases],
   );
 
   const visibleItems = useMemo(() => {
@@ -210,7 +118,8 @@ export default function OperatorWorkbench() {
     return attentionQueue.filter((item) => item.channel === selectedChannel);
   }, [attentionQueue, selectedChannel]);
 
-  const [selectedId, setSelectedId] = useState(attentionQueue[0]?.caseId);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+
   const selected = useMemo(
     () =>
       visibleItems.find((item) => item.caseId === selectedId) ??
@@ -219,24 +128,30 @@ export default function OperatorWorkbench() {
     [attentionQueue, selectedId, visibleItems],
   );
 
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>(
-    Object.fromEntries(mockCases.map((item) => [item.caseId, item.customerReply ?? ""])),
-  );
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+
   const [sentIds, setSentIds] = useState<string[]>([]);
   const [takeoverIds, setTakeoverIds] = useState<string[]>([]);
+  const [showAudit, setShowAudit] = useState(false);
 
   useGSAP(
     () => {
-      gsap.from("[data-enter]", {
-        opacity: 0,
-        y: 8,
-        duration: 0.24,
-        ease: "power2.out",
-        stagger: 0.025,
-      });
+      if (!loading) {
+        gsap.from("[data-enter]", {
+          opacity: 0,
+          y: 8,
+          duration: 0.24,
+          ease: "power2.out",
+          stagger: 0.025,
+        });
+      }
     },
-    { scope: rootRef },
+    { scope: rootRef, dependencies: [loading] },
   );
+
+  if (loading) {
+    return <main className="grid h-dvh place-items-center bg-slate-50">加载中...</main>;
+  }
 
   if (!selected) {
     return <main className="grid h-dvh place-items-center bg-slate-50">暂无待处理售后</main>;
@@ -341,7 +256,7 @@ export default function OperatorWorkbench() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{item.customerName}</div>
                       <div className={active ? "mt-1 text-xs text-slate-300" : "mt-1 text-xs text-slate-500"}>
-                        {item.channel} / {item.orderId}
+                        {item.channel} / {item.orderId || "未知单号"}
                       </div>
                     </div>
                     <span
@@ -353,14 +268,14 @@ export default function OperatorWorkbench() {
                     </span>
                   </div>
                   <p className={active ? "text-sm text-slate-200" : "text-sm text-slate-700"}>
-                    {categoryText[item.category]}
+                    {categoryText[item.category] || "未知分类"}
                   </p>
                   <div className="mt-3 flex items-center justify-between text-xs">
                     <span className={active ? "text-slate-300" : "text-slate-500"}>
                       等待 {item.waitTime}
                     </span>
                     <span className={active ? "text-amber-200" : "text-amber-600"}>
-                      {riskText[item.riskLevel]}
+                      {riskText[item.riskLevel] || "未知风险"}
                     </span>
                   </div>
                 </button>
@@ -392,10 +307,17 @@ export default function OperatorWorkbench() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-500">
-                {selected.customerName} / {selected.channel} / {selected.orderId}
+                {selected.customerName} / {selected.channel} / {selected.orderId || "未知单号"}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => setShowAudit(!showAudit)}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <History size={15} />
+                {showAudit ? "隐藏审计" : "显示审计"}
+              </button>
               <button
                 onClick={handleTakeover}
                 className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -410,7 +332,7 @@ export default function OperatorWorkbench() {
             </div>
           </header>
 
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col relative">
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
               <div className="mx-auto flex max-w-4xl flex-col gap-3">
                 <div className="flex justify-start">
@@ -444,6 +366,26 @@ export default function OperatorWorkbench() {
                 ) : null}
               </div>
             </div>
+
+            {showAudit && (
+              <div className="absolute top-0 right-0 bottom-0 w-80 bg-white border-l border-slate-200 shadow-xl overflow-y-auto p-4 z-10">
+                <h3 className="text-sm font-semibold mb-4 text-slate-800">系统审计日志</h3>
+                <div className="space-y-4">
+                  {selected.auditLogs?.map((log, idx: number) => (
+                    <div key={log.id || idx} className="text-xs">
+                      <div className="font-medium text-slate-700 mb-1">{log.action}</div>
+                      <div className="text-slate-500 mb-1">{new Date(log.createdAt).toLocaleString()}</div>
+                      <pre className="bg-slate-50 p-2 rounded text-slate-600 overflow-x-auto whitespace-pre-wrap">
+                        {JSON.stringify(log.details, null, 2)}
+                      </pre>
+                    </div>
+                  ))}
+                  {!selected.auditLogs?.length && (
+                    <div className="text-sm text-slate-500">该工单暂无审计记录</div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div className="mx-auto max-w-4xl">
@@ -479,7 +421,8 @@ export default function OperatorWorkbench() {
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {selected.actions?.map((action, index) => {
-                    const { label, Icon } = actionLabels[action.type];
+                    const labelInfo = actionLabels[action.type] || { label: action.type, Icon: Home };
+                    const { label, Icon } = labelInfo;
                     return (
                       <button
                         key={`${action.type}-${index}`}
@@ -511,7 +454,7 @@ export default function OperatorWorkbench() {
           <div className="space-y-5 p-5">
             <section className="rounded-md border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h4 className="font-semibold">{selected.orderId}</h4>
+                <h4 className="font-semibold">{selected.orderId || "未知单号"}</h4>
                 <ChevronRight size={16} className="text-slate-400" />
               </div>
               <dl className="space-y-3 text-sm">
@@ -537,7 +480,7 @@ export default function OperatorWorkbench() {
             <section className="rounded-md border border-slate-200 p-4">
               <div className="mb-3 font-semibold">判断依据</div>
               <div className="space-y-3">
-                {selected.facts.map((fact) => (
+                {selected.facts?.map((fact) => (
                   <div key={fact} className="flex items-start gap-2 text-sm text-slate-600">
                     <Check size={14} className="mt-0.5 text-emerald-600" />
                     <span>{fact}</span>

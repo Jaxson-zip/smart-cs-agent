@@ -1,17 +1,24 @@
 import { Injectable } from "@nestjs/common";
 import { AfterSalesCategory } from "@smart-cs-agent/shared";
+import { RulesService } from "../rules/rules.service";
 
 @Injectable()
 export class ClassifierService {
-  classify(text: string): AfterSalesCategory {
+  constructor(private readonly rulesService: RulesService) {}
+
+  async classify(text: string): Promise<AfterSalesCategory> {
+    const rules = await this.rulesService.getRules();
+
     if (text.includes("改") && text.includes("地址")) return "address_change";
     if (text.includes("物流") || text.includes("快递") || text.includes("发货")) return "logistics";
 
-    if (text.includes("投诉") || text.includes("差评") || text.includes("消协")) {
+    const hasComplaintKeyword = rules.highRiskKeywords.some(keyword => text.includes(keyword) && ["投诉", "差评", "消协"].includes(keyword));
+    if (hasComplaintKeyword || text.includes("投诉") || text.includes("差评") || text.includes("消协")) {
       return "complaint_escalation";
     }
 
-    if (text.includes("拒绝") || text.includes("不要券") || text.includes("不接受")) {
+    const hasRejectKeyword = rules.highRiskKeywords.some(keyword => text.includes(keyword) && ["拒绝", "不要券", "不接受"].includes(keyword));
+    if (hasRejectKeyword || text.includes("拒绝") || text.includes("不要券") || text.includes("不接受")) {
       return "compensation_rejected";
     }
 

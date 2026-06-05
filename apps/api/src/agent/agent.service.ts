@@ -3,21 +3,30 @@ import { ClassifierService } from "./classifier.service";
 import { RiskService } from "../risk/risk.service";
 import { DecisionResult } from "./agent.interface";
 import { AfterSalesAction } from "@smart-cs-agent/shared";
+import { AuditService } from "../audit/audit.service";
 
 @Injectable()
 export class AgentService {
   constructor(
     private readonly classifier: ClassifierService,
     private readonly riskService: RiskService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async decide(text: string, context?: { amount?: number }): Promise<DecisionResult> {
-    const category = this.classifier.classify(text);
-    const { riskLevel, automationMode } = this.riskService.evaluate(
+  async decide(text: string, context?: { amount?: number }, caseId?: string): Promise<DecisionResult> {
+    const category = await this.classifier.classify(text);
+    if (caseId) {
+      await this.auditService.log(caseId, "category_decision", { category });
+    }
+
+    const { riskLevel, automationMode } = await this.riskService.evaluate(
       category,
       text,
       context?.amount,
     );
+    if (caseId) {
+      await this.auditService.log(caseId, "risk_decision", { riskLevel, automationMode });
+    }
 
     let replyText = "";
     const suggestedActions: AfterSalesAction[] = [];
