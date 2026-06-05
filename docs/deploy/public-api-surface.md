@@ -23,9 +23,11 @@
 
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
-| `GET /` | Public web shell | Reads operator data from API only through configured sandbox boundary |
-| `GET /api/operator/cases` | Operator BFF | Server-side `OPERATOR_API_KEY`; browser does not receive the key |
-| `GET /api/operator/cases/:id` | Operator BFF | Server-side `OPERATOR_API_KEY`; browser does not receive the key |
+| `GET /` | Public web shell | Shows login state before loading operator data |
+| `POST /api/operator/login` | Operator BFF auth | Validates `OPERATOR_SESSION_ACCOUNTS` and sets HttpOnly signed session cookie |
+| `POST /api/operator/logout` | Operator BFF auth | Clears HttpOnly session cookie |
+| `GET /api/operator/cases` | Operator BFF | Requires HttpOnly operator session; BFF derives API key, tenant, and operator from server-side account config |
+| `GET /api/operator/cases/:id` | Operator BFF | Same as `/api/operator/cases`; browser does not receive operator key |
 | `GET /api/operator/readiness` | Operator BFF readiness | Proxies API readiness without tenant data |
 | `POST /api/chat` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
 | `GET /api/db` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
@@ -33,6 +35,7 @@
 ## Rules
 
 - No route that returns merchant/customer/order/case data should be public.
-- Browser-public env vars are not secrets. Operator keys must stay in server-side env vars such as `OPERATOR_API_KEY`.
+- Browser-public env vars are not secrets. Operator keys must stay in server-side env vars such as `OPERATOR_API_KEYS` or `OPERATOR_SESSION_ACCOUNTS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
+- The current Web login is a sandbox session boundary, not full commercial SSO/RBAC. Before production rollout, replace static account JSON with a real identity provider or account service.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real production channel webhooks must add provider signature verification before replacing the sandbox intake.

@@ -18,7 +18,7 @@
 - Docker Desktop 已启动。
 - 本地 Postgres 使用 `docker-compose.yml` 中的 `postgres` 服务，端口为 `5433`。
 - `.env` 至少包含 `.env.example` 中的 `DATABASE_URL` 和 `PORT=4100`。
-- `.env.example` 已内置沙盒客服台 key：`dev_operator_key`。如果你修改了 `OPERATOR_API_KEYS`，也要同步服务端 `OPERATOR_API_KEY` 或 smoke 脚本的 `--operator-api-key`。
+- `.env.example` 已内置沙盒客服台 key：`dev_operator_key`，以及 Web 客服台登录账号 `demo / demo123456`。如果你修改了 `OPERATOR_API_KEYS`，也要同步 `OPERATOR_SESSION_ACCOUNTS[*].apiKey`、服务端 `OPERATOR_API_KEY` 或 smoke 脚本的 `--operator-api-key`。
 
 首次启动：
 
@@ -62,6 +62,13 @@ npm.cmd run dev:web
 
 ```text
 http://localhost:3000
+```
+
+默认登录：
+
+```text
+账号：demo
+密码：demo123456
 ```
 
 如果 3000 被占用，可以改用 3100：
@@ -187,7 +194,7 @@ curl.exe http://localhost:4100/v1/cases ^
 | Prisma 连接失败、`P1001`、`ECONNREFUSED 5433` | Docker Desktop 或 Postgres 容器没启动 | 运行 `docker compose up -d postgres` |
 | `relation does not exist` 或事件 POST 返回 500 | 迁移未执行 | 运行 `npm.cmd run db:migrate` |
 | `/v1/cases` 返回 401 | 配置了 `OPERATOR_API_KEYS` 但请求没有带 key，或 key 不匹配 | 按上方 curl 示例带上 `Authorization: Bearer dev_operator_key`，或确认 `.env` 中的 key 一致 |
-| `/v1/cases` 返回 403 | key 所属租户和请求的 `x-tenant-id` 不一致 | 确认 `OPERATOR_API_KEYS`、`OPERATOR_TENANT_ID` 和 curl 请求租户一致 |
+| `/v1/cases` 返回 403 | key 所属租户和请求的 `x-tenant-id` 不一致 | 确认 `OPERATOR_API_KEYS[*].tenantId`、`OPERATOR_SESSION_ACCOUNTS[*].tenantId` 和 curl 请求租户一致 |
 | `/v1/cases` 没有演示数据 | seed 未执行、被清空或 tenant header 不匹配 | 运行 `npm.cmd run db:seed`，并确认 `x-tenant-id` 是 `demo_tenant` |
 | 手动 curl 第二次发送同一文件后只看到一张工单 | 这是幂等复用行为，系统会刷新同一张 `case_${externalMessageId}` 工单 | 若想每次生成新工单，使用 `npm.cmd run demo:smoke` 的默认运行后缀 |
 | Web 使用 3100 时实时连接失败 | API CORS 仍允许 3000 | 设置 `WEB_ORIGIN=http://localhost:3100` 后重启 API |

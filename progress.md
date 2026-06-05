@@ -30,3 +30,8 @@
 - Added `/api/operator/cases`, `/api/operator/cases/:id`, and `/api/operator/readiness` Web BFF routes.
 - Updated the operator workbench client to call same-origin BFF routes instead of direct API URLs with browser-public keys.
 - Tightened the mobile workbench layout back to a single viewport with internal scrolling after the BFF fallback path exposed page-level scroll.
+- Started PR6 operator session boundary.
+- Added signed HttpOnly operator sessions, `/api/operator/login`, and `/api/operator/logout`.
+- Changed Web BFF case list/detail routes to require a session and derive API key, tenant ID, and operator ID from server-side account config.
+- Added a Web login state so unauthenticated operators do not see fallback demo cases.
+- Addressed final review findings: production rejects placeholder/short session secrets and default demo accounts, login rejects malformed JSON payloads with 400, production BFF fails closed without `API_URL`, and Web no longer shows offline demo cases unless explicitly enabled.

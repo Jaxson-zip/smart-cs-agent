@@ -21,4 +21,6 @@
 - Legacy `/v2/*` operation endpoints and `/v1/wecom/webhook/send` are operator-facing and must not stay outside the PR3 guard.
 - `WECOM_SANDBOX_ENABLED` should be a real runtime gate. In production, the sandbox event intake should be disabled unless explicitly enabled for a controlled demo environment.
 - Web `/api/chat` and `/api/db` are historical demo routes. They are not used by the current operator workbench and should stay disabled by default because they expose mock order data and mutation-like tools.
-- Web operator data now flows through `/api/operator/*` BFF routes that use server-side `OPERATOR_API_KEY`; the browser should not receive operator secrets.
+- Web operator data now flows through `/api/operator/*` BFF routes. PR6 protects case data with a signed HttpOnly operator session and derives operator secrets from server-side `OPERATOR_SESSION_ACCOUNTS`; the browser should not receive operator secrets.
+- The PR6 login boundary is still a sandbox/commercial-readiness step, not final identity. True production needs SSO/OIDC or a dedicated account service, password hashing, RBAC administration, and session revocation.
+- Offline demo cases must not mask real authorization or API failures. PR6 only enables fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true`; default deployable environments show an error state for non-401 sync failures.

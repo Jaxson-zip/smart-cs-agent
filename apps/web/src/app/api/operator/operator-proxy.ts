@@ -1,24 +1,44 @@
 import { NextResponse } from "next/server";
+import { readOperatorSession, type OperatorSession } from "./operator-session";
 
 const DEFAULT_API_URL = "http://localhost:4100";
-const DEFAULT_TENANT_ID = "demo_tenant";
-const DEFAULT_OPERATOR_ID = "sandbox_operator";
 const REQUEST_TIMEOUT_MS = 2500;
 
 type ProxyOptions = {
-  requireOperatorKey?: boolean;
+  requireSession?: boolean;
 };
 
 export async function proxyOperatorApi(
+  request: Request,
   path: string,
-  options: ProxyOptions = { requireOperatorKey: true },
+  options: ProxyOptions = { requireSession: true },
 ) {
-  const operatorApiKey = process.env.OPERATOR_API_KEY;
-  if (options.requireOperatorKey !== false && !operatorApiKey) {
-    return NextResponse.json(
-      { error: "Operator API key is not configured" },
-      { status: 503 },
-    );
+  let session: OperatorSession | undefined;
+
+  if (options.requireSession !== false) {
+    const sessionResult = readOperatorSession(request);
+    if (sessionResult.status === "missing") {
+      return NextResponse.json(
+        { error: "Operator session is required" },
+        { status: 401 },
+      );
+    }
+
+    if (sessionResult.status === "invalid") {
+      return NextResponse.json(
+        { error: sessionResult.message },
+        { status: 401 },
+      );
+    }
+
+    if (sessionResult.status === "misconfigured") {
+      return NextResponse.json(
+        { error: sessionResult.message },
+        { status: 503 },
+      );
+    }
+
+    session = sessionResult.session;
   }
 
   const controller = new AbortController();
@@ -31,7 +51,7 @@ export async function proxyOperatorApi(
     const response = await fetch(`${apiUrl()}${path}`, {
       cache: "no-store",
       signal: controller.signal,
-      headers: buildOperatorHeaders(operatorApiKey),
+      headers: buildOperatorHeaders(session),
     });
 
     const body = await readResponseBody(response);
@@ -52,19 +72,26 @@ export async function proxyOperatorApi(
 }
 
 function apiUrl() {
+  if (process.env.NODE_ENV === "production" && !process.env.API_URL) {
+    throw new Error("API_URL is required in production");
+  }
+
   return (
     process.env.API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
     DEFAULT_API_URL
   ).replace(/\/$/, "");
 }
 
-function buildOperatorHeaders(operatorApiKey?: string) {
+function buildOperatorHeaders(session?: OperatorSession) {
   return {
     Accept: "application/json",
-    "x-tenant-id": process.env.OPERATOR_TENANT_ID ?? DEFAULT_TENANT_ID,
-    "x-operator-id": process.env.OPERATOR_ID ?? DEFAULT_OPERATOR_ID,
-    ...(operatorApiKey ? { authorization: `Bearer ${operatorApiKey}` } : {}),
+    ...(session
+      ? {
+          authorization: `Bearer ${session.apiKey}`,
+          "x-tenant-id": session.tenantId,
+          "x-operator-id": session.operatorId,
+        }
+      : {}),
   };
 }
 

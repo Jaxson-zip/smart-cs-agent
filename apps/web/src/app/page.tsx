@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   AlertTriangle,
   Check,
@@ -12,19 +12,22 @@ import {
   History,
   Home,
   Inbox,
+  LockKeyhole,
+  LogIn,
   PackageCheck,
   Search,
   Send,
   ShieldAlert,
   TicketCheck,
   Truck,
+  UserRound,
 } from "lucide-react";
 import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
-import { fetchCases } from "../lib/api";
+import { ApiError, fetchCases, loginOperator } from "../lib/api";
 import { fallbackCases, mapApiCaseToUiCase, type QueueStatus, type UiCase } from "../lib/cases";
 
 type ChannelId = "all" | "wechat" | "taobao" | "douyin" | "shopify" | "email";
-type DataState = "loading" | "ready" | "empty" | "fallback";
+type DataState = "loading" | "login" | "ready" | "empty" | "fallback" | "error";
 
 type ChannelMeta = {
   id: ChannelId;
@@ -124,8 +127,12 @@ export default function OperatorWorkbench() {
   const [sentIds, setSentIds] = useState<string[]>([]);
   const [takeoverIds, setTakeoverIds] = useState<string[]>([]);
   const [showAudit, setShowAudit] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [syncError, setSyncError] = useState("售后工单暂时无法同步，请稍后重试。");
 
-  useEffect(() => {
+  const loadCases = useCallback(() => {
     let ignore = false;
 
     fetchCases()
@@ -141,16 +148,38 @@ export default function OperatorWorkbench() {
         setCases(data.map(mapApiCaseToUiCase));
         setDataState("ready");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (ignore) return;
-        setCases(fallbackCases);
-        setDataState("fallback");
+
+        if (error instanceof ApiError && error.status === 401) {
+          setCases([]);
+          setDataState("login");
+          return;
+        }
+
+        if (process.env.NEXT_PUBLIC_ENABLE_OFFLINE_DEMO === "true") {
+          setCases(fallbackCases);
+          setDataState("fallback");
+          return;
+        }
+
+        setCases([]);
+        setSyncError(
+          error instanceof Error
+            ? error.message
+            : "售后工单暂时无法同步，请稍后重试。",
+        );
+        setDataState("error");
       });
 
     return () => {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    return loadCases();
+  }, [loadCases]);
 
   const needActionCases = useMemo(
     () => cases.filter((item) => item.status !== "auto_resolved"),
@@ -188,6 +217,103 @@ export default function OperatorWorkbench() {
           <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
           正在同步售后工单
         </div>
+      </main>
+    );
+  }
+
+  if (dataState === "login") {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-[#f4f6f8] px-5 text-slate-950">
+        <section className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          <div className="flex items-start gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-950 text-white">
+              <LockKeyhole size={20} />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">客服工作台登录</h1>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                登录后只会看到当前账号有权限处理的售后工单。
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className="mt-6 space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">账号</span>
+              <span className="flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 focus-within:border-slate-400 focus-within:bg-white">
+                <UserRound size={16} className="text-slate-400" />
+                <input
+                  value={loginForm.username}
+                  onChange={(event) =>
+                    setLoginForm((form) => ({
+                      ...form,
+                      username: event.target.value,
+                    }))
+                  }
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  autoComplete="username"
+                />
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">密码</span>
+              <span className="flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 focus-within:border-slate-400 focus-within:bg-white">
+                <LockKeyhole size={16} className="text-slate-400" />
+                <input
+                  value={loginForm.password}
+                  onChange={(event) =>
+                    setLoginForm((form) => ({
+                      ...form,
+                      password: event.target.value,
+                    }))
+                  }
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  type="password"
+                  autoComplete="current-password"
+                />
+              </span>
+            </label>
+
+            {loginError ? (
+              <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-700 ring-1 ring-rose-100">
+                {loginError}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+            >
+              <LogIn size={16} />
+              {loginLoading ? "正在登录" : "进入工作台"}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  if (dataState === "error") {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-[#f4f6f8] px-5 text-slate-950">
+        <section className="w-full max-w-[460px] rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-amber-50 text-amber-700">
+            <AlertTriangle size={22} />
+          </div>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight">工单暂时无法同步</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{syncError}</p>
+          <button
+            onClick={() => {
+              setDataState("loading");
+              loadCases();
+            }}
+            className="mt-5 inline-flex h-10 items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            重新同步
+          </button>
+        </section>
       </main>
     );
   }
@@ -237,6 +363,22 @@ export default function OperatorWorkbench() {
   function handleTakeover() {
     if (takeoverIds.includes(selected.caseId)) return;
     setTakeoverIds((items) => [...items, selected.caseId]);
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoginError("");
+    setLoginLoading(true);
+
+    try {
+      await loginOperator(loginForm.username.trim(), loginForm.password);
+      setDataState("loading");
+      loadCases();
+    } catch {
+      setLoginError("账号或密码不正确，或登录服务暂时不可用。");
+    } finally {
+      setLoginLoading(false);
+    }
   }
 
   return (

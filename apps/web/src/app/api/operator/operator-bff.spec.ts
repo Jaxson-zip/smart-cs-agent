@@ -2,6 +2,8 @@ import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
+import { POST as loginOperator } from "./login/route";
+import { POST as logoutOperator } from "./logout/route";
 import { GET as getReadiness } from "./readiness/route";
 
 const originalFetch = globalThis.fetch;
@@ -9,6 +11,11 @@ const originalApiUrl = process.env.API_URL;
 const originalOperatorApiKey = process.env.OPERATOR_API_KEY;
 const originalTenantId = process.env.OPERATOR_TENANT_ID;
 const originalOperatorId = process.env.OPERATOR_ID;
+const originalSessionSecret = process.env.OPERATOR_SESSION_SECRET;
+const originalSessionAccounts = process.env.OPERATOR_SESSION_ACCOUNTS;
+const originalSessionTtl = process.env.OPERATOR_SESSION_TTL_SECONDS;
+const originalNodeEnv = process.env.NODE_ENV;
+const originalNextPublicApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 describe("operator BFF routes", () => {
   afterEach(() => {
@@ -17,14 +24,38 @@ describe("operator BFF routes", () => {
     restoreEnv("OPERATOR_API_KEY", originalOperatorApiKey);
     restoreEnv("OPERATOR_TENANT_ID", originalTenantId);
     restoreEnv("OPERATOR_ID", originalOperatorId);
+    restoreEnv("OPERATOR_SESSION_SECRET", originalSessionSecret);
+    restoreEnv("OPERATOR_SESSION_ACCOUNTS", originalSessionAccounts);
+    restoreEnv("OPERATOR_SESSION_TTL_SECONDS", originalSessionTtl);
+    restoreEnv("NODE_ENV", originalNodeEnv);
+    restoreEnv("NEXT_PUBLIC_API_URL", originalNextPublicApiUrl);
+    delete process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
   });
 
-  it("proxies case list with a server-side operator API key", async () => {
+  it("requires an operator session before proxying case list", async () => {
+    let fetchCalled = false;
+    process.env.API_URL = "http://api.internal:4100";
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json([]);
+    };
+
+    const response = await getCases(new Request("http://localhost/api/operator/cases"));
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session is required",
+    });
+    assert.strictEqual(fetchCalled, false);
+  });
+
+  it("proxies case list with a server-side operator session", async () => {
     const requests: Array<{ url: string; headers: Headers }> = [];
     process.env.API_URL = "http://api.internal:4100";
-    process.env.OPERATOR_API_KEY = "server_only_key";
-    process.env.OPERATOR_TENANT_ID = "tenant_from_server";
-    process.env.OPERATOR_ID = "operator_from_server";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_from_session","operatorId":"operator_from_session","role":"admin","apiKey":"session_api_key"}]';
     process.env.NEXT_PUBLIC_OPERATOR_API_KEY = "public_key_should_not_be_used";
 
     globalThis.fetch = async (input, init) => {
@@ -36,56 +67,155 @@ describe("operator BFF routes", () => {
       return Response.json([{ caseId: "case_1" }]);
     };
 
-    const response = await getCases();
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie");
+    assert.ok(cookie?.includes("smart_cs_operator_session="));
+    assert.ok(cookie?.includes("HttpOnly"));
+    assert.match(cookie ?? "", /SameSite=Lax/i);
+    assert.ok(cookie?.includes("Path=/"));
+
+    const response = await getCases(
+      new Request("http://localhost/api/operator/cases", {
+        headers: { cookie: cookie ?? "" },
+      }),
+    );
 
     assert.strictEqual(response.status, 200);
     assert.deepStrictEqual(await response.json(), [{ caseId: "case_1" }]);
     assert.strictEqual(requests[0]?.url, "http://api.internal:4100/v1/cases");
     assert.strictEqual(
       requests[0]?.headers.get("authorization"),
-      "Bearer server_only_key",
+      "Bearer session_api_key",
     );
     assert.strictEqual(
       requests[0]?.headers.get("x-tenant-id"),
-      "tenant_from_server",
+      "tenant_from_session",
     );
     assert.strictEqual(
       requests[0]?.headers.get("x-operator-id"),
-      "operator_from_server",
+      "operator_from_session",
     );
   });
 
-  it("does not call the API when the server-side operator key is missing", async () => {
+  it("rejects invalid operator credentials", async () => {
     let fetchCalled = false;
     process.env.API_URL = "http://api.internal:4100";
-    delete process.env.OPERATOR_API_KEY;
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
 
     globalThis.fetch = async () => {
       fetchCalled = true;
       return Response.json([]);
     };
 
-    const response = await getCases();
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "wrong",
+      }),
+    );
 
-    assert.strictEqual(response.status, 503);
+    assert.strictEqual(response.status, 401);
     assert.deepStrictEqual(await response.json(), {
-      error: "Operator API key is not configured",
+      error: "Invalid username or password",
     });
     assert.strictEqual(fetchCalled, false);
   });
 
+  it("rejects malformed login payloads without throwing a 500", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(jsonRequest("http://localhost/api/operator/login", null));
+
+    assert.strictEqual(response.status, 400);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Username and password are required",
+    });
+  });
+
+  it("rejects production login when the session secret is not production safe", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "short";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session secret is not configured",
+    });
+  });
+
+  it("rejects the default demo account in production", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"demo","password":"demo123456","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "demo",
+        password: "demo123456",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session accounts are not configured",
+    });
+  });
+
+  it("clears the operator session cookie on logout", async () => {
+    const response = await logoutOperator();
+    const cookie = response.headers.get("set-cookie");
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), { ok: true });
+    assert.ok(cookie?.includes("smart_cs_operator_session="));
+    assert.ok(cookie?.includes("Max-Age=0"));
+    assert.ok(cookie?.includes("HttpOnly"));
+  });
+
   it("proxies case details through the same server-side boundary", async () => {
     process.env.API_URL = "http://api.internal:4100";
-    process.env.OPERATOR_API_KEY = "server_only_key";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_from_session","operatorId":"operator_from_session","role":"operator","apiKey":"session_api_key"}]';
     let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init) => {
       proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
       return Response.json({ caseId: "case_123" });
     };
 
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
     const response = await getCaseDetails(
-      new Request("http://localhost/api/operator/cases/case_123"),
+      new Request("http://localhost/api/operator/cases/case_123", {
+        headers: { cookie },
+      }),
       { params: Promise.resolve({ id: "case_123" }) },
     );
 
@@ -95,6 +225,46 @@ describe("operator BFF routes", () => {
       proxiedUrl,
       "http://api.internal:4100/v1/cases/case_123",
     );
+    assert.strictEqual(
+      proxiedHeaders.get("authorization"),
+      "Bearer session_api_key",
+    );
+  });
+
+  it("rejects a tampered operator session cookie", async () => {
+    let fetchCalled = false;
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json([]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const cookie = (loginResponse.headers.get("set-cookie") ?? "").replace(
+      "smart_cs_operator_session=",
+      "smart_cs_operator_session=tampered",
+    );
+
+    const response = await getCases(
+      new Request("http://localhost/api/operator/cases", {
+        headers: { cookie },
+      }),
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session is invalid",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("proxies readiness without requiring an operator API key", async () => {
@@ -107,13 +277,45 @@ describe("operator BFF routes", () => {
       return Response.json({ status: "ready" });
     };
 
-    const response = await getReadiness();
+    const response = await getReadiness(
+      new Request("http://localhost/api/operator/readiness"),
+    );
 
     assert.strictEqual(response.status, 200);
     assert.deepStrictEqual(await response.json(), { status: "ready" });
     assert.strictEqual(proxiedUrl, "http://api.internal:4100/health/ready");
   });
+
+  it("fails closed in production when the internal API URL is missing", async () => {
+    setEnv("NODE_ENV", "production");
+    delete process.env.API_URL;
+    process.env.NEXT_PUBLIC_API_URL = "http://public.example.invalid";
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({ status: "ready" });
+    };
+
+    const response = await getReadiness(
+      new Request("http://localhost/api/operator/readiness"),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator API is unavailable",
+    });
+    assert.strictEqual(fetchCalled, false);
+  });
 });
+
+function jsonRequest(url: string, body: unknown) {
+  return new Request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 function restoreEnv(key: string, value: string | undefined) {
   if (value === undefined) {
@@ -121,4 +323,8 @@ function restoreEnv(key: string, value: string | undefined) {
   } else {
     process.env[key] = value;
   }
+}
+
+function setEnv(key: string, value: string) {
+  process.env[key] = value;
 }
