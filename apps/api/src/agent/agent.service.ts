@@ -13,8 +13,9 @@ export class AgentService {
     private readonly auditService: AuditService,
   ) {}
 
-  async decide(text: string, context?: { amount?: number }, caseId?: string): Promise<DecisionResult> {
-    const category = await this.classifier.classify(text);
+  async decide(text: string, context?: { amount?: number; tenantId?: string }, caseId?: string): Promise<DecisionResult> {
+    const tenantId = context?.tenantId ?? "demo_tenant";
+    const category = await this.classifier.classify(text, tenantId);
     if (caseId) {
       await this.auditService.log(caseId, "category_decision", { category });
     }
@@ -23,6 +24,7 @@ export class AgentService {
       category,
       text,
       context?.amount,
+      tenantId,
     );
     if (caseId) {
       await this.auditService.log(caseId, "risk_decision", { riskLevel, automationMode });

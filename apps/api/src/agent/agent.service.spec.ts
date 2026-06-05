@@ -8,21 +8,26 @@ import { RulesService } from "../rules/rules.service";
 
 describe("AgentService", () => {
   let service: AgentService;
+  let requestedTenantIds: string[];
 
   beforeEach(() => {
+    requestedTenantIds = [];
     const mockAuditService = { log: async () => {} } as unknown as AuditService;
     const mockRulesService = {
-      getRules: async () => ({
-        couponCompensationLimit: 50,
-        highRiskKeywords: ["投诉", "差评", "消协", "退款", "退货", "不要券", "不接受", "拒绝"],
-        channelCapabilities: {}
-      })
+      getRules: async (tenantId: string) => {
+        requestedTenantIds.push(tenantId);
+        return {
+          couponCompensationLimit: 50,
+          highRiskKeywords: ["投诉", "差评", "消协", "退款", "退货", "不要券", "不接受", "拒绝"],
+          channelCapabilities: {},
+        };
+      },
     } as unknown as RulesService;
 
     service = new AgentService(
-      new ClassifierService(mockRulesService), 
-      new RiskService(mockRulesService), 
-      mockAuditService
+      new ClassifierService(mockRulesService),
+      new RiskService(mockRulesService),
+      mockAuditService,
     );
   });
 
@@ -48,5 +53,13 @@ describe("AgentService", () => {
     assert.strictEqual(result.automationMode, "human_takeover");
     assert.strictEqual(result.category, "complaint_escalation");
     assert.strictEqual(result.riskLevel, "high");
+  });
+
+  it("loads classification and risk rules for the request tenant", async () => {
+    await service.decide("你好，我可以改一下地址吗？", {
+      tenantId: "tenant_a",
+    });
+
+    assert.deepStrictEqual(requestedTenantIds, ["tenant_a", "tenant_a"]);
   });
 });

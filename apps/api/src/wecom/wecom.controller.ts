@@ -43,7 +43,10 @@ export class WecomController {
       { action: "event_received", details: { text: normalizedEvent.text } },
     ];
 
-    const decision = await this.agentService.decide(normalizedEvent.text, { amount: undefined });
+    const decision = await this.agentService.decide(normalizedEvent.text, {
+      amount: undefined,
+      tenantId: normalizedEvent.merchantId,
+    });
     auditEntries.push(
       { action: "category_decision", details: { category: decision.category } },
       {

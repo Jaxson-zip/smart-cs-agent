@@ -2,6 +2,8 @@ import type { AfterSalesCase } from "@smart-cs-agent/shared";
 import type { ApiAfterSalesCase } from "./cases";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
+const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || "demo_tenant";
+const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID || "sandbox_operator";
 const REQUEST_TIMEOUT_MS = 2500;
 
 export type ApiReadiness = {
@@ -55,6 +57,10 @@ async function fetchWithTimeout(url: string): Promise<Response> {
     return await fetch(url, {
       cache: "no-store",
       signal: controller.signal,
+      headers: {
+        "x-tenant-id": TENANT_ID,
+        "x-operator-id": OPERATOR_ID,
+      },
     });
   } finally {
     globalThis.clearTimeout(timeout);

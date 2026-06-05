@@ -205,7 +205,8 @@ describe("WecomController", () => {
       sendMessage: async () => ({ success: true, messageId: "reply_1" }),
     } as unknown as WecomSandboxProvider;
     const agentService = {
-      decide: async () => {
+      decide: async (_text: string, context?: { tenantId?: string }) => {
+        assert.strictEqual(context?.tenantId, "demo");
         return {
           category: "address_change",
           riskLevel: "low",
@@ -303,13 +304,16 @@ describe("WecomController", () => {
       sendMessage: async () => ({ success: true, messageId: "reply_1" }),
     } as unknown as WecomSandboxProvider;
     const agentService = {
-      decide: async () => ({
-        category: "address_change",
-        riskLevel: "low",
-        automationMode: "auto_execute",
-        replyText: "new reply",
-        suggestedActions: [{ type: "change_address", status: "pending" }],
-      }),
+      decide: async (_text: string, context?: { tenantId?: string }) => {
+        assert.strictEqual(context?.tenantId, "demo");
+        return {
+          category: "address_change",
+          riskLevel: "low",
+          automationMode: "auto_execute",
+          replyText: "new reply",
+          suggestedActions: [{ type: "change_address", status: "pending" }],
+        };
+      },
     } as unknown as AgentService;
     const actionService = {
       executeMockAction: async () => {

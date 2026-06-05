@@ -2,24 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR1 - Deployable Sandbox
+## Current Stage: PR2 - Tenant Context Baseline
 
 Status: complete
 
-PR1 makes the current WeCom sandbox loop deployable and testable in a real environment without connecting real Taobao/Douyin yet.
+PR2 starts turning the deployable sandbox into a SaaS-shaped system by making tenant context explicit on operator-facing APIs.
 
-### Scope
+### PR2 Scope
 
-- Backend readiness: config validation, DB health/readiness endpoint, safer startup behavior.
-- CI gate: generate Prisma client, test, typecheck, lint, build.
-- Demo/ops: smoke script checks DB-backed endpoints and documents exact startup path.
-- Frontend: clear API disconnected state and no developer-facing terms.
+- Require `x-tenant-id` on operator-facing APIs that read cases or rules.
+- Filter cases by merchant/tenant to prevent cross-tenant data exposure.
+- Prevent `GET /v1/rules/:tenantId` from reading a tenant different from the request context.
+- Keep WeCom sandbox webhook body-based merchant routing intact.
+- Use the webhook/request tenant when loading classification and risk rules.
+- Update frontend and smoke scripts to send explicit demo tenant headers.
 
-### Out Of Scope For PR1
+### Out Of Scope For PR2
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Authentication and billing.
+- Full authentication, SSO, JWT, sessions, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -29,10 +31,12 @@ PR1 makes the current WeCom sandbox loop deployable and testable in a real envir
 - [x] PR1 CI and deployment hygiene.
 - [x] PR1 frontend production-state polish.
 - [x] PR1 final verification and push.
+- [x] PR2 tenant request context and API filtering.
+- [x] PR2 tests, docs, verification, and push.
 
 ## Verification Gate
 
-Do not claim PR1 complete until these pass:
+Do not claim PR2 tenant context complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -51,3 +55,5 @@ Do not claim PR1 complete until these pass:
 | 2026-06-06 | Prisma connected during module init, making `/health` unavailable when DB was down | Removed startup connect and made `/health/ready` own DB availability |
 | 2026-06-06 | Full config loader in WebSocket decorator required `DATABASE_URL` at import time | Split `loadWebOrigin()` so WebSocket CORS only validates `WEB_ORIGIN` |
 | 2026-06-06 | `.env` fallback could silently affect CI/production | Disabled default `.env` loading when `CI=true` or `NODE_ENV=production` |
+| 2026-06-06 | `/v1/cases` returned all merchants and `/v1/rules/:tenantId` could read arbitrary tenants | PR2 adds explicit tenant request context and tenant filtering |
+| 2026-06-06 | Agent rules still defaulted to `demo_tenant` during webhook decisions | Passed tenant ID into classification and risk evaluation |

@@ -93,8 +93,9 @@ const mapCase = (caseItem: CaseWithDetails) => {
 export class CasesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(tenantId: string) {
     const cases = await this.prisma.afterSalesCase.findMany({
+      where: { merchantId: tenantId },
       orderBy: { createdAt: 'desc' },
       include: {
         messages: { orderBy: { createdAt: 'asc' } },
@@ -106,9 +107,9 @@ export class CasesService {
     return cases.map(mapCase);
   }
 
-  async findOne(id: string) {
-    const caseItem = await this.prisma.afterSalesCase.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string) {
+    const caseItem = await this.prisma.afterSalesCase.findFirst({
+      where: { id, merchantId: tenantId },
       include: {
         messages: { orderBy: { createdAt: 'asc' } },
         caseActions: { orderBy: { createdAt: 'asc' } },

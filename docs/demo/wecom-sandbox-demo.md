@@ -82,9 +82,9 @@ npm.cmd run demo:smoke
 脚本会执行：
 
 1. `GET /health`，确认 API 在 `4100` 可用。
-2. `GET /v1/rules/demo_tenant`，确认规则接口可读。
+2. `GET /v1/rules/demo_tenant`，携带 `x-tenant-id: demo_tenant`，确认规则接口可读。
 3. 读取 `docs/demo/wecom-sandbox-payloads/*.json` 的 5 个 payload。
-4. 逐个 `POST /v1/wecom/events`。
+4. 逐个 `POST /v1/wecom/events`。该 webhook 路径按 payload body 中的 `merchantId` 路由，不需要 operator header。
 5. 输出每个场景的 `category`、`riskLevel`、`automationMode` 是否符合预期。
 
 脚本默认会给 `externalConversationId` 和 `externalMessageId` 添加运行后缀，让每次 smoke 都生成一组新的演示工单。如果需要按文件原始 ID 发送并验证幂等复用，可运行：
@@ -142,7 +142,9 @@ curl.exe -X POST http://localhost:4100/v1/wecom/events ^
 规则接口：
 
 ```powershell
-curl.exe http://localhost:4100/v1/rules/demo_tenant
+curl.exe http://localhost:4100/v1/rules/demo_tenant ^
+  -H "x-tenant-id: demo_tenant" ^
+  -H "x-operator-id: sandbox_operator"
 ```
 
 应看到类似字段：
@@ -161,7 +163,9 @@ curl.exe http://localhost:4100/v1/rules/demo_tenant
 案件列表：
 
 ```powershell
-curl.exe http://localhost:4100/v1/cases
+curl.exe http://localhost:4100/v1/cases ^
+  -H "x-tenant-id: demo_tenant" ^
+  -H "x-operator-id: sandbox_operator"
 ```
 
 应能看到 seed 数据和 smoke 新增的 5 个 case。Web 客服台应展示相同的售后队列、风险等级、自动化模式和审计信息。
@@ -173,7 +177,8 @@ curl.exe http://localhost:4100/v1/cases
 | `API is not reachable at http://localhost:4100` | API 没启动或端口不是 4100 | 运行 `npm.cmd run dev:api`，确认 `.env` 中 `PORT=4100` |
 | Prisma 连接失败、`P1001`、`ECONNREFUSED 5433` | Docker Desktop 或 Postgres 容器没启动 | 运行 `docker compose up -d postgres` |
 | `relation does not exist` 或事件 POST 返回 500 | 迁移未执行 | 运行 `npm.cmd run db:migrate` |
-| `/v1/cases` 没有演示数据 | seed 未执行或被清空 | 运行 `npm.cmd run db:seed` |
+| `/v1/cases` 返回 401 | 缺少 `x-tenant-id` 请求头 | 按上方 curl 示例带上 `x-tenant-id: demo_tenant` |
+| `/v1/cases` 没有演示数据 | seed 未执行、被清空或 tenant header 不匹配 | 运行 `npm.cmd run db:seed`，并确认 `x-tenant-id` 是 `demo_tenant` |
 | 手动 curl 第二次发送同一文件后只看到一张工单 | 这是幂等复用行为，系统会刷新同一张 `case_${externalMessageId}` 工单 | 若想每次生成新工单，使用 `npm.cmd run demo:smoke` 的默认运行后缀 |
 | Web 使用 3100 时实时连接失败 | API CORS 仍允许 3000 | 设置 `WEB_ORIGIN=http://localhost:3100` 后重启 API |
 

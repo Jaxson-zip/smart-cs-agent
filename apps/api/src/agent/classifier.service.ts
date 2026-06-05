@@ -6,8 +6,8 @@ import { RulesService } from "../rules/rules.service";
 export class ClassifierService {
   constructor(private readonly rulesService: RulesService) {}
 
-  async classify(text: string): Promise<AfterSalesCategory> {
-    const rules = await this.rulesService.getRules();
+  async classify(text: string, tenantId = "demo_tenant"): Promise<AfterSalesCategory> {
+    const rules = await this.rulesService.getRules(tenantId);
 
     if (text.includes("改") && text.includes("地址")) return "address_change";
     if (text.includes("物流") || text.includes("快递") || text.includes("发货")) return "logistics";

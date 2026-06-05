@@ -9,7 +9,18 @@ describe("CasesService", () => {
     const updatedAt = new Date("2026-06-05T12:01:00.000Z");
     const prisma = {
       afterSalesCase: {
-        findMany: async () => [
+        findMany: async (query: unknown) => {
+          assert.deepStrictEqual(query, {
+            where: { merchantId: "demo" },
+            orderBy: { createdAt: "desc" },
+            include: {
+              messages: { orderBy: { createdAt: "asc" } },
+              caseActions: { orderBy: { createdAt: "asc" } },
+              auditLogs: { orderBy: { createdAt: "asc" } },
+            },
+          });
+
+          return [
           {
             id: "case_1",
             merchantId: "demo",
@@ -55,12 +66,13 @@ describe("CasesService", () => {
               },
             ],
           },
-        ],
+        ];
+        },
       },
     };
     const service = new CasesService(prisma as unknown as PrismaService);
 
-    const cases = await service.findAll();
+    const cases = await service.findAll("demo");
 
     assert.strictEqual(cases[0]?.caseId, "case_1");
     assert.deepStrictEqual(cases[0]?.actions, [
@@ -84,5 +96,48 @@ describe("CasesService", () => {
         createdAt: "2026-06-05T12:00:00.000Z",
       },
     ]);
+  });
+
+  it("only finds a case inside the requested tenant", async () => {
+    const createdAt = new Date("2026-06-05T12:00:00.000Z");
+    const prisma = {
+      afterSalesCase: {
+        findFirst: async (query: unknown) => {
+          assert.deepStrictEqual(query, {
+            where: { id: "case_1", merchantId: "demo" },
+            include: {
+              messages: { orderBy: { createdAt: "asc" } },
+              caseActions: { orderBy: { createdAt: "asc" } },
+              auditLogs: { orderBy: { createdAt: "asc" } },
+            },
+          });
+
+          return {
+            id: "case_1",
+            merchantId: "demo",
+            channel: "taobao",
+            customerName: "Ada",
+            orderId: null,
+            category: "address_change",
+            riskLevel: "low",
+            automationMode: "auto_execute",
+            customerMessage: "change my address",
+            customerReply: "address updated",
+            actions: [{ type: "change_address", status: "success" }],
+            createdAt,
+            updatedAt: createdAt,
+            messages: [],
+            caseActions: [],
+            auditLogs: [],
+          };
+        },
+      },
+    };
+    const service = new CasesService(prisma as unknown as PrismaService);
+
+    const result = await service.findOne("case_1", "demo");
+
+    assert.strictEqual(result.caseId, "case_1");
+    assert.strictEqual(result.merchantId, "demo");
   });
 });

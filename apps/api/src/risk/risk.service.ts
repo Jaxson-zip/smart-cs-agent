@@ -6,8 +6,13 @@ import { RulesService } from "../rules/rules.service";
 export class RiskService {
   constructor(private readonly rulesService: RulesService) {}
 
-  async evaluate(category: AfterSalesCategory, _text: string, amount?: number): Promise<{ riskLevel: RiskLevel; automationMode: AutomationMode }> {
-    const rules = await this.rulesService.getRules();
+  async evaluate(
+    category: AfterSalesCategory,
+    _text: string,
+    amount?: number,
+    tenantId = "demo_tenant",
+  ): Promise<{ riskLevel: RiskLevel; automationMode: AutomationMode }> {
+    const rules = await this.rulesService.getRules(tenantId);
 
     if (category === "address_change") return { riskLevel: "low", automationMode: "auto_execute" };
     if (category === "logistics") return { riskLevel: "low", automationMode: "auto_execute" };

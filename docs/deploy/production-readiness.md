@@ -47,6 +47,8 @@ NEXT_PUBLIC_WS_URL=http://localhost:4100
 - `WECOM_SANDBOX_ENABLED`：沙盒入口开关，PR1 期望为 `true`。
 - `NEXT_PUBLIC_API_URL`：Web 访问 API 的公开地址。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
+- `NEXT_PUBLIC_TENANT_ID`：沙盒前端请求使用的租户 ID，PR2 默认 `demo_tenant`。
+- `NEXT_PUBLIC_OPERATOR_ID`：沙盒前端请求使用的操作者 ID，PR2 默认 `sandbox_operator`。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
 
@@ -75,8 +77,8 @@ curl http://localhost:4100/health
 PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `/health`：
 
 - `GET /health/ready` 能确认 API 到数据库的路径是否可用；数据库不可用时应返回 HTTP 503。
-- `GET /v1/cases` 能读取 seed 或 smoke 后的售后工单。
-- `GET /v1/rules/demo_tenant` 能读取沙盒规则配置。
+- `GET /v1/cases` 携带 `x-tenant-id: demo_tenant` 后能读取 seed 或 smoke 后的售后工单。
+- `GET /v1/rules/demo_tenant` 携带 `x-tenant-id: demo_tenant` 后能读取沙盒规则配置。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
 
 真实渠道鉴权状态未来应作为独立 channel readiness 展示，不应阻塞当前沙盒 readiness。

@@ -13,3 +13,5 @@
 - The API config loader now searches upward for `.env` and lets explicit environment variables override file defaults.
 - `.env` loading is disabled by default when `NODE_ENV=production` or `CI=true`; production should use real environment variables from the deploy platform.
 - `PrismaService` no longer connects during module initialization; DB availability is reported by `/health/ready` instead of blocking liveness.
+- Operator-facing APIs need tenant context before real commercial use. PR2 uses `x-tenant-id` and `x-operator-id` headers as the tenant context boundary until full auth is implemented.
+- Agent classification and risk evaluation must use the event/request tenant's rules, not the default demo tenant. PR2 passes tenant context through AgentService, ClassifierService, and RiskService.
