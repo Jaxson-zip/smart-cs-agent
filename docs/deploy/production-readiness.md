@@ -140,3 +140,11 @@ PR9 将 Web 客服台账号来源从静态 `OPERATOR_SESSION_ACCOUNTS` 迁移到
 `OPERATOR_SESSION_ACCOUNTS` 现在只作为本地/沙盒兜底来源。若显式设置 `OPERATOR_ACCOUNT_SOURCE=env`，Web BFF 会继续使用旧 JSON 账号；否则存在 `OPERATOR_SESSION_ACCOUNTS` 时仍会兼容旧本地配置。正式部署不要依赖该 JSON 作为主账号系统。
 
 本地开发继续使用 `npm run db:migrate`；部署环境使用 `npm run db:migrate:deploy`，避免在生产执行 Prisma dev migration 语义。
+
+## PR10 Operator Management
+
+PR10 增加管理员账号管理 BFF：`GET /api/operator/operators`、`POST /api/operator/operators` 和 `PATCH /api/operator/operators/:operatorId`。这些接口只接受带 HttpOnly session 的 `admin` 账号访问，普通 `operator` 和 `viewer` 会返回 403。
+
+创建账号时，BFF 使用管理员 session 的租户和服务端 API key 派生新账号上下文，浏览器不需要也不能提交 `apiKey`。密码只以 `scrypt:<salt>:<hash>` 形式写入数据库，响应只返回 `username`、`tenantId`、`operatorId`、`role`、`disabled` 和 `sessionVersion`。
+
+更新账号时，管理员可以调整 `role`、设置 `disabled`，或通过 `revokeSessions` 提升 `sessionVersion` 来撤销旧 cookie。创建和更新都会写入 `AuditLog`，审计详情只包含 actor、target、tenant、role/disabled/revokedSessions 等非 secret 字段。

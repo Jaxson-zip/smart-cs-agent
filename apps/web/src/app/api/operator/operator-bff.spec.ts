@@ -6,7 +6,17 @@ import { GET as getCaseDetails } from "./cases/[id]/route";
 import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
+import {
+  GET as listOperators,
+  POST as createOperator,
+} from "./operators/route";
+import { PATCH as updateOperator } from "./operators/[operatorId]/route";
 import { GET as getReadiness } from "./readiness/route";
+import {
+  clearOperatorAdminStoreForTests,
+  setOperatorAdminStoreForTests,
+  type OperatorAdminStore,
+} from "./operator-admin";
 import {
   clearOperatorAccountStoreForTests,
   setOperatorAccountStoreForTests,
@@ -38,6 +48,7 @@ describe("operator BFF routes", () => {
     restoreEnv("OPERATOR_SESSION_TTL_SECONDS", originalSessionTtl);
     restoreEnv("NODE_ENV", originalNodeEnv);
     restoreEnv("NEXT_PUBLIC_API_URL", originalNextPublicApiUrl);
+    clearOperatorAdminStoreForTests();
     clearOperatorAccountStoreForTests();
     delete process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
   });
@@ -647,12 +658,287 @@ describe("operator BFF routes", () => {
     });
     assert.strictEqual(fetchCalled, false);
   });
+
+  it("requires an admin operator before listing operator accounts", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"session_api_key"}]';
+    let listCalled = false;
+    setOperatorAdminStoreForTests({
+      async listByTenant() {
+        listCalled = true;
+        return [];
+      },
+      async create() {
+        throw new Error("not expected");
+      },
+      async updateByTenantOperatorId() {
+        throw new Error("not expected");
+      },
+      async audit() {},
+    });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const response = await listOperators(
+      new Request("http://localhost/api/operator/operators", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator account management requires admin permission",
+    });
+    assert.strictEqual(listCalled, false);
+  });
+
+  it("lets admins list sanitized operator accounts for their tenant", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let requestedTenantId = "";
+    setOperatorAdminStoreForTests({
+      async listByTenant(tenantId) {
+        requestedTenantId = tenantId;
+        return [
+          {
+            id: "db_id",
+            username: "agent",
+            tenantId,
+            operatorId: "agent_1",
+            role: "operator",
+            passwordHash: testPasswordHash("secret"),
+            apiKey: "must_not_leak",
+            disabled: false,
+            sessionVersion: 2,
+            createdAt: new Date("2026-06-06T00:00:00.000Z"),
+            updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+          },
+        ];
+      },
+      async create() {
+        throw new Error("not expected");
+      },
+      async updateByTenantOperatorId() {
+        throw new Error("not expected");
+      },
+      async audit() {},
+    });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listOperators(
+      new Request("http://localhost/api/operator/operators", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(requestedTenantId, "tenant_1");
+    assert.deepStrictEqual(await response.json(), {
+      operators: [
+        {
+          username: "agent",
+          tenantId: "tenant_1",
+          operatorId: "agent_1",
+          role: "operator",
+          disabled: false,
+          sessionVersion: 2,
+        },
+      ],
+    });
+  });
+
+  it("lets admins create sanitized operator accounts without exposing secrets", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    const auditEvents: Array<{ action: string; details: unknown }> = [];
+    let createdAccount: Parameters<OperatorAdminStore["create"]>[0] | undefined;
+    setOperatorAdminStoreForTests({
+      async listByTenant() {
+        return [];
+      },
+      async create(input) {
+        createdAccount = input;
+        return {
+          ...input,
+          id: "db_id",
+          disabled: false,
+          sessionVersion: 1,
+          createdAt: new Date("2026-06-06T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+        };
+      },
+      async updateByTenantOperatorId() {
+        throw new Error("not expected");
+      },
+      async audit(action, details) {
+        auditEvents.push({ action, details });
+      },
+    });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await createOperator(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/operators",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          username: "new_agent",
+          password: "agent12345",
+          operatorId: "agent_2",
+          role: "operator",
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 201);
+    assert.deepStrictEqual(await response.json(), {
+      operator: {
+        username: "new_agent",
+        tenantId: "tenant_1",
+        operatorId: "agent_2",
+        role: "operator",
+        disabled: false,
+        sessionVersion: 1,
+      },
+    });
+    assert.strictEqual(createdAccount?.tenantId, "tenant_1");
+    assert.strictEqual(createdAccount?.apiKey, "admin_api_key");
+    assert.match(createdAccount?.passwordHash ?? "", /^scrypt:[^:]+:[A-Za-z0-9_-]+$/);
+    assert.notStrictEqual(createdAccount?.passwordHash, "agent12345");
+    assert.deepStrictEqual(auditEvents, [
+      {
+        action: "operator_account.created",
+        details: {
+          actorOperatorId: "admin_1",
+          targetOperatorId: "agent_2",
+          tenantId: "tenant_1",
+          role: "operator",
+        },
+      },
+    ]);
+  });
+
+  it("lets admins update operator status and revoke existing sessions", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    const auditEvents: Array<{ action: string; details: unknown }> = [];
+    let updateInput:
+      | Parameters<OperatorAdminStore["updateByTenantOperatorId"]>[2]
+      | undefined;
+    setOperatorAdminStoreForTests({
+      async listByTenant() {
+        return [];
+      },
+      async create() {
+        throw new Error("not expected");
+      },
+      async updateByTenantOperatorId(_tenantId, _operatorId, input) {
+        updateInput = input;
+        return {
+          id: "db_id",
+          username: "agent",
+          tenantId: "tenant_1",
+          operatorId: "agent_2",
+          role: input.role ?? "operator",
+          passwordHash: testPasswordHash("secret"),
+          apiKey: "admin_api_key",
+          disabled: input.disabled ?? false,
+          sessionVersion: 4,
+          createdAt: new Date("2026-06-06T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+        };
+      },
+      async audit(action, details) {
+        auditEvents.push({ action, details });
+      },
+    });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await updateOperator(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/operators/agent_2",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          disabled: true,
+          role: "viewer",
+          revokeSessions: true,
+        },
+        "PATCH",
+      ),
+      { params: Promise.resolve({ operatorId: "agent_2" }) },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(updateInput, {
+      disabled: true,
+      role: "viewer",
+      incrementSessionVersion: true,
+    });
+    assert.deepStrictEqual(await response.json(), {
+      operator: {
+        username: "agent",
+        tenantId: "tenant_1",
+        operatorId: "agent_2",
+        role: "viewer",
+        disabled: true,
+        sessionVersion: 4,
+      },
+    });
+    assert.deepStrictEqual(auditEvents, [
+      {
+        action: "operator_account.updated",
+        details: {
+          actorOperatorId: "admin_1",
+          targetOperatorId: "agent_2",
+          tenantId: "tenant_1",
+          role: "viewer",
+          disabled: true,
+          revokedSessions: true,
+        },
+      },
+    ]);
+  });
 });
 
 function jsonRequest(url: string, body: unknown) {
   return new Request(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function jsonRequestWithCookie(
+  url: string,
+  cookie: string,
+  body: unknown,
+  method = "POST",
+) {
+  return new Request(url, {
+    method,
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
   });
 }

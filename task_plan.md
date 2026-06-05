@@ -2,26 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR9 - Database-Backed Operator Accounts
+## Current Stage: PR10 - Operator Account Management
 
 Status: in progress
 
-PR9 moves the Web BFF login/session account source from static env JSON toward a database-backed operator account service while preserving local sandbox env fallback.
+PR10 adds a minimal admin-managed operator account lifecycle on top of the PR9 database-backed account store.
 
-### PR9 Scope
+### PR10 Scope
 
-- Add an `OperatorAccount` Prisma model and migration.
-- Seed the local demo operator with a hashed password and matching sandbox API key.
-- Add a Web BFF operator account store abstraction.
-- Use DB-backed operator accounts by default when `OPERATOR_ACCOUNT_SOURCE=database`.
-- Preserve `OPERATOR_SESSION_ACCOUNTS` as an explicit local/sandbox fallback.
-- Keep login and `/api/operator/me` responses sanitized.
+- Add admin-only Web BFF routes for listing operator accounts.
+- Add admin-only Web BFF route for creating operator accounts with hashed passwords.
+- Add admin-only Web BFF route for changing role, disabling accounts, and revoking sessions.
+- Keep account management responses sanitized; never expose `passwordHash` or `apiKey`.
+- Persist audit records for account creation and updates.
+- Preserve tenant boundaries by deriving tenant and API key from the admin session.
 
-### Out Of Scope For PR9
+### Out Of Scope For PR10
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full SSO/OIDC, password reset flows, account management UI, persisted permission policies, and billing.
+- Full SSO/OIDC, password reset flows, polished account management UI, persisted permission policies, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -40,12 +40,13 @@ PR9 moves the Web BFF login/session account source from static env JSON toward a
 - [x] PR6 operator session boundary.
 - [x] PR7 operator identity/RBAC baseline.
 - [x] PR8 operator account hardening.
-- [ ] PR9 database-backed operator account service.
-- [ ] PR10 production-grade identity provider or account management UI.
+- [x] PR9 database-backed operator account service.
+- [ ] PR10 operator account management endpoints and audit.
+- [ ] PR11 production-grade identity provider or account management UI.
 
 ## Verification Gate
 
-Do not claim PR9 database-backed operator accounts complete until these pass:
+Do not claim PR10 operator account management complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`

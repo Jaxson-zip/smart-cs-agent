@@ -27,6 +27,9 @@
 | `POST /api/operator/login` | Operator BFF auth | Validates the DB-backed operator account store, or explicit local env fallback, and sets HttpOnly signed session cookie |
 | `POST /api/operator/logout` | Operator BFF auth | Clears HttpOnly session cookie |
 | `GET /api/operator/me` | Operator BFF auth | Requires HttpOnly operator session; returns sanitized operator profile and role permissions |
+| `GET /api/operator/operators` | Operator BFF admin | Requires HttpOnly admin session; returns sanitized operator account summaries for the session tenant |
+| `POST /api/operator/operators` | Operator BFF admin | Requires HttpOnly admin session; creates a tenant-scoped operator account with a server-side password hash |
+| `PATCH /api/operator/operators/:operatorId` | Operator BFF admin | Requires HttpOnly admin session; updates role/disabled status and can revoke sessions by incrementing `sessionVersion` |
 | `GET /api/operator/cases` | Operator BFF | Requires HttpOnly operator session; BFF derives API key, tenant, and operator from server-side account config |
 | `GET /api/operator/cases/:id` | Operator BFF | Same as `/api/operator/cases`; browser does not receive operator key |
 | `GET /api/operator/readiness` | Operator BFF readiness | Proxies API readiness without tenant data |
@@ -38,7 +41,9 @@
 - No route that returns merchant/customer/order/case data should be public.
 - Browser-public env vars are not secrets. Operator keys must stay server-side, either in the DB-backed operator account store or protected service env vars such as `OPERATOR_API_KEYS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
 - Web BFF auth responses must never expose account passwords or operator API keys. `/api/operator/me` may return `username`, `tenantId`, `operatorId`, `role`, and derived permission booleans only.
+- Web BFF account-management responses must never expose `passwordHash` or `apiKey`; they may return account identity, role, disabled state, and `sessionVersion`.
 - Production operator accounts must use the `OperatorAccount` table with `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
+- Operator account creation and updates must be tenant-scoped from the admin session and must write an audit record without secrets.
 - `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_ACCOUNT_SOURCE=database` after migrations and seed/bootstrap have created operator accounts.
 - The current Web login is a first account-service boundary, not full commercial SSO/RBAC. A later production stage should add SSO/OIDC or account management UI.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
