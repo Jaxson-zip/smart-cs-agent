@@ -1,29 +1,39 @@
-import { AfterSalesCase } from '@smart-cs-agent/shared';
+import type { AfterSalesCase } from "@smart-cs-agent/shared";
+import type { ApiAfterSalesCase } from "./cases";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4100';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
+const REQUEST_TIMEOUT_MS = 2500;
 
-export async function fetchCases(): Promise<AfterSalesCase[]> {
-  try {
-    const res = await fetch(`${API_URL}/v1/cases`, { cache: 'no-store' });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch cases: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (error) {
-    console.error('Error fetching cases:', error);
-    throw error;
+export async function fetchCases(): Promise<ApiAfterSalesCase[]> {
+  const res = await fetchWithTimeout(`${API_URL}/v1/cases`);
+
+  if (!res.ok) {
+    throw new Error("售后工单暂时无法同步");
   }
+
+  return res.json();
 }
 
 export async function fetchCaseDetails(caseId: string): Promise<AfterSalesCase> {
+  const res = await fetchWithTimeout(`${API_URL}/v1/cases/${caseId}`);
+
+  if (!res.ok) {
+    throw new Error("售后工单详情暂时无法同步");
+  }
+
+  return res.json();
+}
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
-    const res = await fetch(`${API_URL}/v1/cases/${caseId}`, { cache: 'no-store' });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch case ${caseId}: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (error) {
-    console.error(`Error fetching case ${caseId}:`, error);
-    throw error;
+    return await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    globalThis.clearTimeout(timeout);
   }
 }

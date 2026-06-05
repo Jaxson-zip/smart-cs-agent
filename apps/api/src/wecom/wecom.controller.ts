@@ -9,7 +9,6 @@ import { ActionService } from "../actions/action.service";
 import { AgentService } from "../agent/agent.service";
 import { WecomSandboxProvider } from "./wecom-sandbox.provider";
 import { PrismaService } from "../prisma/prisma.service";
-import { AuditService } from "../audit/audit.service";
 
 const sendMessageBodySchema = z.object({
   merchantId: z.string(),
@@ -21,6 +20,11 @@ const sendMessageBodySchema = z.object({
 const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
+type AuditEntry = {
+  action: string;
+  details: Prisma.InputJsonValue;
+};
+
 @Controller("v1/wecom")
 export class WecomController {
   constructor(
@@ -28,38 +32,38 @@ export class WecomController {
     private readonly agentService: AgentService,
     private readonly actionService: ActionService,
     private readonly prisma: PrismaService,
-    private readonly auditService: AuditService,
   ) {}
 
   @Post("events")
   @HttpCode(HttpStatus.OK)
   async handleEvent(@Body() body: unknown) {
     const normalizedEvent = await this.wecomProvider.normalizeIncoming(body);
-    
-    // 1. Persist NormalizedChannelEvent
-    await this.prisma.normalizedChannelEvent.create({
-      data: {
-        source: normalizedEvent.source,
-        merchantId: normalizedEvent.merchantId,
-        channel: normalizedEvent.channel,
-        externalConversationId: normalizedEvent.externalConversationId,
-        externalMessageId: normalizedEvent.externalMessageId,
-        senderName: normalizedEvent.senderName,
-        text: normalizedEvent.text,
-        receivedAt: new Date(normalizedEvent.receivedAt),
-      },
-    });
-
     const caseId = `case_${normalizedEvent.externalMessageId}`;
-    await this.auditService.log(caseId, "event_received", { text: normalizedEvent.text });
+    const auditEntries: AuditEntry[] = [
+      { action: "event_received", details: { text: normalizedEvent.text } },
+    ];
 
-    const decision = await this.agentService.decide(normalizedEvent.text, { amount: undefined }, caseId);
+    const decision = await this.agentService.decide(normalizedEvent.text, { amount: undefined });
+    auditEntries.push(
+      { action: "category_decision", details: { category: decision.category } },
+      {
+        action: "risk_decision",
+        details: {
+          riskLevel: decision.riskLevel,
+          automationMode: decision.automationMode,
+        },
+      },
+    );
 
     const executedActions: AfterSalesAction[] = [];
     if (decision.automationMode === "auto_execute") {
       for (const action of (decision.suggestedActions ?? [])) {
-        const result = await this.actionService.executeMockAction(action, caseId);
+        const result = await this.actionService.executeMockAction(action);
         executedActions.push(result);
+        auditEntries.push({
+          action: "action_executed",
+          details: { action: toJsonInput(result) },
+        });
       }
     } else {
       executedActions.push(...(decision.suggestedActions ?? []));
@@ -78,56 +82,99 @@ export class WecomController {
         status: sendResult.success ? "success" : "failed",
         replyText: decision.replyText,
       });
-      await this.auditService.log(caseId, "reply_sent", { text: decision.replyText, success: sendResult.success });
-    }
-
-    // 2. Persist AfterSalesCase
-    const createdCase = await this.prisma.afterSalesCase.create({
-      data: {
-        id: caseId,
-        merchantId: normalizedEvent.merchantId,
-        channel: normalizedEvent.channel,
-        customerName: normalizedEvent.senderName,
-        category: decision.category,
-        riskLevel: decision.riskLevel,
-        automationMode: decision.automationMode,
-        customerMessage: normalizedEvent.text,
-        customerReply: decision.replyText,
-        actions: executedActions, // Legacy
-      },
-    });
-
-    // 3. Persist CaseMessage
-    await this.prisma.caseMessage.create({
-      data: {
-        caseId: createdCase.id,
-        senderType: "customer",
-        text: normalizedEvent.text,
-        createdAt: new Date(normalizedEvent.receivedAt),
-      },
-    });
-
-    if (decision.replyText && decision.automationMode === "auto_execute") {
-      await this.prisma.caseMessage.create({
-        data: {
-          caseId: createdCase.id,
-          senderType: "agent",
-          text: decision.replyText,
-        },
+      auditEntries.push({
+        action: "reply_sent",
+        details: { text: decision.replyText, success: sendResult.success },
       });
     }
 
-    // 4. Persist CaseAction
-    for (const action of executedActions) {
-      await this.prisma.caseAction.create({
+    const createdCase = await this.prisma.$transaction(async (tx) => {
+      await tx.normalizedChannelEvent.create({
         data: {
-          caseId: createdCase.id,
-          type: action.type,
-          status: action.status || "pending",
-          params: toJsonInput(action),
+          source: normalizedEvent.source,
+          merchantId: normalizedEvent.merchantId,
+          channel: normalizedEvent.channel,
+          externalConversationId: normalizedEvent.externalConversationId,
+          externalMessageId: normalizedEvent.externalMessageId,
+          senderName: normalizedEvent.senderName,
+          text: normalizedEvent.text,
+          receivedAt: new Date(normalizedEvent.receivedAt),
         },
       });
-    }
+
+      const caseItem = await tx.afterSalesCase.upsert({
+        where: { id: caseId },
+        create: {
+          id: caseId,
+          merchantId: normalizedEvent.merchantId,
+          channel: normalizedEvent.channel,
+          customerName: normalizedEvent.senderName,
+          category: decision.category,
+          riskLevel: decision.riskLevel,
+          automationMode: decision.automationMode,
+          customerMessage: normalizedEvent.text,
+          customerReply: decision.replyText,
+          actions: toJsonInput(executedActions),
+        },
+        update: {
+          merchantId: normalizedEvent.merchantId,
+          channel: normalizedEvent.channel,
+          customerName: normalizedEvent.senderName,
+          category: decision.category,
+          riskLevel: decision.riskLevel,
+          automationMode: decision.automationMode,
+          customerMessage: normalizedEvent.text,
+          customerReply: decision.replyText,
+          actions: toJsonInput(executedActions),
+        },
+      });
+
+      await tx.caseMessage.deleteMany({ where: { caseId } });
+      await tx.caseAction.deleteMany({ where: { caseId } });
+      await tx.auditLog.deleteMany({ where: { caseId } });
+
+      await tx.caseMessage.create({
+        data: {
+          caseId: caseItem.id,
+          senderType: "customer",
+          text: normalizedEvent.text,
+          createdAt: new Date(normalizedEvent.receivedAt),
+        },
+      });
+
+      if (decision.replyText && decision.automationMode === "auto_execute") {
+        await tx.caseMessage.create({
+          data: {
+            caseId: caseItem.id,
+            senderType: "agent",
+            text: decision.replyText,
+          },
+        });
+      }
+
+      for (const action of executedActions) {
+        await tx.caseAction.create({
+          data: {
+            caseId: caseItem.id,
+            type: action.type,
+            status: action.status || "pending",
+            params: toJsonInput(action),
+          },
+        });
+      }
+
+      for (const entry of auditEntries) {
+        await tx.auditLog.create({
+          data: {
+            caseId: caseItem.id,
+            action: entry.action,
+            details: entry.details,
+          },
+        });
+      }
+
+      return caseItem;
+    });
 
     const afterSalesCase = afterSalesCaseSchema.parse({
       caseId: createdCase.id,

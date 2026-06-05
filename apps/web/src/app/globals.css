@@ -31,10 +31,21 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.cs-workbench {
+  scrollbar-gutter: stable;
+}
 
+@media (min-width: 1024px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+}
 
 /* Glass Input Utilities */
 .glass-input {

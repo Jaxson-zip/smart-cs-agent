@@ -15,7 +15,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "demo:smoke": "node scripts/demo/wecom-sandbox-smoke.mjs"
   },
   "devDependencies": {
     "prisma": "^6.16.0",
