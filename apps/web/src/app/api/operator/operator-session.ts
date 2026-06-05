@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, scryptSync, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 export const OPERATOR_SESSION_COOKIE = "smart_cs_operator_session";
@@ -15,11 +15,14 @@ export type OperatorRole = "admin" | "operator" | "viewer";
 
 export type OperatorAccount = {
   username: string;
-  password: string;
+  password?: string;
+  passwordHash?: string;
   tenantId: string;
   operatorId: string;
   role: OperatorRole;
   apiKey: string;
+  disabled: boolean;
+  sessionVersion: number;
 };
 
 export type OperatorSession = {
@@ -51,6 +54,7 @@ type SignedSessionPayload = {
   tenantId: string;
   operatorId: string;
   role: OperatorRole;
+  sessionVersion: number;
   expiresAt: number;
 };
 
@@ -88,7 +92,8 @@ export function authenticateOperator(
   return getOperatorAccounts().find(
     (account) =>
       account.username === credentials.username &&
-      account.password === credentials.password,
+      !account.disabled &&
+      accountPasswordMatches(account, credentials.password),
   );
 }
 
@@ -99,6 +104,7 @@ export function createOperatorSessionCookie(account: OperatorAccount) {
     tenantId: account.tenantId,
     operatorId: account.operatorId,
     role: account.role,
+    sessionVersion: account.sessionVersion,
     expiresAt: Date.now() + sessionTtlSeconds() * 1000,
   };
 
@@ -144,7 +150,11 @@ export function readOperatorSession(request: Request): SessionResult {
     };
   }
 
-  if (!account) {
+  if (
+    !account ||
+    account.disabled ||
+    account.sessionVersion !== payload.sessionVersion
+  ) {
     return { status: "invalid", message: "Operator session is invalid" };
   }
 
@@ -218,12 +228,23 @@ function parseAccount(value: unknown): OperatorAccount {
 
   const account = {
     username: readString(value, "username"),
-    password: readString(value, "password"),
+    password: readOptionalString(value, "password"),
+    passwordHash: readOptionalString(value, "passwordHash"),
     tenantId: readString(value, "tenantId"),
     operatorId: readString(value, "operatorId"),
     role: readRole(value.role),
     apiKey: readString(value, "apiKey"),
+    disabled: value.disabled === true,
+    sessionVersion: readOptionalPositiveInteger(value, "sessionVersion") ?? 1,
   };
+
+  if (!account.password && !account.passwordHash) {
+    throw new Error("Operator account password or passwordHash is required");
+  }
+
+  if (isProduction() && account.password) {
+    throw new Error("Operator account plaintext password is not allowed in production");
+  }
 
   return account;
 }
@@ -255,6 +276,35 @@ function assertNoDefaultDemoAccount(accounts: OperatorAccount[]) {
   if (hasDefaultDemoAccount) {
     throw new Error("Default demo operator account is not allowed in production");
   }
+}
+
+function accountPasswordMatches(account: OperatorAccount, password: string) {
+  if (account.passwordHash) {
+    return verifyPasswordHash(password, account.passwordHash);
+  }
+
+  return account.password === password;
+}
+
+function verifyPasswordHash(password: string, passwordHash: string) {
+  const parts = passwordHash.split(":");
+  const [algorithm, salt, expectedHash] = parts;
+  if (
+    parts.length !== 3 ||
+    algorithm !== "scrypt" ||
+    !salt ||
+    !expectedHash ||
+    !isBase64Url(expectedHash)
+  ) {
+    throw new Error("Unsupported operator passwordHash format");
+  }
+
+  const actualHash = scryptSync(password, salt, 32).toString("base64url");
+  return safeEqual(actualHash, expectedHash);
+}
+
+function isBase64Url(value: string) {
+  return /^[A-Za-z0-9_-]+$/.test(value);
 }
 
 function permissionsForRole(role: OperatorRole): OperatorPermissions {
@@ -361,6 +411,7 @@ function isSignedSessionPayload(value: unknown): value is SignedSessionPayload {
     typeof value.tenantId === "string" &&
     typeof value.operatorId === "string" &&
     readRole(value.role) === value.role &&
+    typeof value.sessionVersion === "number" &&
     typeof value.expiresAt === "number"
   );
 }
@@ -369,6 +420,29 @@ function readString(value: Record<string, unknown>, key: string) {
   const field = value[key];
   if (typeof field !== "string" || field.length === 0) {
     throw new Error(`Operator account ${key} must be a non-empty string`);
+  }
+
+  return field;
+}
+
+function readOptionalString(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== "string" || field.length === 0) {
+    throw new Error(`Operator account ${key} must be a non-empty string`);
+  }
+
+  return field;
+}
+
+function readOptionalPositiveInteger(
+  value: Record<string, unknown>,
+  key: string,
+) {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== "number" || !Number.isInteger(field) || field < 1) {
+    throw new Error(`Operator account ${key} must be a positive integer`);
   }
 
   return field;

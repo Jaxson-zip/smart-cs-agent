@@ -25,3 +25,4 @@
 - The PR6 login boundary is still a sandbox/commercial-readiness step, not final identity. True production needs SSO/OIDC or a dedicated account service, password hashing, RBAC administration, and session revocation.
 - Offline demo cases must not mask real authorization or API failures. PR6 only enables fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true`; default deployable environments show an error state for non-401 sync failures.
 - PR7 introduces a fixed role-to-permission map in the Web BFF. This is useful for product behavior and tests, but persisted permission policies and audit-backed role changes still belong in a later identity/account-service slice.
+- PR8 reduces the risk of the temporary env-backed account store by requiring `passwordHash` in production and adding session invalidation knobs. It is still not a full identity provider; account lifecycle should move to a real service or database-backed admin surface later.

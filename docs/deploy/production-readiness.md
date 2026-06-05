@@ -36,7 +36,7 @@ NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
 API_URL=http://localhost:4100
 OPERATOR_API_KEY=dev_operator_key
 OPERATOR_SESSION_SECRET=replace_with_a_long_random_secret
-OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","password":"demo123456","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key"}]
+OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]
 ```
 
 如果后续新增需要数据库连接的集成测试，应显式在 CI 中启动 Postgres service，并隔离为 integration/smoke job，避免让 API 单测隐式依赖外部数据库。
@@ -57,11 +57,17 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","password":"demo123456","tenantId"
 - `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"dev_operator_key","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
 - `OPERATOR_API_KEY`：本地 smoke 脚本或直连 API 验证时使用的 operator key，应匹配 `OPERATOR_API_KEYS` 中的一项。Web 客服台 BFF 不再直接使用该变量，也不要使用 `NEXT_PUBLIC_` 前缀。
 - `OPERATOR_SESSION_SECRET`：Web 客服台签发 HttpOnly 登录 cookie 的服务端密钥。部署环境必须使用长随机值，并通过 secret 管理；生产环境会拒绝占位值和过短密钥。
-- `OPERATOR_SESSION_ACCOUNTS`：Web 客服台沙盒账号配置，格式为 JSON 数组，例如 `[{"username":"demo","password":"demo123456","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key"}]`。登录后 BFF 会从该账号派生 `apiKey`、`tenantId` 和 `operatorId` 调用 API；生产环境会拒绝默认 demo 账号。`role` 当前支持 `admin`、`operator`、`viewer`，并映射为 Web 侧权限。
+- `OPERATOR_SESSION_ACCOUNTS`：Web 客服台沙盒账号配置，格式为 JSON 数组，例如 `[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]`。登录后 BFF 会从该账号派生 `apiKey`、`tenantId` 和 `operatorId` 调用 API；生产环境会拒绝默认 demo 账号和明文 `password`。`role` 当前支持 `admin`、`operator`、`viewer`，并映射为 Web 侧权限。`disabled: true` 会禁止登录并让已有 session 失效；提升 `sessionVersion` 可撤销旧 session。
 - `ALLOW_INSECURE_OPERATOR_HEADERS`：只用于本地沙盒调试，默认 `false`。生产环境未配置 `OPERATOR_API_KEYS` 时，默认拒绝只靠 `x-tenant-id` 的访问；除非显式设为 `true`。
 - `ENABLE_LEGACY_WEB_DEMO_API`：早期 Web demo 的 `/api/chat` 和 `/api/db` 开关，默认应为 `false`。部署沙盒和生产环境不得打开，除非是隔离的历史演示环境。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
+
+生产账号应使用 `passwordHash`，当前支持 `scrypt:<salt>:<hash>` 格式。可用下面的 Node 命令生成单个账号 hash：
+
+```bash
+node -e "const { randomBytes, scryptSync } = require('node:crypto'); const p = process.argv[1]; const s = randomBytes(16).toString('base64url'); console.log('scrypt:' + s + ':' + scryptSync(p, s, 32).toString('base64url'))" "replace-password"
+```
 
 API 进程在本地和测试环境会尝试读取项目 `.env`；`NODE_ENV=production` 或 `CI=true` 时默认只信任真实环境变量。若确实需要在特殊环境读取 `.env`，可以显式设置 `SMART_CS_LOAD_DOTENV=true`，但生产部署不建议这样做。
 
@@ -121,5 +127,5 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `OPENAI_API_KEY` 为空时，任何依赖真实模型调用的能力都应视为未启用。
 - 沙盒 smoke payload 是演示数据，不可作为真实售后判责、退款或客服绩效依据。
 - `OPERATOR_API_KEY` 和 `OPERATOR_SESSION_ACCOUNTS[*].apiKey` 属于服务端 secret，不能使用 `NEXT_PUBLIC_` 前缀，也不能暴露给浏览器。
-- `OPERATOR_SESSION_ACCOUNTS[*].password` 当前仅适用于沙盒登录演示；真正上线前必须替换为 SSO、OIDC、密码哈希或独立账号服务，并补 RBAC 管理界面。
+- `OPERATOR_SESSION_ACCOUNTS[*].password` 当前仅适用于本地沙盒登录演示；生产环境必须使用 `passwordHash`。真正上线前仍建议替换为 SSO、OIDC 或独立账号服务，并补 RBAC 管理界面。
 - `/api/chat`、`/api/db` 是历史 demo API，不属于当前售后闭环主路径；上线默认关闭。

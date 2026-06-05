@@ -38,3 +38,6 @@
 - Started PR7 operator identity/RBAC baseline.
 - Added `/api/operator/me` tests and implementation for sanitized current-operator profiles.
 - Added role-derived permissions to login/current-session responses and updated the workbench to show the current operator and disable confirm/takeover for read-only accounts.
+- Started PR8 operator account hardening.
+- Added password hash login coverage, production plaintext password rejection, disabled account rejection, and session-version invalidation tests.
+- Implemented `scrypt:<salt>:<hash>` password verification, `disabled` account enforcement, and `sessionVersion` session revocation in the Web BFF session layer.

@@ -2,26 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR7 - Operator Identity And RBAC Baseline
+## Current Stage: PR8 - Operator Account Hardening
 
 Status: in progress
 
-PR7 adds the first production-grade identity/RBAC baseline on top of the PR6 session boundary. The Web BFF can expose the current sanitized operator profile, derive role permissions, and let the workbench adapt actions based on those permissions.
+PR8 hardens the temporary Web BFF account store so it is less risky as a deployable pre-production identity bridge. It adds hashed password support, rejects plaintext operator passwords in production, and lets operators be disabled or have existing sessions revoked by changing a session version.
 
-### PR7 Scope
+### PR8 Scope
 
-- Add `GET /api/operator/me` to return the current sanitized operator profile.
-- Derive role permissions from `admin`, `operator`, and `viewer`.
-- Include permissions in login and current-session responses without exposing passwords or API keys.
-- Show the current operator identity in the workbench.
-- Disable confirm/takeover actions for read-only operators.
-- Document the role and permission boundary.
+- Support `passwordHash` using `scrypt:<salt>:<hash>`.
+- Keep plaintext `password` only for local sandbox convenience.
+- Reject plaintext operator passwords in production.
+- Support `disabled: true` accounts.
+- Include `sessionVersion` in signed sessions and reject stale versions.
+- Document hash generation, disabled accounts, and session revocation.
 
-### Out Of Scope For PR7
+### Out Of Scope For PR8
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full SSO/OIDC, password hashing, account management UI, persisted permission policies, and billing.
+- Full SSO/OIDC, account database, password reset flows, account management UI, persisted permission policies, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -38,12 +38,13 @@ PR7 adds the first production-grade identity/RBAC baseline on top of the PR6 ses
 - [x] PR4 public API surface lockdown.
 - [x] PR5 server-side operator BFF.
 - [x] PR6 operator session boundary.
-- [ ] PR7 operator identity/RBAC baseline.
-- [ ] PR8 production-grade identity provider or account service.
+- [x] PR7 operator identity/RBAC baseline.
+- [ ] PR8 operator account hardening.
+- [ ] PR9 production-grade identity provider or account service.
 
 ## Verification Gate
 
-Do not claim PR7 operator identity/RBAC baseline complete until these pass:
+Do not claim PR8 operator account hardening complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -74,3 +75,4 @@ Do not claim PR7 operator identity/RBAC baseline complete until these pass:
 | 2026-06-06 | Server-side BFF still used one global operator key and could not identify the logged-in operator | PR6 adds HttpOnly signed operator sessions and derives API key/tenant/operator from `OPERATOR_SESSION_ACCOUNTS` |
 | 2026-06-06 | Review found PR6 could be misconfigured with placeholder session secrets, default demo accounts, and fallback mock cases after real API failures | PR6 now rejects unsafe production session config and only shows fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true` |
 | 2026-06-06 | The Web workbench could not ask who the current operator is after reload and had no role-derived permissions | PR7 adds `/api/operator/me`, sanitized profiles, and role permission mapping |
+| 2026-06-06 | `OPERATOR_SESSION_ACCOUNTS` still depended on plaintext passwords and had no account disable/session revocation mechanism | PR8 adds scrypt password hashes, production plaintext rejection, disabled accounts, and session version invalidation |

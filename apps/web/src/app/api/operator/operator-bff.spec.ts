@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { scryptSync } from "node:crypto";
 import { afterEach, describe, it } from "node:test";
 import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
@@ -160,8 +161,16 @@ describe("operator BFF routes", () => {
   it("rejects production login when the session secret is not production safe", async () => {
     setEnv("NODE_ENV", "production");
     process.env.OPERATOR_SESSION_SECRET = "short";
-    process.env.OPERATOR_SESSION_ACCOUNTS =
-      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
+      {
+        username: "alice",
+        passwordHash: testPasswordHash("secret"),
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+        apiKey: "session_api_key",
+      },
+    ]);
 
     const response = await loginOperator(
       jsonRequest("http://localhost/api/operator/login", {
@@ -270,6 +279,155 @@ describe("operator BFF routes", () => {
           manageOperators: false,
         },
       },
+    });
+  });
+
+  it("allows login with a hashed operator password", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
+      {
+        username: "hashed",
+        passwordHash: testPasswordHash("secret"),
+        tenantId: "tenant_1",
+        operatorId: "hashed_1",
+        role: "operator",
+        apiKey: "hashed_api_key",
+      },
+    ]);
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "hashed",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), {
+      operator: {
+        username: "hashed",
+        tenantId: "tenant_1",
+        operatorId: "hashed_1",
+        role: "operator",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+  });
+
+  it("rejects malformed operator password hashes", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"hashed","passwordHash":"scrypt:salt:hash:extra","tenantId":"tenant_1","operatorId":"hashed_1","role":"operator","apiKey":"hashed_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "hashed",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session accounts are not configured",
+    });
+  });
+
+  it("rejects plaintext operator passwords in production", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session accounts are not configured",
+    });
+  });
+
+  it("rejects disabled operator accounts", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"disabled","password":"secret","disabled":true,"tenantId":"tenant_1","operatorId":"disabled_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "disabled",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Invalid username or password",
+    });
+  });
+
+  it("invalidates an existing operator session when the account is disabled", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","disabled":true,"tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await getOperatorMe(
+      new Request("http://localhost/api/operator/me", {
+        headers: { cookie },
+      }),
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session is invalid",
+    });
+  });
+
+  it("invalidates an existing operator session when the session version changes", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","sessionVersion":1,"tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","sessionVersion":2,"tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await getOperatorMe(
+      new Request("http://localhost/api/operator/me", {
+        headers: { cookie },
+      }),
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session is invalid",
     });
   });
 
@@ -421,4 +579,10 @@ function restoreEnv(key: string, value: string | undefined) {
 
 function setEnv(key: string, value: string) {
   process.env[key] = value;
+}
+
+function testPasswordHash(password: string) {
+  const salt = "test_salt";
+  const hash = scryptSync(password, salt, 32).toString("base64url");
+  return `scrypt:${salt}:${hash}`;
 }

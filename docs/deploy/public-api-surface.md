@@ -38,6 +38,7 @@
 - No route that returns merchant/customer/order/case data should be public.
 - Browser-public env vars are not secrets. Operator keys must stay in server-side env vars such as `OPERATOR_API_KEYS` or `OPERATOR_SESSION_ACCOUNTS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
 - Web BFF auth responses must never expose account passwords or operator API keys. `/api/operator/me` may return `username`, `tenantId`, `operatorId`, `role`, and derived permission booleans only.
+- Production operator accounts must use `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
 - The current Web login is a sandbox session boundary, not full commercial SSO/RBAC. Before production rollout, replace static account JSON with a real identity provider or account service.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real production channel webhooks must add provider signature verification before replacing the sandbox intake.
