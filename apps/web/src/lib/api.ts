@@ -10,11 +10,20 @@ export type ApiReadiness = {
 };
 
 export type OperatorLoginResult = {
-  operator: {
-    username: string;
-    tenantId: string;
-    operatorId: string;
-    role: "admin" | "operator" | "viewer";
+  operator: OperatorProfile;
+};
+
+export type OperatorProfile = {
+  username: string;
+  tenantId: string;
+  operatorId: string;
+  role: "admin" | "operator" | "viewer";
+  permissions: {
+    viewCases: boolean;
+    confirmReplies: boolean;
+    takeoverCases: boolean;
+    manageRules: boolean;
+    manageOperators: boolean;
   };
 };
 
@@ -43,6 +52,26 @@ export async function loginOperator(
   }
 
   return res.json();
+}
+
+export async function fetchCurrentOperator(): Promise<OperatorLoginResult> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/me`);
+
+  if (!res.ok) {
+    throw new ApiError("请先登录客服工作台", res.status);
+  }
+
+  return res.json();
+}
+
+export async function logoutOperator(): Promise<void> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/logout`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    throw new ApiError("退出登录失败", res.status);
+  }
 }
 
 export async function fetchCases(): Promise<ApiAfterSalesCase[]> {

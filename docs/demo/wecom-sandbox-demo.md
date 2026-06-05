@@ -71,6 +71,8 @@ http://localhost:3000
 密码：demo123456
 ```
 
+本地沙盒默认账号是 `admin` 权限。若要演示只读客服，可在 `.env` 的 `OPERATOR_SESSION_ACCOUNTS` 中增加 `role: "viewer"` 的账号；只读账号可以查看工单，但不能确认回复或接管工单。
+
 如果 3000 被占用，可以改用 3100：
 
 ```powershell

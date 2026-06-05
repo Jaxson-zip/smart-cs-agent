@@ -4,6 +4,7 @@ import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
 import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
+import { GET as getOperatorMe } from "./me/route";
 import { GET as getReadiness } from "./readiness/route";
 
 const originalFetch = globalThis.fetch;
@@ -78,6 +79,21 @@ describe("operator BFF routes", () => {
     assert.ok(cookie?.includes("HttpOnly"));
     assert.match(cookie ?? "", /SameSite=Lax/i);
     assert.ok(cookie?.includes("Path=/"));
+    assert.deepStrictEqual(await loginResponse.json(), {
+      operator: {
+        username: "alice",
+        tenantId: "tenant_from_session",
+        operatorId: "operator_from_session",
+        role: "admin",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: true,
+          manageOperators: true,
+        },
+      },
+    });
 
     const response = await getCases(
       new Request("http://localhost/api/operator/cases", {
@@ -188,6 +204,84 @@ describe("operator BFF routes", () => {
     assert.ok(cookie?.includes("smart_cs_operator_session="));
     assert.ok(cookie?.includes("Max-Age=0"));
     assert.ok(cookie?.includes("HttpOnly"));
+  });
+
+  it("returns the current operator session without exposing secrets", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"viewer","password":"secret","tenantId":"tenant_1","operatorId":"viewer_1","role":"viewer","apiKey":"viewer_api_key"}]';
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "viewer",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    const response = await getOperatorMe(
+      new Request("http://localhost/api/operator/me", {
+        headers: { cookie },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), {
+      operator: {
+        username: "viewer",
+        tenantId: "tenant_1",
+        operatorId: "viewer_1",
+        role: "viewer",
+        permissions: {
+          viewCases: true,
+          confirmReplies: false,
+          takeoverCases: false,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+  });
+
+  it("returns operator role permissions for standard service agents", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"agent_1","role":"operator","apiKey":"agent_api_key"}]';
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(loginResponse.status, 200);
+    assert.deepStrictEqual(await loginResponse.json(), {
+      operator: {
+        username: "agent",
+        tenantId: "tenant_1",
+        operatorId: "agent_1",
+        role: "operator",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+  });
+
+  it("requires an operator session before returning the current operator", async () => {
+    const response = await getOperatorMe(
+      new Request("http://localhost/api/operator/me"),
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator session is required",
+    });
   });
 
   it("proxies case details through the same server-side boundary", async () => {

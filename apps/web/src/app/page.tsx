@@ -14,6 +14,7 @@ import {
   Inbox,
   LockKeyhole,
   LogIn,
+  LogOut,
   PackageCheck,
   Search,
   Send,
@@ -23,7 +24,14 @@ import {
   UserRound,
 } from "lucide-react";
 import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
-import { ApiError, fetchCases, loginOperator } from "../lib/api";
+import {
+  ApiError,
+  fetchCases,
+  fetchCurrentOperator,
+  loginOperator,
+  logoutOperator,
+  type OperatorProfile,
+} from "../lib/api";
 import { fallbackCases, mapApiCaseToUiCase, type QueueStatus, type UiCase } from "../lib/cases";
 
 type ChannelId = "all" | "wechat" | "taobao" | "douyin" | "shopify" | "email";
@@ -97,6 +105,12 @@ const statusText: Record<QueueStatus, string> = {
   human_takeover: "需接管",
 };
 
+const roleText: Record<OperatorProfile["role"], string> = {
+  admin: "管理员",
+  operator: "客服",
+  viewer: "只读",
+};
+
 const statusClass: Record<QueueStatus, string> = {
   auto_resolved: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   waiting_confirm: "bg-amber-50 text-amber-800 ring-amber-100",
@@ -131,21 +145,28 @@ export default function OperatorWorkbench() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [syncError, setSyncError] = useState("售后工单暂时无法同步，请稍后重试。");
+  const [operator, setOperator] = useState<OperatorProfile>();
 
   const loadCases = useCallback(() => {
     let ignore = false;
 
-    fetchCases()
+    fetchCurrentOperator()
+      .then(async (session) => {
+        const data = await fetchCases();
+        return { data, operator: session.operator };
+      })
       .then((data) => {
         if (ignore) return;
 
-        if (data.length === 0) {
+        setOperator(data.operator);
+
+        if (data.data.length === 0) {
           setCases([]);
           setDataState("empty");
           return;
         }
 
-        setCases(data.map(mapApiCaseToUiCase));
+        setCases(data.data.map(mapApiCaseToUiCase));
         setDataState("ready");
       })
       .catch((error: unknown) => {
@@ -153,6 +174,7 @@ export default function OperatorWorkbench() {
 
         if (error instanceof ApiError && error.status === 401) {
           setCases([]);
+          setOperator(undefined);
           setDataState("login");
           return;
         }
@@ -340,8 +362,13 @@ export default function OperatorWorkbench() {
   const isSent = sentIds.includes(selected.caseId) || selected.status === "auto_resolved";
   const isTakeover =
     takeoverIds.includes(selected.caseId) || selected.status === "human_takeover";
+  const canConfirmReplies = operator?.permissions.confirmReplies ?? false;
+  const canTakeoverCases = operator?.permissions.takeoverCases ?? false;
   const selectedChannelMeta = getChannelMeta(selected.channel);
-  const canConfirm = selected.status === "waiting_confirm" && currentDraft.trim().length > 0;
+  const canConfirm =
+    canConfirmReplies &&
+    selected.status === "waiting_confirm" &&
+    currentDraft.trim().length > 0;
   const headerStatus = selected.status === "auto_resolved" ? "已自动处理 / 无需操作" : statusText[selected.status];
 
   function selectChannel(id: ChannelId) {
@@ -361,6 +388,7 @@ export default function OperatorWorkbench() {
   }
 
   function handleTakeover() {
+    if (!canTakeoverCases) return;
     if (takeoverIds.includes(selected.caseId)) return;
     setTakeoverIds((items) => [...items, selected.caseId]);
   }
@@ -371,7 +399,8 @@ export default function OperatorWorkbench() {
     setLoginLoading(true);
 
     try {
-      await loginOperator(loginForm.username.trim(), loginForm.password);
+      const session = await loginOperator(loginForm.username.trim(), loginForm.password);
+      setOperator(session.operator);
       setDataState("loading");
       loadCases();
     } catch {
@@ -379,6 +408,14 @@ export default function OperatorWorkbench() {
     } finally {
       setLoginLoading(false);
     }
+  }
+
+  async function handleLogout() {
+    await logoutOperator();
+    setOperator(undefined);
+    setCases([]);
+    setSelectedId(undefined);
+    setDataState("login");
   }
 
   return (
@@ -390,6 +427,11 @@ export default function OperatorWorkbench() {
               <div>
                 <p className="text-xs font-medium text-slate-500">售后工作台</p>
                 <h1 className="mt-0.5 text-xl font-semibold tracking-tight">工单队列</h1>
+                {operator ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {operator.username} · {roleText[operator.role]}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-lg bg-slate-950 px-3 py-1.5 text-right text-white">
                 <div className="text-base font-semibold">{needActionCases.length}</div>
@@ -507,11 +549,18 @@ export default function OperatorWorkbench() {
                 </button>
                 <button
                   onClick={handleTakeover}
-                  disabled={selected.status === "auto_resolved"}
+                  disabled={selected.status === "auto_resolved" || !canTakeoverCases}
                   className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                 >
                   <Headphones size={15} />
                   接管
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                >
+                  <LogOut size={15} />
+                  退出
                 </button>
               </div>
             </div>
@@ -592,7 +641,13 @@ export default function OperatorWorkbench() {
                     className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     {isSent ? <Check size={15} /> : <Send size={15} />}
-                    {isSent ? "已确认" : isTakeover ? "需接管" : "确认回复"}
+                    {isSent
+                      ? "已确认"
+                      : isTakeover
+                        ? "需接管"
+                        : canConfirmReplies
+                          ? "确认回复"
+                          : "无确认权限"}
                   </button>
                 </div>
 
@@ -627,7 +682,9 @@ export default function OperatorWorkbench() {
                   })}
 
                   <span className="min-w-[220px] flex-1 text-sm leading-6 text-slate-500">
-                    {selected.operatorHint}
+                    {canConfirmReplies || selected.status === "auto_resolved"
+                      ? selected.operatorHint
+                      : "当前账号仅可查看工单，请联系管理员调整权限。"}
                   </span>
                 </div>
               </div>

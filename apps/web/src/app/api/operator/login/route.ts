@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   authenticateOperator,
   setOperatorSessionCookie,
+  toPublicOperatorAccount,
   type LoginCredentials,
 } from "../operator-session";
 
@@ -42,12 +43,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({
-    operator: {
-      username: account.username,
-      tenantId: account.tenantId,
-      operatorId: account.operatorId,
-      role: account.role,
-    },
+    operator: toPublicOperatorAccount(account),
   });
 
   try {

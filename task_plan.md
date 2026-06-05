@@ -2,27 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR6 - Operator Session Boundary
+## Current Stage: PR7 - Operator Identity And RBAC Baseline
 
 Status: in progress
 
-PR6 adds a minimal real operator session boundary on top of the Web BFF. The browser logs in through a same-origin route and receives an HttpOnly signed session cookie. Protected BFF routes derive `apiKey`, `tenantId`, `operatorId`, and `role` from server-side account config instead of using one global Web key.
+PR7 adds the first production-grade identity/RBAC baseline on top of the PR6 session boundary. The Web BFF can expose the current sanitized operator profile, derive role permissions, and let the workbench adapt actions based on those permissions.
 
-### PR6 Scope
+### PR7 Scope
 
-- Add `POST /api/operator/login` and `POST /api/operator/logout`.
-- Sign operator sessions with `OPERATOR_SESSION_SECRET` and store them in an HttpOnly cookie.
-- Configure sandbox operators with `OPERATOR_SESSION_ACCOUNTS`.
-- Require a valid session for `/api/operator/cases` and `/api/operator/cases/:id`.
-- Keep `/api/operator/readiness` unauthenticated and tenant-data-free.
-- Show a clean Web login state when the browser has no operator session.
-- Document the new session boundary and keep full SSO/RBAC as the next stage.
+- Add `GET /api/operator/me` to return the current sanitized operator profile.
+- Derive role permissions from `admin`, `operator`, and `viewer`.
+- Include permissions in login and current-session responses without exposing passwords or API keys.
+- Show the current operator identity in the workbench.
+- Disable confirm/takeover actions for read-only operators.
+- Document the role and permission boundary.
 
-### Out Of Scope For PR6
+### Out Of Scope For PR7
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full SSO/OIDC, password hashing, account management UI, fine-grained RBAC, and billing.
+- Full SSO/OIDC, password hashing, account management UI, persisted permission policies, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -38,12 +37,13 @@ PR6 adds a minimal real operator session boundary on top of the Web BFF. The bro
 - [x] PR3 docs, verification, and push.
 - [x] PR4 public API surface lockdown.
 - [x] PR5 server-side operator BFF.
-- [ ] PR6 operator session boundary.
-- [ ] PR7 production-grade identity/RBAC design and implementation slice.
+- [x] PR6 operator session boundary.
+- [ ] PR7 operator identity/RBAC baseline.
+- [ ] PR8 production-grade identity provider or account service.
 
 ## Verification Gate
 
-Do not claim PR6 operator session boundary complete until these pass:
+Do not claim PR7 operator identity/RBAC baseline complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -73,3 +73,4 @@ Do not claim PR6 operator session boundary complete until these pass:
 | 2026-06-06 | Browser carried `NEXT_PUBLIC_OPERATOR_API_KEY` for API access | PR5 moves operator API access to server-side `/api/operator/*` BFF routes using `OPERATOR_API_KEY` |
 | 2026-06-06 | Server-side BFF still used one global operator key and could not identify the logged-in operator | PR6 adds HttpOnly signed operator sessions and derives API key/tenant/operator from `OPERATOR_SESSION_ACCOUNTS` |
 | 2026-06-06 | Review found PR6 could be misconfigured with placeholder session secrets, default demo accounts, and fallback mock cases after real API failures | PR6 now rejects unsafe production session config and only shows fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true` |
+| 2026-06-06 | The Web workbench could not ask who the current operator is after reload and had no role-derived permissions | PR7 adds `/api/operator/me`, sanitized profiles, and role permission mapping |

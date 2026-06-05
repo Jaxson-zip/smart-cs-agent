@@ -35,3 +35,6 @@
 - Changed Web BFF case list/detail routes to require a session and derive API key, tenant ID, and operator ID from server-side account config.
 - Added a Web login state so unauthenticated operators do not see fallback demo cases.
 - Addressed final review findings: production rejects placeholder/short session secrets and default demo accounts, login rejects malformed JSON payloads with 400, production BFF fails closed without `API_URL`, and Web no longer shows offline demo cases unless explicitly enabled.
+- Started PR7 operator identity/RBAC baseline.
+- Added `/api/operator/me` tests and implementation for sanitized current-operator profiles.
+- Added role-derived permissions to login/current-session responses and updated the workbench to show the current operator and disable confirm/takeover for read-only accounts.

@@ -30,6 +30,22 @@ export type OperatorSession = {
   apiKey: string;
 };
 
+export type OperatorPermissions = {
+  viewCases: boolean;
+  confirmReplies: boolean;
+  takeoverCases: boolean;
+  manageRules: boolean;
+  manageOperators: boolean;
+};
+
+export type PublicOperatorSession = {
+  username: string;
+  tenantId: string;
+  operatorId: string;
+  role: OperatorRole;
+  permissions: OperatorPermissions;
+};
+
 type SignedSessionPayload = {
   username: string;
   tenantId: string;
@@ -144,6 +160,30 @@ export function readOperatorSession(request: Request): SessionResult {
   };
 }
 
+export function toPublicOperatorSession(
+  session: OperatorSession,
+): PublicOperatorSession {
+  return {
+    username: session.username,
+    tenantId: session.tenantId,
+    operatorId: session.operatorId,
+    role: session.role,
+    permissions: permissionsForRole(session.role),
+  };
+}
+
+export function toPublicOperatorAccount(
+  account: OperatorAccount,
+): PublicOperatorSession {
+  return {
+    username: account.username,
+    tenantId: account.tenantId,
+    operatorId: account.operatorId,
+    role: account.role,
+    permissions: permissionsForRole(account.role),
+  };
+}
+
 export function setOperatorSessionCookie(
   response: NextResponse,
   account: OperatorAccount,
@@ -215,6 +255,36 @@ function assertNoDefaultDemoAccount(accounts: OperatorAccount[]) {
   if (hasDefaultDemoAccount) {
     throw new Error("Default demo operator account is not allowed in production");
   }
+}
+
+function permissionsForRole(role: OperatorRole): OperatorPermissions {
+  if (role === "admin") {
+    return {
+      viewCases: true,
+      confirmReplies: true,
+      takeoverCases: true,
+      manageRules: true,
+      manageOperators: true,
+    };
+  }
+
+  if (role === "operator") {
+    return {
+      viewCases: true,
+      confirmReplies: true,
+      takeoverCases: true,
+      manageRules: false,
+      manageOperators: false,
+    };
+  }
+
+  return {
+    viewCases: true,
+    confirmReplies: false,
+    takeoverCases: false,
+    manageRules: false,
+    manageOperators: false,
+  };
 }
 
 function isProduction() {
