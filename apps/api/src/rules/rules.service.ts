@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface SandboxRules {
@@ -15,6 +16,12 @@ const DEFAULT_RULES: SandboxRules = {
     douyin: ["change_address", "query_logistics", "issue_coupon"],
   },
 };
+
+const sandboxRulesSchema = z.object({
+  couponCompensationLimit: z.number().positive().optional(),
+  highRiskKeywords: z.array(z.string()).optional(),
+  channelCapabilities: z.record(z.string(), z.array(z.string())).optional(),
+});
 
 @Injectable()
 export class RulesService {
@@ -34,7 +41,11 @@ export class RulesService {
       });
 
       if (config && config.value) {
-        return { ...DEFAULT_RULES, ...(config.value as any) };
+        const parsed = sandboxRulesSchema.safeParse(config.value);
+        if (parsed.success) {
+          return { ...DEFAULT_RULES, ...parsed.data };
+        }
+        this.logger.warn(`Invalid sandbox rules config, using defaults: ${parsed.error.message}`);
       }
     } catch (e) {
       this.logger.warn(`Failed to fetch rules, using defaults: ${(e as Error).message}`);

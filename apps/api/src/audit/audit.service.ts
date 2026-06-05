@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -7,7 +8,7 @@ export class AuditService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(caseId: string | null, action: string, details?: any) {
+  async log(caseId: string | null, action: string, details?: Prisma.InputJsonValue) {
     this.logger.log(`Audit [${action}] for Case [${caseId || 'N/A'}]: ${JSON.stringify(details || {})}`);
     
     // Attempt to persist if a caseId is provided or it's a general action

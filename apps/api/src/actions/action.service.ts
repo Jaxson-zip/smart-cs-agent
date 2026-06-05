@@ -14,7 +14,7 @@ export class ActionService {
     private readonly douyinAdapter: MockDouyinAdapter,
   ) {}
 
-  async executeMockAction(action: Omit<AfterSalesAction, "status">, caseId?: string): Promise<AfterSalesAction> {
+  async executeMockAction(action: AfterSalesAction, caseId?: string): Promise<AfterSalesAction> {
     this.logger.log(`Executing mock action: ${action.type}`);
     
     let resultAction: AfterSalesAction;
@@ -24,29 +24,26 @@ export class ActionService {
 
     switch (action.type) {
       case "change_address":
-        await adapter.changeAddress(orderId, (action as any).newAddress || "N/A");
-        resultAction = { ...action, status: "success" } as AfterSalesAction;
+        await adapter.changeAddress(orderId, action.newAddress || "N/A");
+        resultAction = { ...action, status: "success" };
         break;
       case "query_logistics":
         await adapter.queryLogistics(orderId);
-        resultAction = { ...action, status: "success" } as AfterSalesAction;
+        resultAction = { ...action, status: "success" };
         break;
       case "issue_coupon":
-        await adapter.issueCoupon(orderId, (action as any).amount || 0);
-        resultAction = { ...action, status: "success" } as AfterSalesAction;
+        await adapter.issueCoupon(orderId, action.amount || 0);
+        resultAction = { ...action, status: "success" };
         break;
       case "create_handoff":
-        resultAction = { ...action, status: "pending" } as AfterSalesAction;
+        resultAction = { ...action, status: "pending" };
         break;
       case "create_supervisor_review":
-        resultAction = { ...action, status: "pending" } as AfterSalesAction;
+        resultAction = { ...action, status: "pending" };
         break;
       case "send_channel_reply":
-        await adapter.sendMessage(orderId, (action as any).replyText || "");
-        resultAction = { ...action, status: "success" } as AfterSalesAction;
-        break;
-      default:
-        resultAction = { ...action, status: "pending" } as AfterSalesAction;
+        await adapter.sendMessage(orderId, action.replyText || "");
+        resultAction = { ...action, status: "success" };
         break;
     }
 

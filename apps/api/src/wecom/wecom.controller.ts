@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   afterSalesCaseSchema,
@@ -16,6 +17,9 @@ const sendMessageBodySchema = z.object({
   externalConversationId: z.string(),
   text: z.string(),
 });
+
+const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
+  JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 @Controller("v1/wecom")
 export class WecomController {
@@ -120,7 +124,7 @@ export class WecomController {
           caseId: createdCase.id,
           type: action.type,
           status: action.status || "pending",
-          params: action as any,
+          params: toJsonInput(action),
         },
       });
     }
