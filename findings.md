@@ -20,3 +20,4 @@
 - Malformed `OPERATOR_API_KEYS` must fail closed instead of falling back to insecure tenant headers.
 - Legacy `/v2/*` operation endpoints and `/v1/wecom/webhook/send` are operator-facing and must not stay outside the PR3 guard.
 - `WECOM_SANDBOX_ENABLED` should be a real runtime gate. In production, the sandbox event intake should be disabled unless explicitly enabled for a controlled demo environment.
+- Web `/api/chat` and `/api/db` are historical demo routes. They are not used by the current operator workbench and should stay disabled by default because they expose mock order data and mutation-like tools.

@@ -23,3 +23,6 @@
 - Extended PR3 guard coverage to legacy `/v2/*` operator endpoints and `/v1/wecom/webhook/send`.
 - Added a runtime gate for `/v1/wecom/events` through `WECOM_SANDBOX_ENABLED`.
 - Changed insecure operator header fallback to default `false` in config and `.env.example`.
+- Started PR4 public API surface lockdown.
+- Disabled legacy Web demo APIs `/api/chat` and `/api/db` by default behind `ENABLE_LEGACY_WEB_DEMO_API`.
+- Added Web route tests and a deployment API surface inventory.

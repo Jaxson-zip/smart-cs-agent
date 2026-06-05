@@ -52,6 +52,7 @@ NEXT_PUBLIC_WS_URL=http://localhost:4100
 - `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"dev_operator_key","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
 - `ALLOW_INSECURE_OPERATOR_HEADERS`：只用于本地沙盒调试，默认 `false`。生产环境未配置 `OPERATOR_API_KEYS` 时，默认拒绝只靠 `x-tenant-id` 的访问；除非显式设为 `true`。
 - `NEXT_PUBLIC_OPERATOR_API_KEY`：沙盒 Web 用来调用 API 的演示 key，应与 `OPERATOR_API_KEYS` 中的一项匹配。它会暴露在浏览器里，只能用于本地/预生产沙盒；真正商用版本需要服务端 session/JWT/BFF，不应把它当正式鉴权。
+- `ENABLE_LEGACY_WEB_DEMO_API`：早期 Web demo 的 `/api/chat` 和 `/api/db` 开关，默认应为 `false`。部署沙盒和生产环境不得打开，除非是隔离的历史演示环境。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
 
@@ -84,7 +85,10 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
 - `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
 - `POST /v1/wecom/webhook/send` 必须携带 operator key，且 key 所属租户必须与 body 中的 `merchantId` 一致。
+- Web 侧 `/api/chat` 和 `/api/db` 默认返回 404；只有显式设置 `ENABLE_LEGACY_WEB_DEMO_API=true` 才会打开旧 demo 接口。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
+
+公开路由清单见 `docs/deploy/public-api-surface.md`。新增任何 HTTP 路由时，应同步更新该清单和对应测试。
 
 真实渠道鉴权状态未来应作为独立 channel readiness 展示，不应阻塞当前沙盒 readiness。
 
@@ -107,3 +111,4 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `/health` 只说明进程存活；沙盒发布前仍需执行 readiness 检查和 smoke。
 - `OPENAI_API_KEY` 为空时，任何依赖真实模型调用的能力都应视为未启用。
 - 沙盒 smoke payload 是演示数据，不可作为真实售后判责、退款或客服绩效依据。
+- `/api/chat`、`/api/db` 是历史 demo API，不属于当前售后闭环主路径；上线默认关闭。

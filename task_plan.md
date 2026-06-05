@@ -2,26 +2,22 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR3 - Operator API Key Guard
+## Current Stage: PR4 - Public API Surface Lockdown
 
 Status: complete
 
-PR3 turns the PR2 tenant header boundary into a minimal protected operator boundary for sandbox and pre-production demos.
+PR4 closes leftover public demo/API surfaces so deployable environments do not expose mock order data or mutation-like demo tools.
 
-### PR3 Scope
+### PR4 Scope
 
-- Support `OPERATOR_API_KEYS` as JSON-configured operator credentials.
-- Accept `Authorization: Bearer <key>` or `x-api-key` for operator-facing APIs.
-- Derive tenant, operator, and role from the matched key instead of trusting browser-supplied identity.
-- Block mismatched `x-tenant-id` headers with 403.
-- Keep local insecure header fallback only for sandbox development.
-- Reject production operator access when no key is configured unless `ALLOW_INSECURE_OPERATOR_HEADERS=true` is explicitly set.
-- Update Web, smoke script, and docs to use the sandbox key.
-- Protect legacy `/v2/*` operator APIs with the same request context.
-- Protect `/v1/wecom/webhook/send` and verify body `merchantId` matches the request tenant.
-- Enforce `WECOM_SANDBOX_ENABLED` so production does not accidentally expose the sandbox event intake.
+- Keep `/health` and `/health/ready` public and data-free.
+- Keep operator APIs protected by PR3 operator key guard.
+- Keep `/v1/wecom/events` behind `WECOM_SANDBOX_ENABLED`.
+- Disable legacy Web demo APIs `/api/chat` and `/api/db` by default.
+- Add a public API surface inventory for deployment review.
+- Add Web tests for legacy demo API default-off behavior.
 
-### Out Of Scope For PR3
+### Out Of Scope For PR4
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
@@ -39,14 +35,16 @@ PR3 turns the PR2 tenant header boundary into a minimal protected operator bound
 - [x] PR2 tests, docs, verification, and push.
 - [x] PR3 operator API key guard.
 - [x] PR3 docs, verification, and push.
-- [ ] PR4 public API surface lockdown.
+- [x] PR4 public API surface lockdown.
+- [ ] PR5 server-side operator session/BFF.
 
 ## Verification Gate
 
-Do not claim PR3 operator API key guard complete until these pass:
+Do not claim PR4 public API surface lockdown complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
+- `npm.cmd run test --workspace @smart-cs-agent/web`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
@@ -68,3 +66,4 @@ Do not claim PR3 operator API key guard complete until these pass:
 | 2026-06-06 | Public browser key is not real commercial authentication | Documented it as sandbox/pre-production only; real production still needs session/JWT/BFF |
 | 2026-06-06 | Legacy `/v2/*` and `/v1/wecom/webhook/send` were outside the new operator guard | PR3 now requires request context for those operator-facing APIs |
 | 2026-06-06 | `WECOM_SANDBOX_ENABLED` existed but did not gate the event intake | PR3 now blocks `/v1/wecom/events` when the sandbox endpoint is disabled or production has not explicitly enabled it |
+| 2026-06-06 | Web `/api/chat` and `/api/db` exposed historical mock order data/actions | PR4 disables those legacy demo APIs by default behind `ENABLE_LEGACY_WEB_DEMO_API` |

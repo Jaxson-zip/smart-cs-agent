@@ -2,6 +2,10 @@ import { openai } from "@ai-sdk/openai";
 import { streamText, tool, type ModelMessage } from "ai";
 import { z } from "zod";
 import { mockDb } from "../../db";
+import {
+  disabledLegacyDemoApiResponse,
+  legacyDemoApiEnabled,
+} from "../legacy-demo-guard";
 
 export const maxDuration = 30;
 
@@ -13,6 +17,10 @@ const shippedStatus = "已发货";
 const refundedStatus = "已退款";
 
 export async function POST(req: Request) {
+  if (!legacyDemoApiEnabled()) {
+    return disabledLegacyDemoApiResponse();
+  }
+
   const { messages } = (await req.json()) as ChatRequestBody;
 
   const result = streamText({
