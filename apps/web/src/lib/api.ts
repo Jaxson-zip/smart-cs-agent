@@ -4,6 +4,11 @@ import type { ApiAfterSalesCase } from "./cases";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
 const REQUEST_TIMEOUT_MS = 2500;
 
+export type ApiReadiness = {
+  status: "ready" | "unavailable";
+  checkedAt: string;
+};
+
 export async function fetchCases(): Promise<ApiAfterSalesCase[]> {
   const res = await fetchWithTimeout(`${API_URL}/v1/cases`);
 
@@ -22,6 +27,24 @@ export async function fetchCaseDetails(caseId: string): Promise<AfterSalesCase> 
   }
 
   return res.json();
+}
+
+export async function fetchApiReadiness(): Promise<ApiReadiness> {
+  const checkedAt = new Date().toISOString();
+
+  try {
+    const res = await fetchWithTimeout(`${API_URL}/health/ready`);
+
+    return {
+      status: res.ok ? "ready" : "unavailable",
+      checkedAt,
+    };
+  } catch {
+    return {
+      status: "unavailable",
+      checkedAt,
+    };
+  }
 }
 
 async function fetchWithTimeout(url: string): Promise<Response> {

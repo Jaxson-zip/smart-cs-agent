@@ -1,0 +1,48 @@
+name: Sandbox CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  DATABASE_URL: postgresql://smartcs_ci:smartcs_ci@localhost:5432/smartcs_ci?schema=public
+  OPENAI_API_KEY: ""
+  WEB_ORIGIN: http://localhost:3000
+  PORT: "4100"
+  WECOM_SANDBOX_ENABLED: "true"
+  NEXT_PUBLIC_API_URL: http://localhost:4100
+  NEXT_PUBLIC_WS_URL: http://localhost:4100
+
+jobs:
+  quality:
+    name: Install, test, typecheck, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run API tests
+        run: npm run test --workspace @smart-cs-agent/api
+
+      - name: Typecheck workspaces
+        run: npm run typecheck --workspaces --if-present -- --pretty false
+
+      - name: Lint workspaces
+        run: npm run lint --workspaces --if-present -- --max-warnings=0
+
+      - name: Build workspaces
+        run: npm run build --workspaces --if-present

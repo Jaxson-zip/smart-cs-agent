@@ -1,15 +1,16 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { loadApiConfig } from "./config/api-config";
 
 async function bootstrap() {
+  const config = loadApiConfig();
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    origin: config.webOrigin,
     credentials: true,
   });
 
-  const port = Number(process.env.PORT ?? 4100);
-  await app.listen(port);
+  await app.listen(config.port);
 }
 
 void bootstrap();

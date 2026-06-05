@@ -233,7 +233,7 @@ function mapAuditLog(log: ApiAuditLog, index: number): UiAuditLog {
     id: log.id ?? `audit-${index}`,
     title: auditTitle(log.action),
     time: formatTime(log.createdAt),
-    summary: auditSummary(log.details),
+    summary: auditSummary(log.action, log.details),
   };
 }
 
@@ -249,20 +249,62 @@ function auditTitle(action?: string): string {
     handoff: "触发人工接管",
     reply: "生成客户回复",
     action: "更新处理记录",
+    change_address: "修改收货地址",
+    query_logistics: "查询物流进展",
+    issue_coupon: "处理补偿方案",
+    create_handoff: "转入人工接管",
+    create_supervisor_review: "升级主管处理",
+    send_channel_reply: "同步客户回复",
   };
 
   if (!action) return "更新处理记录";
-  return titles[action] ?? action.replaceAll("_", " ");
+  const normalized = action.toLowerCase();
+  if (titles[normalized]) return titles[normalized];
+  if (normalized.includes("category") || normalized.includes("classify")) return "完成售后分类";
+  if (normalized.includes("risk")) return "完成风险判断";
+  if (normalized.includes("address")) return "修改收货地址";
+  if (normalized.includes("logistics")) return "查询物流进展";
+  if (normalized.includes("coupon") || normalized.includes("compensation")) return "处理补偿方案";
+  if (normalized.includes("handoff") || normalized.includes("takeover")) return "转入人工接管";
+  if (normalized.includes("supervisor")) return "升级主管处理";
+  if (normalized.includes("reply") || normalized.includes("message")) return "同步客户回复";
+
+  return "更新处理记录";
 }
 
-function auditSummary(details?: Record<string, unknown> | null): string {
+function auditSummary(action?: string, details?: Record<string, unknown> | null): string {
   if (!details) return "已记录处理进展。";
 
-  const values = Object.values(details)
-    .filter((value) => typeof value === "string" || typeof value === "number")
-    .slice(0, 2);
+  const actionDetail = details.action;
+  if (isRecord(actionDetail)) {
+    const type = typeof actionDetail.type === "string" ? actionDetail.type : undefined;
+    const status = typeof actionDetail.status === "string" ? actionDetail.status : undefined;
 
-  return values.length > 0 ? values.join("；") : "已记录处理进展。";
+    return `处理动作：${actionTypeLabel(type)}，状态：${actionStatusLabel(status)}。`;
+  }
+
+  if (typeof details.category === "string") {
+    return `售后类型：${categoryLabel(details.category)}。`;
+  }
+
+  if (typeof details.riskLevel === "string") {
+    const mode =
+      typeof details.automationMode === "string"
+        ? `，处理方式：${automationModeLabel(details.automationMode)}`
+        : "";
+
+    return `风险等级：${riskLabel(details.riskLevel)}${mode}。`;
+  }
+
+  if (typeof details.success === "boolean") {
+    return details.success ? "已同步客户回复。" : "客户回复暂未同步。";
+  }
+
+  if (typeof details.text === "string") {
+    return action === "reply_sent" ? "已同步客户回复。" : "已记录客户诉求。";
+  }
+
+  return "已记录处理进展。";
 }
 
 function formatWaitTime(createdAt?: string | Date): string {
@@ -291,8 +333,8 @@ function formatTime(value?: string | Date): string {
   });
 }
 
-function categoryLabel(category: AfterSalesCase["category"]): string {
-  const labels: Record<AfterSalesCase["category"], string> = {
+function categoryLabel(category: string): string {
+  const labels: Record<string, string> = {
     address_change: "修改地址",
     logistics: "物流问题",
     damage_compensation: "破损补偿",
@@ -302,15 +344,52 @@ function categoryLabel(category: AfterSalesCase["category"]): string {
     unknown: "待判定",
   };
 
-  return labels[category];
+  return labels[category] ?? "待判定";
 }
 
-function riskLabel(riskLevel: AfterSalesCase["riskLevel"]): string {
-  const labels: Record<AfterSalesCase["riskLevel"], string> = {
+function riskLabel(riskLevel: string): string {
+  const labels: Record<string, string> = {
     low: "低风险",
     medium: "中风险",
     high: "高风险",
   };
 
-  return labels[riskLevel];
+  return labels[riskLevel] ?? "待判断";
+}
+
+function automationModeLabel(mode: string): string {
+  const labels: Record<string, string> = {
+    auto_execute: "自动处理",
+    human_confirm: "客服确认",
+    human_takeover: "人工接管",
+  };
+
+  return labels[mode] ?? "待确认";
+}
+
+function actionTypeLabel(type?: string): string {
+  const labels: Record<string, string> = {
+    change_address: "修改收货地址",
+    query_logistics: "查询物流进展",
+    issue_coupon: "发放补偿券",
+    create_handoff: "转入人工接管",
+    create_supervisor_review: "升级主管处理",
+    send_channel_reply: "同步客户回复",
+  };
+
+  return type ? labels[type] ?? "更新处理记录" : "更新处理记录";
+}
+
+function actionStatusLabel(status?: string): string {
+  const labels: Record<string, string> = {
+    success: "已完成",
+    failed: "未完成",
+    pending: "待处理",
+  };
+
+  return status ? labels[status] ?? "待处理" : "待处理";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

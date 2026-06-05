@@ -257,7 +257,7 @@ export default function OperatorWorkbench() {
 
             {dataState === "fallback" ? (
               <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 ring-1 ring-amber-100">
-                数据暂未同步，正在展示演示工单。
+                当前使用演示工单，数据暂未同步。
               </div>
             ) : null}
 

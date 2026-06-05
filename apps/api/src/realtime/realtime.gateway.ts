@@ -6,10 +6,11 @@ import {
 } from "@nestjs/websockets";
 import type { AgentEvent } from "@smart-cs-agent/shared";
 import type { Server } from "socket.io";
+import { loadWebOrigin } from "../config/api-config";
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    origin: loadWebOrigin(),
     credentials: true,
   },
 })
