@@ -2,26 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR8 - Operator Account Hardening
+## Current Stage: PR9 - Database-Backed Operator Accounts
 
 Status: in progress
 
-PR8 hardens the temporary Web BFF account store so it is less risky as a deployable pre-production identity bridge. It adds hashed password support, rejects plaintext operator passwords in production, and lets operators be disabled or have existing sessions revoked by changing a session version.
+PR9 moves the Web BFF login/session account source from static env JSON toward a database-backed operator account service while preserving local sandbox env fallback.
 
-### PR8 Scope
+### PR9 Scope
 
-- Support `passwordHash` using `scrypt:<salt>:<hash>`.
-- Keep plaintext `password` only for local sandbox convenience.
-- Reject plaintext operator passwords in production.
-- Support `disabled: true` accounts.
-- Include `sessionVersion` in signed sessions and reject stale versions.
-- Document hash generation, disabled accounts, and session revocation.
+- Add an `OperatorAccount` Prisma model and migration.
+- Seed the local demo operator with a hashed password and matching sandbox API key.
+- Add a Web BFF operator account store abstraction.
+- Use DB-backed operator accounts by default when `OPERATOR_ACCOUNT_SOURCE=database`.
+- Preserve `OPERATOR_SESSION_ACCOUNTS` as an explicit local/sandbox fallback.
+- Keep login and `/api/operator/me` responses sanitized.
 
-### Out Of Scope For PR8
+### Out Of Scope For PR9
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full SSO/OIDC, account database, password reset flows, account management UI, persisted permission policies, and billing.
+- Full SSO/OIDC, password reset flows, account management UI, persisted permission policies, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -39,12 +39,13 @@ PR8 hardens the temporary Web BFF account store so it is less risky as a deploya
 - [x] PR5 server-side operator BFF.
 - [x] PR6 operator session boundary.
 - [x] PR7 operator identity/RBAC baseline.
-- [ ] PR8 operator account hardening.
-- [ ] PR9 production-grade identity provider or account service.
+- [x] PR8 operator account hardening.
+- [ ] PR9 database-backed operator account service.
+- [ ] PR10 production-grade identity provider or account management UI.
 
 ## Verification Gate
 
-Do not claim PR8 operator account hardening complete until these pass:
+Do not claim PR9 database-backed operator accounts complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -53,7 +54,7 @@ Do not claim PR8 operator account hardening complete until these pass:
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
-- Browser desktop and narrow viewport checks for no horizontal overflow and no developer terms.
+- Browser desktop and narrow viewport checks if UI files changed.
 
 ## Errors Encountered
 

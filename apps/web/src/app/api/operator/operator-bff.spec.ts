@@ -7,6 +7,11 @@ import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
 import { GET as getReadiness } from "./readiness/route";
+import {
+  clearOperatorAccountStoreForTests,
+  setOperatorAccountStoreForTests,
+  type OperatorAccountStore,
+} from "./operator-session";
 
 const originalFetch = globalThis.fetch;
 const originalApiUrl = process.env.API_URL;
@@ -14,6 +19,7 @@ const originalOperatorApiKey = process.env.OPERATOR_API_KEY;
 const originalTenantId = process.env.OPERATOR_TENANT_ID;
 const originalOperatorId = process.env.OPERATOR_ID;
 const originalSessionSecret = process.env.OPERATOR_SESSION_SECRET;
+const originalOperatorAccountSource = process.env.OPERATOR_ACCOUNT_SOURCE;
 const originalSessionAccounts = process.env.OPERATOR_SESSION_ACCOUNTS;
 const originalSessionTtl = process.env.OPERATOR_SESSION_TTL_SECONDS;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -27,10 +33,12 @@ describe("operator BFF routes", () => {
     restoreEnv("OPERATOR_TENANT_ID", originalTenantId);
     restoreEnv("OPERATOR_ID", originalOperatorId);
     restoreEnv("OPERATOR_SESSION_SECRET", originalSessionSecret);
+    restoreEnv("OPERATOR_ACCOUNT_SOURCE", originalOperatorAccountSource);
     restoreEnv("OPERATOR_SESSION_ACCOUNTS", originalSessionAccounts);
     restoreEnv("OPERATOR_SESSION_TTL_SECONDS", originalSessionTtl);
     restoreEnv("NODE_ENV", originalNodeEnv);
     restoreEnv("NEXT_PUBLIC_API_URL", originalNextPublicApiUrl);
+    clearOperatorAccountStoreForTests();
     delete process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
   });
 
@@ -160,6 +168,7 @@ describe("operator BFF routes", () => {
 
   it("rejects production login when the session secret is not production safe", async () => {
     setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
     process.env.OPERATOR_SESSION_SECRET = "short";
     process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
       {
@@ -187,6 +196,7 @@ describe("operator BFF routes", () => {
 
   it("rejects the default demo account in production", async () => {
     setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
     process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
     process.env.OPERATOR_SESSION_ACCOUNTS =
       '[{"username":"demo","password":"demo123456","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"session_api_key"}]';
@@ -320,6 +330,83 @@ describe("operator BFF routes", () => {
     });
   });
 
+  it("authenticates operators from the account store when env accounts are absent", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    delete process.env.OPERATOR_SESSION_ACCOUNTS;
+    const dbBackedAccount = {
+      username: "db_agent",
+      passwordHash: testPasswordHash("secret"),
+      tenantId: "tenant_from_db",
+      operatorId: "operator_from_db",
+      role: "operator" as const,
+      apiKey: "db_api_key",
+      disabled: false,
+      sessionVersion: 3,
+    };
+    const accountStore: OperatorAccountStore = {
+      async findByUsername(username) {
+        return username === dbBackedAccount.username ? dbBackedAccount : undefined;
+      },
+      async findSessionAccount(payload) {
+        return payload.username === dbBackedAccount.username &&
+          payload.tenantId === dbBackedAccount.tenantId &&
+          payload.operatorId === dbBackedAccount.operatorId &&
+          payload.role === dbBackedAccount.role
+          ? dbBackedAccount
+          : undefined;
+      },
+    };
+    setOperatorAccountStoreForTests(accountStore);
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "db_agent",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    assert.strictEqual(loginResponse.status, 200);
+    assert.deepStrictEqual(await loginResponse.json(), {
+      operator: {
+        username: "db_agent",
+        tenantId: "tenant_from_db",
+        operatorId: "operator_from_db",
+        role: "operator",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+
+    const meResponse = await getOperatorMe(
+      new Request("http://localhost/api/operator/me", {
+        headers: { cookie },
+      }),
+    );
+
+    assert.strictEqual(meResponse.status, 200);
+    assert.deepStrictEqual(await meResponse.json(), {
+      operator: {
+        username: "db_agent",
+        tenantId: "tenant_from_db",
+        operatorId: "operator_from_db",
+        role: "operator",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+  });
+
   it("rejects malformed operator password hashes", async () => {
     process.env.OPERATOR_SESSION_SECRET = "test_secret";
     process.env.OPERATOR_SESSION_ACCOUNTS =
@@ -340,6 +427,7 @@ describe("operator BFF routes", () => {
 
   it("rejects plaintext operator passwords in production", async () => {
     setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
     process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
     process.env.OPERATOR_SESSION_ACCOUNTS =
       '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';

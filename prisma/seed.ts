@@ -1,3 +1,4 @@
+import { scryptSync } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -19,6 +20,31 @@ async function main() {
   });
 
   console.log(`Seeded tenant ${tenant.name}`);
+
+  await prisma.operatorAccount.upsert({
+    where: { username: "demo" },
+    update: {
+      tenantId: "demo_tenant",
+      operatorId: "sandbox_operator",
+      role: "admin",
+      passwordHash: demoPasswordHash("demo123456"),
+      apiKey: process.env.OPERATOR_API_KEY ?? "dev_operator_key",
+      disabled: false,
+      sessionVersion: 1,
+    },
+    create: {
+      username: "demo",
+      tenantId: "demo_tenant",
+      operatorId: "sandbox_operator",
+      role: "admin",
+      passwordHash: demoPasswordHash("demo123456"),
+      apiKey: process.env.OPERATOR_API_KEY ?? "dev_operator_key",
+      disabled: false,
+      sessionVersion: 1,
+    },
+  });
+
+  console.log(`Seeded demo operator account`);
 
   await prisma.caseAction.deleteMany();
   await prisma.caseMessage.deleteMany();
@@ -327,3 +353,9 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+function demoPasswordHash(password: string) {
+  const salt = "demo_operator_salt";
+  const hash = scryptSync(password, salt, 32).toString("base64url");
+  return `scrypt:${salt}:${hash}`;
+}

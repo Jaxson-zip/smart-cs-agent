@@ -69,6 +69,36 @@ export type LoginCredentials = {
   password: string;
 };
 
+export type OperatorAccountStore = {
+  findByUsername(username: string): Promise<OperatorAccount | undefined>;
+  findSessionAccount(
+    payload: Pick<
+      SignedSessionPayload,
+      "username" | "tenantId" | "operatorId" | "role"
+    >,
+  ): Promise<OperatorAccount | undefined>;
+};
+
+type PrismaClientLike = {
+  operatorAccount: {
+    findUnique(args: {
+      where:
+        | { username: string }
+        | { tenantId_operatorId: { tenantId: string; operatorId: string } };
+    }): Promise<unknown>;
+  };
+};
+
+let operatorAccountStoreForTests: OperatorAccountStore | undefined;
+
+export function setOperatorAccountStoreForTests(store: OperatorAccountStore) {
+  operatorAccountStoreForTests = store;
+}
+
+export function clearOperatorAccountStoreForTests() {
+  operatorAccountStoreForTests = undefined;
+}
+
 export function getOperatorAccounts(): OperatorAccount[] {
   const rawAccounts = process.env.OPERATOR_SESSION_ACCOUNTS;
   if (!rawAccounts) return [];
@@ -86,15 +116,16 @@ export function getOperatorAccounts(): OperatorAccount[] {
   return accounts;
 }
 
-export function authenticateOperator(
+export async function authenticateOperator(
   credentials: LoginCredentials,
-): OperatorAccount | undefined {
-  return getOperatorAccounts().find(
-    (account) =>
-      account.username === credentials.username &&
-      !account.disabled &&
-      accountPasswordMatches(account, credentials.password),
+): Promise<OperatorAccount | undefined> {
+  const account = await operatorAccountStore().findByUsername(
+    credentials.username,
   );
+  if (!account || account.disabled) return undefined;
+  return accountPasswordMatches(account, credentials.password)
+    ? account
+    : undefined;
 }
 
 export function createOperatorSessionCookie(account: OperatorAccount) {
@@ -111,7 +142,7 @@ export function createOperatorSessionCookie(account: OperatorAccount) {
   return signPayload(payload, secret);
 }
 
-export function readOperatorSession(request: Request): SessionResult {
+export async function readOperatorSession(request: Request): Promise<SessionResult> {
   const token = readCookie(request.headers.get("cookie"), OPERATOR_SESSION_COOKIE);
   if (!token) return { status: "missing" };
 
@@ -136,13 +167,7 @@ export function readOperatorSession(request: Request): SessionResult {
 
   let account: OperatorAccount | undefined;
   try {
-    account = getOperatorAccounts().find(
-      (item) =>
-        item.username === payload.username &&
-        item.tenantId === payload.tenantId &&
-        item.operatorId === payload.operatorId &&
-        item.role === payload.role,
-    );
+    account = await operatorAccountStore().findSessionAccount(payload);
   } catch {
     return {
       status: "misconfigured",
@@ -247,6 +272,97 @@ function parseAccount(value: unknown): OperatorAccount {
   }
 
   return account;
+}
+
+function operatorAccountStore(): OperatorAccountStore {
+  if (operatorAccountStoreForTests) return operatorAccountStoreForTests;
+  if (shouldUseEnvOperatorAccounts()) return envOperatorAccountStore;
+  return prismaOperatorAccountStore;
+}
+
+function shouldUseEnvOperatorAccounts() {
+  if (process.env.OPERATOR_ACCOUNT_SOURCE === "database") return false;
+  if (process.env.OPERATOR_ACCOUNT_SOURCE === "env") return true;
+  if (isProduction()) return false;
+  return Boolean(process.env.OPERATOR_SESSION_ACCOUNTS);
+}
+
+const envOperatorAccountStore: OperatorAccountStore = {
+  async findByUsername(username) {
+    return getOperatorAccounts().find((account) => account.username === username);
+  },
+  async findSessionAccount(payload) {
+    return getOperatorAccounts().find(
+      (account) =>
+        account.username === payload.username &&
+        account.tenantId === payload.tenantId &&
+        account.operatorId === payload.operatorId &&
+        account.role === payload.role,
+    );
+  },
+};
+
+const prismaOperatorAccountStore: OperatorAccountStore = {
+  async findByUsername(username) {
+    const prisma = await prismaClient();
+    return mapStoredOperatorAccount(
+      await prisma.operatorAccount.findUnique({ where: { username } }),
+    );
+  },
+  async findSessionAccount(payload) {
+    const prisma = await prismaClient();
+    const account = mapStoredOperatorAccount(
+      await prisma.operatorAccount.findUnique({
+        where: {
+          tenantId_operatorId: {
+            tenantId: payload.tenantId,
+            operatorId: payload.operatorId,
+          },
+        },
+      }),
+    );
+
+    if (
+      !account ||
+      account.username !== payload.username ||
+      account.role !== payload.role
+    ) {
+      return undefined;
+    }
+
+    return account;
+  },
+};
+
+async function prismaClient(): Promise<PrismaClientLike> {
+  const globalForPrisma = globalThis as typeof globalThis & {
+    smartCsOperatorPrisma?: PrismaClientLike;
+  };
+
+  if (!globalForPrisma.smartCsOperatorPrisma) {
+    const { PrismaClient } = await import("@prisma/client");
+    globalForPrisma.smartCsOperatorPrisma = new PrismaClient();
+  }
+
+  return globalForPrisma.smartCsOperatorPrisma;
+}
+
+function mapStoredOperatorAccount(value: unknown): OperatorAccount | undefined {
+  if (!value) return undefined;
+  if (!isRecord(value)) {
+    throw new Error("Stored operator account must be an object");
+  }
+
+  return {
+    username: readString(value, "username"),
+    passwordHash: readString(value, "passwordHash"),
+    tenantId: readString(value, "tenantId"),
+    operatorId: readString(value, "operatorId"),
+    role: readRole(value.role),
+    apiKey: readString(value, "apiKey"),
+    disabled: value.disabled === true,
+    sessionVersion: readRequiredPositiveInteger(value, "sessionVersion"),
+  };
 }
 
 function requiredSessionSecret() {
@@ -442,6 +558,18 @@ function readOptionalPositiveInteger(
   const field = value[key];
   if (field === undefined) return undefined;
   if (typeof field !== "number" || !Number.isInteger(field) || field < 1) {
+    throw new Error(`Operator account ${key} must be a positive integer`);
+  }
+
+  return field;
+}
+
+function readRequiredPositiveInteger(
+  value: Record<string, unknown>,
+  key: string,
+) {
+  const field = readOptionalPositiveInteger(value, key);
+  if (field === undefined) {
     throw new Error(`Operator account ${key} must be a positive integer`);
   }
 

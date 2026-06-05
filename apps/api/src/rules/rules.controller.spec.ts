@@ -44,7 +44,7 @@ describe("RulesController", () => {
       },
     } as unknown as RulesService);
 
-    await controller.getRules({ "x-tenant-id": "demo_tenant" });
+    await controller.getCurrentTenantRules({ "x-tenant-id": "demo_tenant" });
 
     assert.strictEqual(tenantId, "demo_tenant");
   });

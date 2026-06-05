@@ -30,6 +30,8 @@ npm.cmd run db:migrate
 npm.cmd run db:seed
 ```
 
+PR9 后 `.env.example` 默认设置 `OPERATOR_ACCOUNT_SOURCE=database`。`npm.cmd run db:seed` 会写入 demo 客服账号 `demo / demo123456` 到 `OperatorAccount` 表，并使用 `OPERATOR_API_KEY` 作为该账号的服务端 API key。`OPERATOR_SESSION_ACCOUNTS` 仍可作为本地兜底，但不再是推荐主路径。
+
 重复演示前如果想恢复到干净样例数据，可以重新运行：
 
 ```powershell

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   let account;
   try {
-    account = authenticateOperator(payload);
+    account = await authenticateOperator(payload);
   } catch {
     return NextResponse.json(
       { error: "Operator session accounts are not configured" },

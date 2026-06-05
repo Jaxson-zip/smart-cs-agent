@@ -5,7 +5,7 @@ import {
 } from "../operator-session";
 
 export async function GET(request: Request) {
-  const sessionResult = readOperatorSession(request);
+  const sessionResult = await readOperatorSession(request);
 
   if (sessionResult.status === "missing") {
     return NextResponse.json(

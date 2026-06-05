@@ -24,7 +24,7 @@
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
 | `GET /` | Public web shell | Shows login state before loading operator data |
-| `POST /api/operator/login` | Operator BFF auth | Validates `OPERATOR_SESSION_ACCOUNTS` and sets HttpOnly signed session cookie |
+| `POST /api/operator/login` | Operator BFF auth | Validates the DB-backed operator account store, or explicit local env fallback, and sets HttpOnly signed session cookie |
 | `POST /api/operator/logout` | Operator BFF auth | Clears HttpOnly session cookie |
 | `GET /api/operator/me` | Operator BFF auth | Requires HttpOnly operator session; returns sanitized operator profile and role permissions |
 | `GET /api/operator/cases` | Operator BFF | Requires HttpOnly operator session; BFF derives API key, tenant, and operator from server-side account config |
@@ -36,9 +36,10 @@
 ## Rules
 
 - No route that returns merchant/customer/order/case data should be public.
-- Browser-public env vars are not secrets. Operator keys must stay in server-side env vars such as `OPERATOR_API_KEYS` or `OPERATOR_SESSION_ACCOUNTS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
+- Browser-public env vars are not secrets. Operator keys must stay server-side, either in the DB-backed operator account store or protected service env vars such as `OPERATOR_API_KEYS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
 - Web BFF auth responses must never expose account passwords or operator API keys. `/api/operator/me` may return `username`, `tenantId`, `operatorId`, `role`, and derived permission booleans only.
-- Production operator accounts must use `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
-- The current Web login is a sandbox session boundary, not full commercial SSO/RBAC. Before production rollout, replace static account JSON with a real identity provider or account service.
+- Production operator accounts must use the `OperatorAccount` table with `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
+- `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_ACCOUNT_SOURCE=database` after migrations and seed/bootstrap have created operator accounts.
+- The current Web login is a first account-service boundary, not full commercial SSO/RBAC. A later production stage should add SSO/OIDC or account management UI.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real production channel webhooks must add provider signature verification before replacing the sandbox intake.

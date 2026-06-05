@@ -131,6 +131,23 @@ model AuditLog {
   createdAt DateTime        @default(now())
 }
 
+model OperatorAccount {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  tenantId       String
+  operatorId     String
+  role           String
+  passwordHash   String
+  apiKey         String
+  disabled       Boolean  @default(false)
+  sessionVersion Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, operatorId])
+  @@index([tenantId, role])
+}
+
 model RuleConfig {
   id        String   @id @default(cuid())
   tenantId  String

@@ -36,6 +36,7 @@ NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
 API_URL=http://localhost:4100
 OPERATOR_API_KEY=dev_operator_key
 OPERATOR_SESSION_SECRET=replace_with_a_long_random_secret
+OPERATOR_ACCOUNT_SOURCE=database
 OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]
 ```
 
@@ -129,3 +130,13 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `OPERATOR_API_KEY` 和 `OPERATOR_SESSION_ACCOUNTS[*].apiKey` 属于服务端 secret，不能使用 `NEXT_PUBLIC_` 前缀，也不能暴露给浏览器。
 - `OPERATOR_SESSION_ACCOUNTS[*].password` 当前仅适用于本地沙盒登录演示；生产环境必须使用 `passwordHash`。真正上线前仍建议替换为 SSO、OIDC 或独立账号服务，并补 RBAC 管理界面。
 - `/api/chat`、`/api/db` 是历史 demo API，不属于当前售后闭环主路径；上线默认关闭。
+
+## PR9 Operator Accounts
+
+PR9 将 Web 客服台账号来源从静态 `OPERATOR_SESSION_ACCOUNTS` 迁移到数据库 `OperatorAccount` 表。部署环境建议设置 `OPERATOR_ACCOUNT_SOURCE=database`，并在执行 `npm run db:migrate:deploy` 后通过 seed 或后续账号管理流程创建客服账号。
+
+`OperatorAccount` 保存 `username`、`tenantId`、`operatorId`、`role`、`passwordHash`、`apiKey`、`disabled` 和 `sessionVersion`。登录和 session 校验都会重新读取账号状态；账号被禁用或 `sessionVersion` 提升后，旧 cookie 会失效。`/api/operator/login` 和 `/api/operator/me` 仍只返回脱敏身份与权限，不暴露 `apiKey` 或 `passwordHash`。
+
+`OPERATOR_SESSION_ACCOUNTS` 现在只作为本地/沙盒兜底来源。若显式设置 `OPERATOR_ACCOUNT_SOURCE=env`，Web BFF 会继续使用旧 JSON 账号；否则存在 `OPERATOR_SESSION_ACCOUNTS` 时仍会兼容旧本地配置。正式部署不要依赖该 JSON 作为主账号系统。
+
+本地开发继续使用 `npm run db:migrate`；部署环境使用 `npm run db:migrate:deploy`，避免在生产执行 Prisma dev migration 语义。

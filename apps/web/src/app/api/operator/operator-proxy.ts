@@ -16,7 +16,7 @@ export async function proxyOperatorApi(
   let session: OperatorSession | undefined;
 
   if (options.requireSession !== false) {
-    const sessionResult = readOperatorSession(request);
+    const sessionResult = await readOperatorSession(request);
     if (sessionResult.status === "missing") {
       return NextResponse.json(
         { error: "Operator session is required" },
