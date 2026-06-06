@@ -77,3 +77,7 @@
 - Connected aggregate real-channel queue health into `/health/ready`, returning `degraded` when configured thresholds are exceeded while keeping DB failure as `unhealthy`/503.
 - Added queue threshold env vars to `.env.example` with blank warning thresholds disabled by default.
 - Final PR20 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live degraded readiness smoke with aggregate queue reasons only.
+- Started PR21 channel queue operations runbook.
+- Added `docs/deploy/channel-queue-runbook.md` to document readiness states, queue metrics, stale recovery steps, degraded reason codes, and safety boundaries.
+- Added `scripts/verify-channel-queue-runbook.mjs` plus `npm run verify:channel-runbook` so the runbook, env example, public API surface, and source routes are checked together.
+- Final PR21 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.

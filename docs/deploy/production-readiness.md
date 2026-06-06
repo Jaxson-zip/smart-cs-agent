@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR21 Channel Queue Operations Runbook
+
+Channel queue operations are now documented in `docs/deploy/channel-queue-runbook.md`. The runbook covers `/health/ready`, `GET /v1/channel-events/metrics`, `POST /v1/channel-events/recover-stale`, the Web BFF equivalents, threshold env vars, degraded reason codes, triage steps, and safety boundaries.
+
+The runbook is guarded by `npm run verify:channel-runbook`, which checks the runbook, `.env.example`, `docs/deploy/public-api-surface.md`, and the relevant API source files for required operational facts. Any future change to readiness, queue metrics, stale recovery, or the public API surface should update the runbook and keep this verifier passing.
+
 ## PR20 Queue Readiness Thresholds
 
 `GET /health/ready` now includes aggregate real-channel queue health. Database failure still returns HTTP 503 with `status=unhealthy`; queue pressure returns HTTP 200 with `status=degraded` so deploy platforms can distinguish "service is up but needs operator attention" from "service cannot serve".

@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR20 - Channel Queue Readiness Thresholds
+## Current Stage: PR21 - Channel Queue Operations Runbook
 
 Status: verified
 
-PR20 builds on PR19 by connecting aggregate real-channel queue metrics into `/health/ready`. Queue pressure can mark readiness as `degraded` without returning HTTP 503, while database failure still returns `unhealthy`. Degraded checks expose only aggregate counts, age, thresholds, and reason codes.
+PR21 turns the PR18-PR20 queue safety work into an operational runbook with an executable verifier. The goal is to make readiness degradation, metrics triage, stale recovery, and data-leak boundaries discoverable and hard to regress.
 
 ### PR16 Scope
 
@@ -55,10 +55,11 @@ PR20 builds on PR19 by connecting aggregate real-channel queue metrics into `/he
 - [x] PR18 channel event processing recovery.
 - [x] PR19 channel event queue metrics.
 - [x] PR20 channel queue readiness thresholds.
+- [x] PR21 channel queue operations runbook and verifier.
 
 ## Verification Gate
 
-Do not claim PR20 channel queue readiness thresholds complete until these pass:
+Do not claim PR21 channel queue operations runbook complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -67,6 +68,8 @@ Do not claim PR20 channel queue readiness thresholds complete until these pass:
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
+- `node --check scripts/verify-channel-queue-runbook.mjs`
+- `npm.cmd run verify:channel-runbook`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
 - `node --check scripts/demo/real-channel-webhook-smoke.mjs`
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`

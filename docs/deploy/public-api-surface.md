@@ -1,5 +1,7 @@
 # Public API Surface
 
+Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue readiness, metrics, stale recovery, degraded reasons, and safety boundaries. Keep it in sync with this API surface.
+
 本文档记录当前沙盒/预生产阶段允许暴露的 HTTP API 面。新增路由时必须更新本表，并补对应测试。
 
 ## API Service

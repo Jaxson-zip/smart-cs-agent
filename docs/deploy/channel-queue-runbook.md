@@ -1,0 +1,132 @@
+# Channel Queue Operations Runbook
+
+This runbook is for operators and on-call engineers who need to keep the real-channel review queue healthy. It covers the queue created by signed real-channel webhooks and the manual review bridge into after-sales cases.
+
+The goal is simple: detect backlog or stuck `processing` claims early, recover safely, and avoid exposing tenant or customer data while doing it.
+
+## Public Signals
+
+Use these signals during deploy checks, incident triage, and daily operations:
+
+| Signal | Purpose | Access |
+| --- | --- | --- |
+| `GET /health/ready` | Public readiness with database, webhook config, and source-wide aggregate channel queue health | No operator session required; no tenant data |
+| `GET /v1/channel-events/metrics` | Tenant-scoped real-channel queue metrics | Operator API key required |
+| `GET /api/operator/channel-events/metrics` | Same metrics through the Web BFF | Operator session required |
+| `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
+| `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
+
+## Queue States
+
+- `pending`: a normalized real-channel event is waiting for an operator to generate a reviewed after-sales case or ignore it.
+- `processing`: an internal claim is in progress after replay starts. This should usually be short-lived.
+- `replayed`: the event has created an internal after-sales case.
+- `ignored`: an operator intentionally marked the event as not handled.
+
+## Readiness States
+
+- `ok`: database is reachable and aggregate queue thresholds are not exceeded.
+- `degraded`: database is reachable, but queue pressure needs operator attention. `/health/ready` still returns HTTP 200.
+- `unhealthy`: database readiness failed. `/health/ready` returns HTTP 503.
+
+`degraded` means the service can still respond, but the team should inspect queue pressure before it becomes customer-visible delay.
+
+## Threshold Configuration
+
+Configure queue pressure through environment variables:
+
+| Variable | Meaning | Default behavior |
+| --- | --- | --- |
+| `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD` | Degrade readiness when pending count is greater than this value | Empty disables this warning |
+| `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS` | Degrade readiness when the oldest pending event age is greater than this value | Empty disables this warning |
+| `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD` | Degrade readiness when stale processing count is greater than this value | Empty disables this warning |
+| `CHANNEL_QUEUE_STALE_AFTER_MINUTES` | Age at which `processing` is considered stale | Defaults to `15` |
+
+Readiness can report these degraded reasons:
+
+- `pending_count_above_threshold`
+- `oldest_pending_age_above_threshold`
+- `stale_processing_above_threshold`
+
+## Triage Steps
+
+### 1. Check readiness
+
+```bash
+curl -sS http://localhost:4100/health/ready
+```
+
+If `status` is `unhealthy`, treat this as database or readiness dependency availability first. Queue recovery cannot help until the readiness path works.
+
+If `status` is `degraded`, inspect `checks.channelQueue.reasons`.
+
+### 2. Check queue metrics
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer <operator-key>" \
+  http://localhost:4100/v1/channel-events/metrics
+```
+
+Look at:
+
+- `pendingCount`: current unreviewed real-channel events for the operator tenant.
+- `processingCount`: events currently claimed by replay.
+- `staleProcessingCount`: claimed events older than the stale cutoff.
+- `oldestPendingAgeSeconds`: how long the oldest pending customer message has waited.
+
+### 3. Recover stale processing claims
+
+Use this only when `staleProcessingCount` is above the threshold or an interrupted replay left events stuck in `processing`.
+
+```bash
+curl -sS \
+  -X POST \
+  -H "Authorization: Bearer <admin-operator-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"olderThanMinutes":15,"limit":50}' \
+  http://localhost:4100/v1/channel-events/recover-stale
+```
+
+Expected result:
+
+```json
+{
+  "status": "recovered",
+  "recoveredCount": 0,
+  "recoveredBefore": "2026-06-06T07:15:00.000Z",
+  "eventIds": []
+}
+```
+
+Recovery moves old `processing` events back to `pending`, clears the processing claim, and writes an audit record.
+
+### 4. Recheck readiness
+
+```bash
+curl -sS http://localhost:4100/health/ready
+```
+
+If the only degraded reason was `stale_processing_above_threshold`, readiness should return to `ok` after recovery and the next metrics check.
+
+If `pending_count_above_threshold` or `oldest_pending_age_above_threshold` remains, recovery is not the fix. Pause or reduce real-channel intake where possible, add operator capacity, and continue reviewing pending messages.
+
+## Safety Boundaries
+
+Recovery is an operations safety valve, not a customer action.
+
+It must not call AgentService, must not create cases, must not execute actions, and must not send customer-visible replies.
+
+Metrics and readiness must not expose tenant IDs, must not expose customer messages, must not expose provider payloads, must not expose external conversation IDs, must not expose external message IDs, must not expose operator API keys, and must not expose secrets.
+
+The Web BFF route may return tenant-scoped counts, timestamps, and age seconds to the browser. It must strip tenant/source/internal fields before responding.
+
+## Verification
+
+Run the documentation verifier after changing readiness, channel-event metrics, recovery, or the public API surface:
+
+```bash
+npm run verify:channel-runbook
+```
+
+The verifier checks this runbook, `.env.example`, `docs/deploy/public-api-surface.md`, and the relevant API source files for the required endpoints, threshold variables, degraded reasons, and safety boundaries.
