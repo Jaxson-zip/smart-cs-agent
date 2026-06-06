@@ -6,6 +6,9 @@ const REQUEST_TIMEOUT_MS = 2500;
 
 type ProxyOptions = {
   requireSession?: boolean;
+  method?: "GET" | "POST";
+  body?: BodyInit;
+  contentType?: string;
 };
 
 export async function proxyOperatorApi(
@@ -50,8 +53,10 @@ export async function proxyOperatorApi(
   try {
     const response = await fetch(`${apiUrl()}${path}`, {
       cache: "no-store",
+      method: options.method ?? "GET",
       signal: controller.signal,
-      headers: buildOperatorHeaders(session),
+      headers: buildOperatorHeaders(session, options.contentType),
+      body: options.body,
     });
 
     const body = await readResponseBody(response);
@@ -82,9 +87,10 @@ function apiUrl() {
   ).replace(/\/$/, "");
 }
 
-function buildOperatorHeaders(session?: OperatorSession) {
+function buildOperatorHeaders(session?: OperatorSession, contentType?: string) {
   return {
     Accept: "application/json",
+    ...(contentType ? { "content-type": contentType } : {}),
     ...(session
       ? {
           authorization: `Bearer ${session.apiKey}`,

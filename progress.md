@@ -54,3 +54,10 @@
 - Added operator-gated channel event review service/controller tests and implementation for list, ignore, and manual replay.
 - Addressed PR15 spec review findings by restricting the review pool to `source=real_channel_webhook`, adding a review status enum migration, and covering malformed/viewer/source boundary cases in tests.
 - Final PR15 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.
+- Started PR16 operator workbench review pool UI.
+- Added Web BFF tests and routes for `GET /api/operator/channel-events`, `POST /api/operator/channel-events/:id/replay`, and `POST /api/operator/channel-events/:id/ignore`.
+- Extended the Web operator API client with sanitized pending channel event list, replay, and ignore helpers.
+- Added BFF viewer-role blocking for channel event replay/ignore even when a session account is backed by a stronger server API key.
+- Added the "待接入消息" workbench queue and verified in browser that pending messages can generate an internal human-reviewed case.
+- Tightened `GET /api/operator/channel-events` so the browser receives only UI-safe fields and not tenant or external conversation/message identifiers.
+- Final PR16 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and browser checks at 1366x768 plus 390x844 with no page-level overflow or internal terminology visible.

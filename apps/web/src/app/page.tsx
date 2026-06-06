@@ -30,13 +30,17 @@ import {
 import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
 import {
   ApiError,
+  fetchChannelEvents,
   createOperatorAccount,
   fetchCases,
   fetchCurrentOperator,
   fetchOperatorAccounts,
+  ignoreChannelEvent,
   loginOperator,
   logoutOperator,
+  replayChannelEvent,
   updateOperatorAccount,
+  type ChannelEventSummary,
   type OperatorAccountSummary,
   type OperatorProfile,
 } from "../lib/api";
@@ -165,6 +169,12 @@ export default function OperatorWorkbench() {
   const [operatorAccountsLoading, setOperatorAccountsLoading] = useState(false);
   const [operatorAccountsError, setOperatorAccountsError] = useState("");
   const [operatorAccountSaving, setOperatorAccountSaving] = useState("");
+  const [channelEvents, setChannelEvents] = useState<ChannelEventSummary[]>([]);
+  const [channelEventsLoading, setChannelEventsLoading] = useState(false);
+  const [channelEventError, setChannelEventError] = useState("");
+  const [selectedChannelEventId, setSelectedChannelEventId] = useState<string>();
+  const [channelEventActionId, setChannelEventActionId] = useState("");
+  const [channelEventActionError, setChannelEventActionError] = useState("");
   const [newOperator, setNewOperator] = useState({
     username: "",
     password: "",
@@ -177,15 +187,33 @@ export default function OperatorWorkbench() {
 
     fetchCurrentOperator()
       .then(async (session) => {
-        const data = await fetchCases();
-        return { data, operator: session.operator };
+        setChannelEventsLoading(true);
+        const [data, eventResult] = await Promise.all([
+          fetchCases(),
+          fetchChannelEvents()
+            .then((events) => ({ ok: true as const, events }))
+            .catch((error: unknown) => ({ ok: false as const, error })),
+        ]);
+        return { data, eventResult, operator: session.operator };
       })
       .then((data) => {
         if (ignore) return;
 
         setOperator(data.operator);
+        setChannelEventsLoading(false);
+        if (data.eventResult.ok) {
+          setChannelEvents(data.eventResult.events);
+          setChannelEventError("");
+        } else {
+          setChannelEvents([]);
+          setChannelEventError(
+            data.eventResult.error instanceof Error
+              ? data.eventResult.error.message
+              : "待接入消息暂时无法同步",
+          );
+        }
 
-        if (data.data.length === 0) {
+        if (data.data.length === 0 && (!data.eventResult.ok || data.eventResult.events.length === 0)) {
           setCases([]);
           setDataState("empty");
           return;
@@ -196,9 +224,11 @@ export default function OperatorWorkbench() {
       })
       .catch((error: unknown) => {
         if (ignore) return;
+        setChannelEventsLoading(false);
 
         if (error instanceof ApiError && error.status === 401) {
           setCases([]);
+          setChannelEvents([]);
           setOperator(undefined);
           setDataState("login");
           return;
@@ -211,6 +241,7 @@ export default function OperatorWorkbench() {
         }
 
         setCases([]);
+        setChannelEvents([]);
         setSyncError(
           error instanceof Error
             ? error.message
@@ -260,10 +291,22 @@ export default function OperatorWorkbench() {
     return needActionCases.filter((item) => normalizeChannel(item.channel) === selectedChannel);
   }, [needActionCases, selectedChannel]);
 
+  const filteredChannelEvents = useMemo(() => {
+    if (selectedChannel === "all") return channelEvents;
+    return channelEvents.filter((item) => normalizeChannel(item.channel) === selectedChannel);
+  }, [channelEvents, selectedChannel]);
+
   const filteredAll = useMemo(() => {
     if (selectedChannel === "all") return cases;
     return cases.filter((item) => normalizeChannel(item.channel) === selectedChannel);
   }, [cases, selectedChannel]);
+
+  const selectedChannelEvent = useMemo(
+    () =>
+      filteredChannelEvents.find((item) => item.id === selectedChannelEventId) ??
+      (!selectedId ? filteredChannelEvents[0] : undefined),
+    [filteredChannelEvents, selectedChannelEventId, selectedId],
+  );
 
   const selected = useMemo(
     () =>
@@ -396,22 +439,37 @@ export default function OperatorWorkbench() {
     );
   }
 
-  if (!selected) {
+  if (!selected && !selectedChannelEvent) {
     return null;
   }
 
-  const currentDraft = replyDrafts[selected.caseId] ?? selected.customerReply ?? "";
-  const isSent = sentIds.includes(selected.caseId) || selected.status === "auto_resolved";
+  const currentDraft = selected
+    ? replyDrafts[selected.caseId] ?? selected.customerReply ?? ""
+    : "";
+  const isSent = selected
+    ? sentIds.includes(selected.caseId) || selected.status === "auto_resolved"
+    : false;
   const isTakeover =
-    takeoverIds.includes(selected.caseId) || selected.status === "human_takeover";
+    selected
+      ? takeoverIds.includes(selected.caseId) || selected.status === "human_takeover"
+      : false;
   const canConfirmReplies = operator?.permissions.confirmReplies ?? false;
   const canTakeoverCases = operator?.permissions.takeoverCases ?? false;
-  const selectedChannelMeta = getChannelMeta(selected.channel);
+  const selectedChannelMeta = getChannelMeta(
+    selectedChannelEvent?.channel ?? selected?.channel ?? selectedChannel,
+  );
   const canConfirm =
+    Boolean(selected) &&
     canConfirmReplies &&
-    selected.status === "waiting_confirm" &&
+    selected?.status === "waiting_confirm" &&
     currentDraft.trim().length > 0;
-  const headerStatus = selected.status === "auto_resolved" ? "已自动处理 / 无需操作" : statusText[selected.status];
+  const headerStatus = selected
+    ? selectedChannelEvent
+      ? "待生成工单"
+      : selected.status === "auto_resolved"
+      ? "已自动处理 / 无需操作"
+      : statusText[selected.status]
+    : "待生成工单";
 
   function selectChannel(id: ChannelId) {
     setSelectedChannel(id);
@@ -420,16 +478,23 @@ export default function OperatorWorkbench() {
       id === "all"
         ? needActionCases
         : needActionCases.filter((item) => normalizeChannel(item.channel) === id);
+    const nextEvents =
+      id === "all"
+        ? channelEvents
+        : channelEvents.filter((item) => normalizeChannel(item.channel) === id);
 
     setSelectedId(nextList[0]?.caseId);
+    setSelectedChannelEventId(nextList[0] ? undefined : nextEvents[0]?.id);
   }
 
   function confirmReply() {
+    if (!selected) return;
     if (!canConfirm || sentIds.includes(selected.caseId)) return;
     setSentIds((items) => [...items, selected.caseId]);
   }
 
   function handleTakeover() {
+    if (!selected) return;
     if (!canTakeoverCases) return;
     if (takeoverIds.includes(selected.caseId)) return;
     setTakeoverIds((items) => [...items, selected.caseId]);
@@ -456,10 +521,52 @@ export default function OperatorWorkbench() {
     await logoutOperator();
     setOperator(undefined);
     setCases([]);
+    setChannelEvents([]);
     setSelectedId(undefined);
+    setSelectedChannelEventId(undefined);
     setOperatorPanelOpen(false);
     setOperatorAccounts([]);
     setDataState("login");
+  }
+
+  async function handleReplayChannelEvent(event: ChannelEventSummary) {
+    if (!canConfirmReplies) return;
+
+    setChannelEventActionError("");
+    setChannelEventActionId(event.id);
+
+    try {
+      const result = await replayChannelEvent(event.id);
+      setChannelEvents((items) => items.filter((item) => item.id !== event.id));
+      setSelectedChannelEventId(undefined);
+      setSelectedId(result.caseId);
+      loadCases();
+    } catch (error) {
+      setChannelEventActionError(
+        error instanceof Error ? error.message : "待接入消息生成工单失败",
+      );
+    } finally {
+      setChannelEventActionId("");
+    }
+  }
+
+  async function handleIgnoreChannelEvent(event: ChannelEventSummary) {
+    if (!canConfirmReplies) return;
+
+    setChannelEventActionError("");
+    setChannelEventActionId(event.id);
+
+    try {
+      await ignoreChannelEvent(event.id, "客服在工作台标记为不处理");
+      setChannelEvents((items) => items.filter((item) => item.id !== event.id));
+      setSelectedChannelEventId(undefined);
+    } catch (error) {
+      setChannelEventActionError(
+        error instanceof Error ? error.message : "待接入消息忽略失败",
+      );
+    } finally {
+      setChannelEventActionId("");
+    }
   }
 
   async function openOperatorPanel() {
@@ -585,14 +692,58 @@ export default function OperatorWorkbench() {
           </section>
 
           <div className="min-h-[220px] flex-1 overflow-y-auto p-3 lg:min-h-0">
+            <div className="mb-3 rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <Inbox size={15} />
+                  待接入消息
+                </div>
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                  {filteredChannelEvents.length}
+                </span>
+              </div>
+
+              {channelEventError ? (
+                <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 ring-1 ring-amber-100">
+                  {channelEventError}
+                </div>
+              ) : channelEventsLoading ? (
+                <div className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500 ring-1 ring-slate-200">
+                  正在同步待接入消息
+                </div>
+              ) : filteredChannelEvents.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredChannelEvents.map((event) => (
+                    <ChannelEventQueueItem
+                      key={event.id}
+                      event={event}
+                      active={event.id === selectedChannelEvent?.id}
+                      onClick={() => {
+                        setSelectedChannelEventId(event.id);
+                        setSelectedId(undefined);
+                        setChannelEventActionError("");
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg bg-white px-3 py-2 text-xs text-slate-500 ring-1 ring-slate-200">
+                  暂无待接入消息
+                </div>
+              )}
+            </div>
+
             {filteredNeedAction.length > 0 ? (
               <div className="space-y-2">
                 {filteredNeedAction.map((item) => (
                   <QueueItem
                     key={item.caseId}
                     item={item}
-                    active={item.caseId === selected.caseId}
-                    onClick={() => setSelectedId(item.caseId)}
+                    active={!selectedChannelEvent && item.caseId === selected?.caseId}
+                    onClick={() => {
+                      setSelectedId(item.caseId);
+                      setSelectedChannelEventId(undefined);
+                    }}
                   />
                 ))}
               </div>
@@ -627,15 +778,27 @@ export default function OperatorWorkbench() {
                   >
                     {selectedChannelMeta.label}
                   </span>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${statusClass[selected.status]}`}>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${
+                      selected && !selectedChannelEvent
+                        ? statusClass[selected.status]
+                        : "bg-blue-50 text-blue-700 ring-blue-100"
+                    }`}
+                  >
                     {headerStatus}
                   </span>
-                  <span className={`text-xs font-semibold ${riskClass[selected.riskLevel]}`}>
-                    {riskText[selected.riskLevel]}
-                  </span>
+                  {selected && !selectedChannelEvent ? (
+                    <span className={`text-xs font-semibold ${riskClass[selected.riskLevel]}`}>
+                      {riskText[selected.riskLevel]}
+                    </span>
+                  ) : null}
                 </div>
                 <h2 className="mt-2 truncate text-xl font-semibold tracking-tight">
-                  {categoryText[selected.category]} · {selected.customerName}
+                  {selectedChannelEvent
+                    ? `待接入消息 · ${selectedChannelEvent.senderName}`
+                    : selected
+                      ? `${categoryText[selected.category]} · ${selected.customerName}`
+                      : "待接入消息"}
                 </h2>
               </div>
 
@@ -651,27 +814,31 @@ export default function OperatorWorkbench() {
                     <span className="hidden sm:inline">客服账号</span>
                   </button>
                 ) : null}
-                <button
-                  onClick={() => setShowAudit((value) => !value)}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
-                  aria-label="审计"
-                >
-                  <History size={15} />
-                  <span className="hidden sm:inline">审计</span>
-                  <ChevronDown
-                    size={14}
-                    className={`transition ${showAudit ? "rotate-180" : ""}`}
-                  />
-                </button>
-                <button
-                  onClick={handleTakeover}
-                  disabled={selected.status === "auto_resolved" || !canTakeoverCases}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:px-3"
-                  aria-label="接管"
-                >
-                  <Headphones size={15} />
-                  <span className="hidden sm:inline">接管</span>
-                </button>
+                {selected && !selectedChannelEvent ? (
+                  <>
+                    <button
+                      onClick={() => setShowAudit((value) => !value)}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
+                      aria-label="审计"
+                    >
+                      <History size={15} />
+                      <span className="hidden sm:inline">审计</span>
+                      <ChevronDown
+                        size={14}
+                        className={`transition ${showAudit ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                    <button
+                      onClick={handleTakeover}
+                      disabled={selected.status === "auto_resolved" || !canTakeoverCases}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:px-3"
+                      aria-label="接管"
+                    >
+                      <Headphones size={15} />
+                      <span className="hidden sm:inline">接管</span>
+                    </button>
+                  </>
+                ) : null}
                 <button
                   onClick={handleLogout}
                   className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
@@ -687,29 +854,52 @@ export default function OperatorWorkbench() {
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 xl:px-5">
               <div className="mx-auto flex max-w-5xl flex-col gap-3">
-                <MessageBubble
-                  align="left"
-                  eyebrow={selected.customerName}
-                  body={selected.customerMessage}
-                />
+                {selectedChannelEvent ? (
+                  <>
+                    <MessageBubble
+                      align="left"
+                      eyebrow={selectedChannelEvent.senderName}
+                      body={selectedChannelEvent.text}
+                    />
+                    <MessageBubble
+                      align="left"
+                      tone="system"
+                      eyebrow="接入前检查"
+                      body="这条消息来自已接入渠道，尚未生成售后工单。确认需要处理后，可生成工单进入人工确认流程；重复或无效消息可以不处理。"
+                    />
+                    {channelEventActionError ? (
+                      <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-700 ring-1 ring-rose-100">
+                        {channelEventActionError}
+                      </div>
+                    ) : null}
+                  </>
+                ) : selected ? (
+                  <>
+                    <MessageBubble
+                      align="left"
+                      eyebrow={selected.customerName}
+                      body={selected.customerMessage}
+                    />
 
-                <MessageBubble
-                  align="left"
-                  tone="system"
-                  eyebrow="处理建议"
-                  body={selected.systemResult}
-                />
+                    <MessageBubble
+                      align="left"
+                      tone="system"
+                      eyebrow="处理建议"
+                      body={selected.systemResult}
+                    />
 
-                {currentDraft ? (
-                  <MessageBubble
-                    align="right"
-                    tone={isSent ? "sent" : "draft"}
-                    eyebrow={isSent ? "已回复客户" : "待确认回复"}
-                    body={currentDraft}
-                  />
+                    {currentDraft ? (
+                      <MessageBubble
+                        align="right"
+                        tone={isSent ? "sent" : "draft"}
+                        eyebrow={isSent ? "已回复客户" : "待确认回复"}
+                        body={currentDraft}
+                      />
+                    ) : null}
+                  </>
                 ) : null}
 
-                {showAudit ? (
+                {selected && showAudit ? (
                   <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
                     <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                       <History size={15} />
@@ -737,74 +927,109 @@ export default function OperatorWorkbench() {
 
             <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 xl:px-5">
               <div className="mx-auto max-w-5xl">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                    {selected.status === "human_takeover" ? (
-                      <AlertTriangle size={16} className="text-rose-600" />
-                    ) : selected.status === "auto_resolved" ? (
-                      <Check size={16} className="text-emerald-600" />
-                    ) : (
-                      <Clock3 size={16} className="text-amber-600" />
-                    )}
-                    {selected.status === "auto_resolved"
-                      ? "无需操作"
-                      : isTakeover
-                        ? "人工接管中"
-                        : "等待客服确认"}
-                  </div>
-
-                  <button
-                    onClick={confirmReply}
-                    disabled={!canConfirm || isSent || isTakeover}
-                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isSent ? <Check size={15} /> : <Send size={15} />}
-                    {isSent
-                      ? "已确认"
-                      : isTakeover
-                        ? "需接管"
-                        : canConfirmReplies
-                          ? "确认回复"
-                          : "无确认权限"}
-                  </button>
-                </div>
-
-                <textarea
-                  value={currentDraft}
-                  onChange={(event) =>
-                    setReplyDrafts((drafts) => ({
-                      ...drafts,
-                      [selected.caseId]: event.target.value,
-                    }))
-                  }
-                  disabled={isSent || selected.status === "auto_resolved"}
-                  className="h-20 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-[15px] leading-6 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:bg-slate-100 disabled:text-slate-500 xl:h-24"
-                  placeholder="填写确认后要回复客户的内容"
-                />
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {selected.actions?.map((action, index) => {
-                    const labelInfo =
-                      actionLabels[action.type as keyof typeof actionLabels] ?? actionLabels.send_channel_reply;
-                    const { label, Icon } = labelInfo;
-
-                    return (
-                      <span
-                        key={`${action.type}-${index}`}
-                        className="inline-flex h-8 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200"
+                {selectedChannelEvent ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-[220px] flex-1">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <Clock3 size={16} className="text-blue-600" />
+                        等待接入处理
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">
+                        生成工单后进入人工确认流程；不处理会从待接入消息中移除。
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleIgnoreChannelEvent(selectedChannelEvent)}
+                        disabled={!canConfirmReplies || channelEventActionId === selectedChannelEvent.id}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                       >
-                        <Icon size={14} />
-                        {label}
-                      </span>
-                    );
-                  })}
+                        <X size={15} />
+                        不处理
+                      </button>
+                      <button
+                        onClick={() => handleReplayChannelEvent(selectedChannelEvent)}
+                        disabled={!canConfirmReplies || channelEventActionId === selectedChannelEvent.id}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-300"
+                      >
+                        <ClipboardCheck size={15} />
+                        {channelEventActionId === selectedChannelEvent.id ? "正在生成" : "生成工单"}
+                      </button>
+                    </div>
+                  </div>
+                ) : selected ? (
+                  <>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        {selected.status === "human_takeover" ? (
+                          <AlertTriangle size={16} className="text-rose-600" />
+                        ) : selected.status === "auto_resolved" ? (
+                          <Check size={16} className="text-emerald-600" />
+                        ) : (
+                          <Clock3 size={16} className="text-amber-600" />
+                        )}
+                        {selected.status === "auto_resolved"
+                          ? "无需操作"
+                          : isTakeover
+                            ? "人工接管中"
+                            : "等待客服确认"}
+                      </div>
 
-                  <span className="min-w-[220px] flex-1 text-sm leading-6 text-slate-500">
-                    {canConfirmReplies || selected.status === "auto_resolved"
-                      ? selected.operatorHint
-                      : "当前账号仅可查看工单，请联系管理员调整权限。"}
-                  </span>
-                </div>
+                      <button
+                        onClick={confirmReply}
+                        disabled={!canConfirm || isSent || isTakeover}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {isSent ? <Check size={15} /> : <Send size={15} />}
+                        {isSent
+                          ? "已确认"
+                          : isTakeover
+                            ? "需接管"
+                            : canConfirmReplies
+                              ? "确认回复"
+                              : "无确认权限"}
+                      </button>
+                    </div>
+
+                    <textarea
+                      value={currentDraft}
+                      onChange={(event) =>
+                        setReplyDrafts((drafts) => ({
+                          ...drafts,
+                          [selected.caseId]: event.target.value,
+                        }))
+                      }
+                      disabled={isSent || selected.status === "auto_resolved"}
+                      className="h-20 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-[15px] leading-6 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:bg-slate-100 disabled:text-slate-500 xl:h-24"
+                      placeholder="填写确认后要回复客户的内容"
+                    />
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {selected.actions?.map((action, index) => {
+                        const labelInfo =
+                          actionLabels[action.type as keyof typeof actionLabels] ??
+                          actionLabels.send_channel_reply;
+                        const { label, Icon } = labelInfo;
+
+                        return (
+                          <span
+                            key={`${action.type}-${index}`}
+                            className="inline-flex h-8 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200"
+                          >
+                            <Icon size={14} />
+                            {label}
+                          </span>
+                        );
+                      })}
+
+                      <span className="min-w-[220px] flex-1 text-sm leading-6 text-slate-500">
+                        {canConfirmReplies || selected.status === "auto_resolved"
+                          ? selected.operatorHint
+                          : "当前账号仅可查看工单，请联系管理员调整权限。"}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </footer>
           </div>
@@ -812,49 +1037,82 @@ export default function OperatorWorkbench() {
 
         <aside className="hidden min-h-0 min-w-0 overflow-y-auto border-t border-slate-200 bg-white lg:block lg:border-l lg:border-t-0">
           <div className="space-y-4 p-4 xl:p-5">
-            <section className="rounded-xl bg-slate-950 p-4 text-white">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs text-slate-300">当前处理</p>
-                  <h3 className="mt-1 text-lg font-semibold">{statusText[selected.status]}</h3>
-                </div>
-                {selected.status === "human_takeover" ? (
-                  <ShieldAlert className="text-rose-300" size={24} />
-                ) : selected.status === "waiting_confirm" ? (
-                  <Clock3 className="text-amber-300" size={24} />
-                ) : (
-                  <PackageCheck className="text-emerald-300" size={24} />
-                )}
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">{selected.operatorHint}</p>
-            </section>
-
-            <InfoSection title="客户与订单">
-              <InfoRow label="客户" value={selected.customerName} />
-              <InfoRow label="订单" value={selected.orderId ?? "待同步"} />
-              <InfoRow label="商品" value={selected.product} />
-              <InfoRow label="金额" value={selected.amount} />
-              <InfoRow label="状态" value={selected.orderStatus} />
-            </InfoSection>
-
-            <InfoSection title="分类与风险">
-              <div className="grid grid-cols-2 gap-2">
-                <Metric label="售后类型" value={categoryText[selected.category]} />
-                <Metric label="风险等级" value={riskText[selected.riskLevel]} emphasis={riskClass[selected.riskLevel]} />
-              </div>
-              <div className="mt-3 space-y-2">
-                {selected.facts.map((fact) => (
-                  <div key={fact} className="flex items-start gap-2 text-sm leading-6 text-slate-600">
-                    <Check className="mt-1 shrink-0 text-emerald-600" size={14} />
-                    <span>{fact}</span>
+            {selectedChannelEvent ? (
+              <>
+                <section className="rounded-xl bg-slate-950 p-4 text-white">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs text-slate-300">当前处理</p>
+                      <h3 className="mt-1 text-lg font-semibold">待接入消息</h3>
+                    </div>
+                    <Inbox className="text-blue-300" size={24} />
                   </div>
-                ))}
-              </div>
-            </InfoSection>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    这条客户消息还未生成售后工单，生成后才会进入人工确认队列。
+                  </p>
+                </section>
 
-            <InfoSection title="处理摘要">
-              <p className="text-sm leading-6 text-slate-600">{selected.systemResult}</p>
-            </InfoSection>
+                <InfoSection title="客户与渠道">
+                  <InfoRow label="客户" value={selectedChannelEvent.senderName} />
+                  <InfoRow label="渠道" value={getChannelMeta(selectedChannelEvent.channel).label} />
+                  <InfoRow label="收到时间" value={formatShortTime(selectedChannelEvent.receivedAt)} />
+                </InfoSection>
+
+                <InfoSection title="客户消息">
+                  <p className="text-sm leading-6 text-slate-600">{selectedChannelEvent.text}</p>
+                </InfoSection>
+              </>
+            ) : selected ? (
+              <>
+                <section className="rounded-xl bg-slate-950 p-4 text-white">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs text-slate-300">当前处理</p>
+                      <h3 className="mt-1 text-lg font-semibold">{statusText[selected.status]}</h3>
+                    </div>
+                    {selected.status === "human_takeover" ? (
+                      <ShieldAlert className="text-rose-300" size={24} />
+                    ) : selected.status === "waiting_confirm" ? (
+                      <Clock3 className="text-amber-300" size={24} />
+                    ) : (
+                      <PackageCheck className="text-emerald-300" size={24} />
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{selected.operatorHint}</p>
+                </section>
+
+                <InfoSection title="客户与订单">
+                  <InfoRow label="客户" value={selected.customerName} />
+                  <InfoRow label="订单" value={selected.orderId ?? "待同步"} />
+                  <InfoRow label="商品" value={selected.product} />
+                  <InfoRow label="金额" value={selected.amount} />
+                  <InfoRow label="状态" value={selected.orderStatus} />
+                </InfoSection>
+
+                <InfoSection title="分类与风险">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Metric label="售后类型" value={categoryText[selected.category]} />
+                    <Metric
+                      label="风险等级"
+                      value={riskText[selected.riskLevel]}
+                      emphasis={riskClass[selected.riskLevel]}
+                    />
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {selected.facts.map((fact) => (
+                      <div key={fact} className="flex items-start gap-2 text-sm leading-6 text-slate-600">
+                        <Check className="mt-1 shrink-0 text-emerald-600" size={14} />
+                        <span>{fact}</span>
+                      </div>
+                    ))}
+                  </div>
+                </InfoSection>
+
+                <InfoSection title="处理摘要">
+                  <p className="text-sm leading-6 text-slate-600">{selected.systemResult}</p>
+                </InfoSection>
+              </>
+            ) : null}
           </div>
         </aside>
       </div>
@@ -1173,6 +1431,48 @@ function QueueItem({
   );
 }
 
+function ChannelEventQueueItem({
+  event,
+  active,
+  onClick,
+}: {
+  event: ChannelEventSummary;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const channel = getChannelMeta(event.channel);
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full rounded-lg p-2.5 text-left transition ${
+        active
+          ? "bg-blue-950 text-white"
+          : "bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold">{event.senderName}</div>
+          <p className={active ? "mt-1 truncate text-xs text-blue-100" : "mt-1 truncate text-xs text-slate-500"}>
+            {event.text}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
+            active ? "bg-white/10 text-white ring-white/15" : channel.badgeClass
+          }`}
+        >
+          {channel.shortLabel}
+        </span>
+      </div>
+      <div className={active ? "mt-2 text-xs text-blue-100" : "mt-2 text-xs text-slate-400"}>
+        {formatShortTime(event.receivedAt)}
+      </div>
+    </button>
+  );
+}
+
 function MessageBubble({
   align,
   eyebrow,
@@ -1257,4 +1557,16 @@ function normalizeChannel(channel: string): ChannelId {
 function getChannelMeta(channel: string): ChannelMeta {
   const normalized = normalizeChannel(channel);
   return channelTabs.find((item) => item.id === normalized) ?? channelTabs[0];
+}
+
+function formatShortTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }

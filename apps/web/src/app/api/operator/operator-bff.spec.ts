@@ -3,6 +3,9 @@ import { scryptSync } from "node:crypto";
 import { afterEach, describe, it } from "node:test";
 import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
+import { GET as listChannelEvents } from "./channel-events/route";
+import { POST as ignoreChannelEvent } from "./channel-events/[id]/ignore/route";
+import { POST as replayChannelEvent } from "./channel-events/[id]/replay/route";
 import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
@@ -673,6 +676,218 @@ describe("operator BFF routes", () => {
       proxiedHeaders.get("authorization"),
       "Bearer session_api_key",
     );
+  });
+
+  it("proxies pending real-channel event review list through the operator session", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_from_session","operatorId":"operator_from_session","role":"operator","apiKey":"session_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json([
+        {
+          id: "event_1",
+          merchantId: "tenant_from_session",
+          channel: "taobao",
+          externalConversationId: "conv_secret",
+          externalMessageId: "msg_secret",
+          senderName: "林女士",
+          text: "鞋盒压坏了",
+          receivedAt: "2026-06-06T06:00:00.000Z",
+          createdAt: "2026-06-06T06:01:00.000Z",
+          reviewStatus: "pending",
+        },
+      ]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await listChannelEvents(
+      new Request("http://localhost/api/operator/channel-events", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), [
+      {
+        id: "event_1",
+        channel: "taobao",
+        senderName: "林女士",
+        text: "鞋盒压坏了",
+        receivedAt: "2026-06-06T06:00:00.000Z",
+        createdAt: "2026-06-06T06:01:00.000Z",
+        reviewStatus: "pending",
+      },
+    ]);
+    assert.strictEqual(proxiedUrl, "http://api.internal:4100/v1/channel-events");
+    assert.strictEqual(
+      proxiedHeaders.get("authorization"),
+      "Bearer session_api_key",
+    );
+    assert.strictEqual(
+      proxiedHeaders.get("x-tenant-id"),
+      "tenant_from_session",
+    );
+  });
+
+  it("proxies real-channel event replay as a POST without exposing operator keys", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json({
+        status: "replayed",
+        eventId: "event_1",
+        caseId: "case_1",
+        automationMode: "human_confirm",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await replayChannelEvent(
+      new Request("http://localhost/api/operator/channel-events/event_1/replay", {
+        method: "POST",
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+      { params: Promise.resolve({ id: "event_1" }) },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/event_1/replay",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(
+      proxiedHeaders.get("authorization"),
+      "Bearer session_api_key",
+    );
+    assert.deepStrictEqual(await response.json(), {
+      status: "replayed",
+      eventId: "event_1",
+      caseId: "case_1",
+      automationMode: "human_confirm",
+    });
+  });
+
+  it("proxies real-channel event ignore notes as JSON through the server boundary", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedBody = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      proxiedBody = String(init?.body ?? "");
+      return Response.json({
+        status: "ignored",
+        eventId: "event_1",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await ignoreChannelEvent(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/channel-events/event_1/ignore",
+        loginResponse.headers.get("set-cookie") ?? "",
+        { note: "重复消息" },
+      ),
+      { params: Promise.resolve({ id: "event_1" }) },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/event_1/ignore",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
+    assert.deepStrictEqual(JSON.parse(proxiedBody), { note: "重复消息" });
+    assert.deepStrictEqual(await response.json(), {
+      status: "ignored",
+      eventId: "event_1",
+    });
+  });
+
+  it("blocks viewer sessions from replaying or ignoring pending channel events in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"viewer","password":"secret","tenantId":"tenant_1","operatorId":"viewer_1","role":"viewer","apiKey":"shared_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({ ok: true });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "viewer",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    const replayResponse = await replayChannelEvent(
+      new Request("http://localhost/api/operator/channel-events/event_1/replay", {
+        method: "POST",
+        headers: { cookie },
+      }),
+      { params: Promise.resolve({ id: "event_1" }) },
+    );
+    const ignoreResponse = await ignoreChannelEvent(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/channel-events/event_1/ignore",
+        cookie,
+        { note: "只读账号不能处理" },
+      ),
+      { params: Promise.resolve({ id: "event_1" }) },
+    );
+
+    assert.strictEqual(replayResponse.status, 403);
+    assert.strictEqual(ignoreResponse.status, 403);
+    assert.deepStrictEqual(await replayResponse.json(), {
+      error: "Channel event review requires operator permission",
+    });
+    assert.deepStrictEqual(await ignoreResponse.json(), {
+      error: "Channel event review requires operator permission",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("rejects a tampered operator session cookie", async () => {

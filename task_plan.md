@@ -2,29 +2,30 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR15 - Real Channel Review Replay Pool
+## Current Stage: PR16 - Operator Workbench Review Pool UI
 
-Status: verified and pushed
+Status: verified
 
-PR15 builds on PR14 by giving operators a controlled review pool for normalized real-channel events. Operators can list pending events, ignore noise, or replay one event into an internal after-sales case that still requires human confirmation or takeover.
+PR16 builds on PR15 by exposing the real-channel review pool through the Web BFF and operator workbench. Customer service operators can see pending inbound channel messages, generate a human-reviewed after-sales case, or mark noise as not handled, without seeing webhook payloads, provider secrets, or internal event terminology.
 
-### PR15 Scope
+### PR16 Scope
 
-- Add review lifecycle fields to `NormalizedChannelEvent`.
-- Add operator-gated APIs to list pending normalized events.
-- Add an ignore action for duplicate/noise events.
-- Add a replay action that creates an internal after-sales case while forcing `human_confirm` or `human_takeover`.
-- Keep replay out of action execution and channel replies.
+- Add Web BFF routes for pending channel events, replay, and ignore.
+- Keep browser access same-origin through `/api/operator/*`; never expose operator API keys.
+- Add BFF role protection so viewer sessions cannot replay or ignore pending channel events.
+- Add customer-facing workbench UI for "待接入消息" with "生成工单" and "不处理" actions.
+- Keep UI copy free of webhook, normalized event, source, replay, API key, and payload terminology.
 
-### Out Of Scope For PR15
+### Out Of Scope For PR16
 
 - Multi-channel production rollout.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
-- Browser UI for the review pool.
 - Automated replay or auto-execution from normalized events.
 - Provider-specific production API callbacks beyond sandbox-shaped payloads.
+- Real customer replies or real commerce actions from the review pool.
+- Bulk review, assignment, SLA routing, and notification workflows.
 
 ## Phases
 
@@ -49,10 +50,11 @@ PR15 builds on PR14 by giving operators a controlled review pool for normalized 
 - [x] PR13 real channel intake security.
 - [x] PR14 real channel payload normalization.
 - [x] PR15 real channel review replay pool.
+- [x] PR16 operator workbench review pool UI.
 
 ## Verification Gate
 
-Do not claim PR15 real channel review replay pool complete until these pass:
+Do not claim PR16 operator workbench review pool UI complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -65,7 +67,7 @@ Do not claim PR15 real channel review replay pool complete until these pass:
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`
-- Browser checks if UI files changed.
+- Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; "待接入消息" and "生成工单" visible; no `webhook`, `normalized`, or `channel-events` terms visible in the operator UI.
 
 ## Errors Encountered
 

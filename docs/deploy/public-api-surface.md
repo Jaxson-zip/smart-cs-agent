@@ -36,6 +36,9 @@
 | `PATCH /api/operator/operators/:operatorId` | Operator BFF admin | Requires HttpOnly admin session; updates role/disabled status and can revoke sessions by incrementing `sessionVersion` |
 | `GET /api/operator/cases` | Operator BFF | Requires HttpOnly operator session; BFF derives API key, tenant, and operator from server-side account config |
 | `GET /api/operator/cases/:id` | Operator BFF | Same as `/api/operator/cases`; browser does not receive operator key |
+| `GET /api/operator/channel-events` | Operator BFF | Requires HttpOnly operator session; lists pending real-channel review messages through the server-side API key and returns only UI-safe fields |
+| `POST /api/operator/channel-events/:id/replay` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; creates an internal human-reviewed case only |
+| `POST /api/operator/channel-events/:id/ignore` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; marks a pending review message not handled |
 | `GET /api/operator/readiness` | Operator BFF readiness | Proxies API readiness without tenant data |
 | `POST /api/chat` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
 | `GET /api/db` | Legacy demo API | Disabled by default; only enabled with `ENABLE_LEGACY_WEB_DEMO_API=true` |
@@ -46,6 +49,7 @@
 - Browser-public env vars are not secrets. Operator keys must stay server-side, either in the DB-backed operator account store or protected service env vars such as `OPERATOR_API_KEYS`; Web code must never use `NEXT_PUBLIC_OPERATOR_API_KEY`.
 - Web BFF auth responses must never expose account passwords or operator API keys. `/api/operator/me` may return `username`, `tenantId`, `operatorId`, `role`, and derived permission booleans only.
 - Web BFF account-management responses must never expose `passwordHash` or `apiKey`; they may return account identity, role, disabled state, and `sessionVersion`.
+- Web BFF channel-event responses must be sanitized before reaching the browser. The operator UI may receive customer name, channel, message text, and received time, but must not receive or render webhook, normalized event, source, payload, tenant, API key, or external message identifiers.
 - Production operator accounts must use the `OperatorAccount` table with `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
 - Operator account creation and updates must be tenant-scoped from the admin session and must write an audit record without secrets.
 - `OPERATOR_IDENTITY_PROVIDER` is the Web BFF identity boundary. Supported deployable values are `database` and `env`; reserved values such as `oidc` and `sso` fail closed until a real provider adapter is implemented.

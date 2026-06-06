@@ -34,3 +34,6 @@
 - PR14 writes replay receipts and normalized events in the same transaction after normalization succeeds. A malformed provider payload should not consume the replay key, so the channel can retry after fixing the payload mapping.
 - PR15 adds the first controlled bridge from real-channel normalized events into after-sales cases. The bridge is operator-gated and always forces human review modes, so it is still not real-channel automation.
 - PR15 review pool operations must filter `source=real_channel_webhook`; `NormalizedChannelEvent` can also contain sandbox sources, and mixing them would make the review pool semantically unsafe.
+- PR16 keeps the review pool behind the Web BFF. The browser calls same-origin `/api/operator/channel-events*`, while the BFF derives API credentials from the HttpOnly operator session and blocks viewer sessions before mutation.
+- Operator-facing review pool UI should say "待接入消息", "生成工单", and "不处理"; it should not expose webhook, normalized event, replay, source, payload, tenant, API key, or external message identifiers.
+- PR16 BFF list responses should strip `merchantId`, `externalConversationId`, and `externalMessageId` before returning data to the browser, even if the React UI would not render them.

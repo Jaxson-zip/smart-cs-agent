@@ -36,6 +36,28 @@ export type OperatorAccountSummary = {
   sessionVersion: number;
 };
 
+export type ChannelEventSummary = {
+  id: string;
+  channel: string;
+  senderName: string;
+  text: string;
+  receivedAt: string;
+  createdAt: string;
+  reviewStatus: "pending";
+};
+
+export type ChannelEventReplayResult = {
+  status: "replayed";
+  eventId: string;
+  caseId: string;
+  automationMode: "human_confirm" | "human_takeover";
+};
+
+export type ChannelEventIgnoreResult = {
+  status: "ignored";
+  eventId: string;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -138,6 +160,56 @@ export async function fetchOperatorAccounts(): Promise<OperatorAccountSummary[]>
   return body.operators.map(toOperatorAccountSummary);
 }
 
+export async function fetchChannelEvents(): Promise<ChannelEventSummary[]> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/channel-events`);
+
+  if (!res.ok) {
+    throw new ApiError("待接入消息暂时无法同步", res.status);
+  }
+
+  const body: unknown = await res.json();
+  if (!Array.isArray(body)) {
+    throw new ApiError("待接入消息数据格式异常", 502);
+  }
+
+  return body.map(toChannelEventSummary);
+}
+
+export async function replayChannelEvent(
+  eventId: string,
+): Promise<ChannelEventReplayResult> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/channel-events/${encodeURIComponent(eventId)}/replay`,
+    { method: "POST" },
+  );
+
+  if (!res.ok) {
+    throw new ApiError("待接入消息生成工单失败", res.status);
+  }
+
+  return toChannelEventReplayResult(await res.json());
+}
+
+export async function ignoreChannelEvent(
+  eventId: string,
+  note?: string,
+): Promise<ChannelEventIgnoreResult> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/channel-events/${encodeURIComponent(eventId)}/ignore`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(note ? { note } : {}),
+    },
+  );
+
+  if (!res.ok) {
+    throw new ApiError("待接入消息忽略失败", res.status);
+  }
+
+  return toChannelEventIgnoreResult(await res.json());
+}
+
 export async function createOperatorAccount(input: {
   username: string;
   password: string;
@@ -183,6 +255,51 @@ export async function updateOperatorAccount(
   return toOperatorAccountSummary(body.operator);
 }
 
+function toChannelEventSummary(value: unknown): ChannelEventSummary {
+  if (!isRecord(value)) {
+    throw new ApiError("待接入消息数据格式异常", 502);
+  }
+
+  return {
+    id: readString(value, "id"),
+    channel: readString(value, "channel"),
+    senderName: readString(value, "senderName"),
+    text: readString(value, "text"),
+    receivedAt: readString(value, "receivedAt"),
+    createdAt: readString(value, "createdAt"),
+    reviewStatus: readChannelEventReviewStatus(value.reviewStatus),
+  };
+}
+
+function toChannelEventReplayResult(value: unknown): ChannelEventReplayResult {
+  if (!isRecord(value)) {
+    throw new ApiError("待接入消息生成结果格式异常", 502);
+  }
+
+  const automationMode = value.automationMode;
+  if (automationMode !== "human_confirm" && automationMode !== "human_takeover") {
+    throw new ApiError("待接入消息生成结果格式异常", 502);
+  }
+
+  return {
+    status: readLiteral(value.status, "replayed", "待接入消息生成结果格式异常"),
+    eventId: readString(value, "eventId"),
+    caseId: readString(value, "caseId"),
+    automationMode,
+  };
+}
+
+function toChannelEventIgnoreResult(value: unknown): ChannelEventIgnoreResult {
+  if (!isRecord(value)) {
+    throw new ApiError("待接入消息忽略结果格式异常", 502);
+  }
+
+  return {
+    status: readLiteral(value.status, "ignored", "待接入消息忽略结果格式异常"),
+    eventId: readString(value, "eventId"),
+  };
+}
+
 function toOperatorAccountSummary(value: unknown): OperatorAccountSummary {
   if (!isRecord(value)) {
     throw new ApiError("客服账号数据格式异常", 502);
@@ -196,6 +313,20 @@ function toOperatorAccountSummary(value: unknown): OperatorAccountSummary {
     disabled: value.disabled === true,
     sessionVersion: readPositiveInteger(value, "sessionVersion"),
   };
+}
+
+function readChannelEventReviewStatus(value: unknown): "pending" {
+  if (value === "pending") return value;
+  throw new ApiError("待接入消息数据格式异常", 502);
+}
+
+function readLiteral<T extends string>(
+  value: unknown,
+  expected: T,
+  errorMessage: string,
+): T {
+  if (value === expected) return expected;
+  throw new ApiError(errorMessage, 502);
 }
 
 function readString(value: Record<string, unknown>, key: string) {
