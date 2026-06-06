@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
 import { GET as listChannelEvents } from "./channel-events/route";
+import { GET as getChannelEventMetrics } from "./channel-events/metrics/route";
 import { POST as ignoreChannelEvent } from "./channel-events/[id]/ignore/route";
 import { POST as replayChannelEvent } from "./channel-events/[id]/replay/route";
 import { POST as recoverStaleChannelEvents } from "./channel-events/recover-stale/route";
@@ -739,6 +740,63 @@ describe("operator BFF routes", () => {
       proxiedHeaders.get("x-tenant-id"),
       "tenant_from_session",
     );
+  });
+
+  it("proxies real-channel queue metrics without leaking tenant or source fields", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_from_session","operatorId":"operator_from_session","role":"viewer","apiKey":"viewer_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json({
+        tenantId: "tenant_from_session",
+        source: "real_channel_webhook",
+        pendingCount: 3,
+        processingCount: 2,
+        staleProcessingCount: 1,
+        replayedCount: 8,
+        ignoredCount: 5,
+        oldestPendingReceivedAt: "2026-06-06T07:00:00.000Z",
+        oldestPendingAgeSeconds: 1800,
+        staleAfterMinutes: 15,
+        measuredAt: "2026-06-06T07:30:00.000Z",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await getChannelEventMetrics(
+      new Request("http://localhost/api/operator/channel-events/metrics", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/metrics",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer viewer_api_key");
+    assert.deepStrictEqual(await response.json(), {
+      pendingCount: 3,
+      processingCount: 2,
+      staleProcessingCount: 1,
+      replayedCount: 8,
+      ignoredCount: 5,
+      oldestPendingReceivedAt: "2026-06-06T07:00:00.000Z",
+      oldestPendingAgeSeconds: 1800,
+      staleAfterMinutes: 15,
+      measuredAt: "2026-06-06T07:30:00.000Z",
+    });
   });
 
   it("proxies real-channel event replay as a POST without exposing operator keys", async () => {

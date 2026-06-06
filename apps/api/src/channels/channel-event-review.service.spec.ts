@@ -422,6 +422,95 @@ describe("ChannelEventReviewService", () => {
       true,
     );
   });
+
+  it("reports queue metrics without exposing customer event details", async () => {
+    const countQueries: unknown[] = [];
+    const findFirstQueries: unknown[] = [];
+    const service = new ChannelEventReviewService(
+      {
+        normalizedChannelEvent: {
+          count: async (query: unknown) => {
+            countQueries.push(query);
+            return [3, 2, 1, 8, 5][countQueries.length - 1] ?? 0;
+          },
+          findFirst: async (query: unknown) => {
+            findFirstQueries.push(query);
+            return { receivedAt: new Date("2026-06-06T07:00:00.000Z") };
+          },
+        },
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+    const now = new Date("2026-06-06T07:30:00.000Z");
+
+    const result = await service.getQueueMetrics({
+      tenantId: "tenant_1",
+      staleAfterMinutes: 15,
+      now,
+    });
+
+    const staleBefore = new Date("2026-06-06T07:15:00.000Z");
+    assert.deepStrictEqual(result, {
+      measuredAt: now,
+      staleAfterMinutes: 15,
+      pendingCount: 3,
+      processingCount: 2,
+      staleProcessingCount: 1,
+      replayedCount: 8,
+      ignoredCount: 5,
+      oldestPendingReceivedAt: new Date("2026-06-06T07:00:00.000Z"),
+      oldestPendingAgeSeconds: 1800,
+    });
+    assert.deepStrictEqual(countQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "pending",
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+          reviewedAt: { lt: staleBefore },
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "replayed",
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "ignored",
+        },
+      },
+    ]);
+    assert.deepStrictEqual(findFirstQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "pending",
+        },
+        select: { receivedAt: true },
+        orderBy: { receivedAt: "asc" },
+      },
+    ]);
+  });
 });
 
 function normalizedEvent(input: { reviewStatus?: string } = {}) {

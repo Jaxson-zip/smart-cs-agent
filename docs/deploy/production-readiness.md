@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR19 Queue Metrics
+
+Real-channel review operations now expose a tenant-scoped queue metrics snapshot through `GET /v1/channel-events/metrics` and the same-origin BFF route `GET /api/operator/channel-events/metrics`. The response includes counts for `pending`, `processing`, stale `processing`, `replayed`, and `ignored`, plus the oldest pending receive time and age in seconds.
+
+The metrics route is read-only and must not expose customer message text, tenant identifiers, provider payloads, source names, external conversation IDs, external message IDs, operator API keys, or secrets to the browser.
+
 ## PR18 Processing Recovery
 
 Admin operators can recover stale real-channel review events through `POST /v1/channel-events/recover-stale` or the same-origin BFF route `POST /api/operator/channel-events/recover-stale`. Recovery only touches the current tenant, `source=real_channel_webhook`, `reviewStatus=processing`, and rows whose `reviewedAt` is older than the requested cutoff.

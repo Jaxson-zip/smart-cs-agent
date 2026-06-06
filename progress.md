@@ -69,3 +69,7 @@
 - Added an admin-only API and Web BFF recovery path for stale real-channel events stuck in `processing`.
 - Recovery moves stale claims back to `pending`, clears the processing claim fields, and writes an audit log without calling AgentService or sending customer-visible replies.
 - Final PR18 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live recovery endpoint smoke returning `recoveredCount: 0`.
+- Started PR19 channel event queue metrics.
+- Added tenant-scoped API and Web BFF metrics for pending, processing, stale processing, replayed, ignored, and oldest pending age.
+- BFF metrics responses strip tenant/source/internal fields before returning to the browser.
+- Final PR19 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live metrics endpoint smoke returning queue counts and oldest pending age.

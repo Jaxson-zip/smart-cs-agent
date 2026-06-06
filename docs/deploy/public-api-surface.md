@@ -12,6 +12,7 @@
 | `GET /v1/cases/:id` | Operator API | Same as `/v1/cases`; service filters by tenant |
 | `GET /v1/rules/:tenantId?` | Operator API | Same as `/v1/cases`; path tenant must match key tenant |
 | `GET /v1/channel-events` | Operator API | Operator key required; lists only `source=real_channel_webhook` pending normalized events for the key tenant |
+| `GET /v1/channel-events/metrics` | Operator API | Operator key required; returns tenant-scoped real-channel queue counts and age metrics without customer message details |
 | `POST /v1/channel-events/recover-stale` | Operator API admin | Admin operator key required; recovers stale `processing` real-channel review events for the key tenant back to `pending` and writes an audit record |
 | `POST /v1/channel-events/:id/replay` | Operator API | Operator key required; replays one pending normalized event into a human-reviewed after-sales case without executing actions or sending replies |
 | `POST /v1/channel-events/:id/ignore` | Operator API | Operator key required; marks one pending normalized event ignored for the key tenant |
@@ -38,6 +39,7 @@
 | `GET /api/operator/cases` | Operator BFF | Requires HttpOnly operator session; BFF derives API key, tenant, and operator from server-side account config |
 | `GET /api/operator/cases/:id` | Operator BFF | Same as `/api/operator/cases`; browser does not receive operator key |
 | `GET /api/operator/channel-events` | Operator BFF | Requires HttpOnly operator session; lists pending real-channel review messages through the server-side API key and returns only UI-safe fields |
+| `GET /api/operator/channel-events/metrics` | Operator BFF | Requires HttpOnly operator session; proxies queue metrics and strips tenant/source/internal fields before returning to the browser |
 | `POST /api/operator/channel-events/recover-stale` | Operator BFF admin | Requires HttpOnly admin session; proxies stale review recovery without exposing operator keys |
 | `POST /api/operator/channel-events/:id/replay` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; creates an internal human-reviewed case only |
 | `POST /api/operator/channel-events/:id/ignore` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; marks a pending review message not handled |
@@ -62,4 +64,5 @@
 - Real-channel webhook signatures use `x-smartcs-signature-version: v1`, `x-smartcs-tenant-id`, `x-smartcs-event-id`, `x-smartcs-timestamp`, and `x-smartcs-signature`. The HMAC payload is `version + channel + tenantId + timestamp + eventId + sha256(rawBody)`, joined by newline characters.
 - Real-channel readiness may expose configured channel names, but must never expose webhook secrets, signatures, or raw request bodies.
 - Real-channel replay APIs are operator-gated review controls over `NormalizedChannelEvent.source=real_channel_webhook` only. Replay may create an after-sales case, customer message, pending action rows, and audit logs, but must force `human_confirm` or `human_takeover`; it must never return `auto_execute`, call channel `sendMessage()`, or run action execution.
+- Real-channel metrics are read-only and tenant-scoped. They may expose counts, timestamps, and age seconds, but must not expose customer message text, tenant identifiers, source names, webhook payloads, external conversation IDs, or external message IDs to the browser.
 - Real-channel stale recovery is admin-only. It may move old `processing` events back to `pending` for the same tenant/source after a crash or interrupted replay, but it must not call AgentService, create cases, execute actions, or send customer replies.

@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR18 - Channel Event Processing Recovery
+## Current Stage: PR19 - Channel Event Queue Metrics
 
 Status: verified
 
-PR18 builds on PR17 by adding an admin-only recovery path for real-channel review events that are stuck in `processing` after an interrupted replay attempt. Recovery returns stale claims to `pending`, stays tenant/source scoped, and writes a non-secret audit log without triggering AgentService, case creation, commerce actions, or customer-visible replies.
+PR19 builds on PR18 by exposing tenant-scoped, read-only queue metrics for the real-channel review pool. Operators can observe pending volume, processing volume, stale processing claims, replayed/ignored totals, and oldest pending age without exposing customer messages, provider identifiers, webhook payloads, tenant IDs, API keys, or source names to the browser.
 
 ### PR16 Scope
 
@@ -53,10 +53,11 @@ PR18 builds on PR17 by adding an admin-only recovery path for real-channel revie
 - [x] PR16 operator workbench review pool UI.
 - [x] PR17 channel event replay atomic claim safety.
 - [x] PR18 channel event processing recovery.
+- [x] PR19 channel event queue metrics.
 
 ## Verification Gate
 
-Do not claim PR18 channel event processing recovery complete until these pass:
+Do not claim PR19 channel event queue metrics complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`

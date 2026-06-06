@@ -2,6 +2,7 @@
 
 ## 2026-06-06
 
+- PR19 adds safe queue observability: operators need counts and age metrics to notice backlog/stuck real-channel reviews, but browser metrics must not leak tenant IDs, source names, payloads, external IDs, or customer messages.
 - PR18 treats `processing` as a recoverable internal claim. Admin-only stale recovery must stay tenant/source scoped, write audit logs, and avoid AgentService/case/action/customer-reply side effects.
 - PR17 closes a real commercial race: replaying a real-channel event must be claimed atomically with `pending -> processing` before AgentService or case creation runs. If another operator already reviewed the event, the API should return 409 Conflict and must not call AgentService.
 - The V1.2 branch is clean at commit `04469dd`.

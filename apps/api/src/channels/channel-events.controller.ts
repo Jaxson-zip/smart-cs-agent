@@ -39,6 +39,12 @@ export class ChannelEventsController {
     return this.reviewService.listPending(context.tenantId);
   }
 
+  @Get("metrics")
+  async metrics(@Headers() headers: RequestHeaders) {
+    const context = requireRequestContext(headers);
+    return this.reviewService.getQueueMetrics({ tenantId: context.tenantId });
+  }
+
   @Post("recover-stale")
   async recoverStale(
     @Body() body: unknown,

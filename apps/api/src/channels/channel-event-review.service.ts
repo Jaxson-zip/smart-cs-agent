@@ -19,6 +19,12 @@ type RecoverStaleProcessingInput = ReviewContext & {
   now?: Date;
 };
 
+type QueueMetricsInput = {
+  tenantId: string;
+  staleAfterMinutes?: number;
+  now?: Date;
+};
+
 const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
@@ -282,6 +288,73 @@ export class ChannelEventReviewService {
         eventIds,
       };
     });
+  }
+
+  async getQueueMetrics(input: QueueMetricsInput) {
+    const staleAfterMinutes = input.staleAfterMinutes ?? 15;
+    const measuredAt = input.now ?? new Date();
+    const staleBefore = new Date(
+      measuredAt.getTime() - staleAfterMinutes * 60_000,
+    );
+    const baseWhere = {
+      merchantId: input.tenantId,
+      source: REAL_CHANNEL_EVENT_SOURCE,
+    };
+
+    const [
+      pendingCount,
+      processingCount,
+      staleProcessingCount,
+      replayedCount,
+      ignoredCount,
+      oldestPending,
+    ] = await Promise.all([
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: PENDING_REVIEW_STATUS },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: PROCESSING_REVIEW_STATUS },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: {
+          ...baseWhere,
+          reviewStatus: PROCESSING_REVIEW_STATUS,
+          reviewedAt: { lt: staleBefore },
+        },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: "replayed" },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: "ignored" },
+      }),
+      this.prisma.normalizedChannelEvent.findFirst({
+        where: { ...baseWhere, reviewStatus: PENDING_REVIEW_STATUS },
+        select: { receivedAt: true },
+        orderBy: { receivedAt: "asc" },
+      }),
+    ]);
+    const oldestPendingReceivedAt = oldestPending?.receivedAt ?? null;
+    const oldestPendingAgeSeconds = oldestPendingReceivedAt
+      ? Math.max(
+          0,
+          Math.floor(
+            (measuredAt.getTime() - oldestPendingReceivedAt.getTime()) / 1000,
+          ),
+        )
+      : null;
+
+    return {
+      measuredAt,
+      staleAfterMinutes,
+      pendingCount,
+      processingCount,
+      staleProcessingCount,
+      replayedCount,
+      ignoredCount,
+      oldestPendingReceivedAt,
+      oldestPendingAgeSeconds,
+    };
   }
 }
 

@@ -25,6 +25,32 @@ describe("ChannelEventsController", () => {
     ]);
   });
 
+  it("returns queue metrics through the operator tenant context", async () => {
+    const calls: unknown[] = [];
+    const controller = new ChannelEventsController({
+      getQueueMetrics: async (input: unknown) => {
+        calls.push(input);
+        return {
+          pendingCount: 3,
+          processingCount: 2,
+          staleProcessingCount: 1,
+        };
+      },
+    } as unknown as ChannelEventReviewService);
+
+    const result = await controller.metrics({
+      "x-tenant-id": "tenant_1",
+      "x-operator-id": "operator_1",
+    });
+
+    assert.deepStrictEqual(result, {
+      pendingCount: 3,
+      processingCount: 2,
+      staleProcessingCount: 1,
+    });
+    assert.deepStrictEqual(calls, [{ tenantId: "tenant_1" }]);
+  });
+
   it("replays an event with the authenticated operator context", async () => {
     const calls: unknown[] = [];
     const controller = new ChannelEventsController({
