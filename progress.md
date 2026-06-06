@@ -103,3 +103,10 @@
 - Updated `.env.example`, channel queue runbook, public API surface, production-readiness notes, and runbook verifier for the new 429 safety boundary.
 - Addressed independent review findings by switching the limiter key to structured `JSON.stringify([channel, tenantId])`, pruning old minute buckets, and covering invalid-signature requests that must not spend valid quota.
 - Final PR25 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, and live real-channel rate-limit smoke on port 4101 showing first signed webhook 202, second signed webhook 429, one receipt, and one normalized event.
+- Started PR26 production real-channel intake gates.
+- Added fail-closed API config validation for `NODE_ENV=production` plus `REAL_CHANNEL_WEBHOOKS_ENABLED=true`.
+- Production real-channel intake now requires at least one configured webhook secret, a positive per-minute application rate limit, an explicit freshness window, and all channel queue thresholds before API startup can proceed.
+- Updated production readiness docs, channel queue runbook, public API surface, sandbox CI example, and the runbook verifier for the PR26 intake-gate contract.
+- Addressed independent review coverage feedback by making the config spec table-driven for each required production intake gate, including `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=0` and each queue threshold.
+- Reduced secret propagation risk by keeping `REAL_CHANNEL_WEBHOOK_SECRETS` out of the returned `ApiConfig` object; disabled real-channel intake can still start even if a stale secret env value is malformed.
+- Final PR26 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, and a built-config runtime check proving missing production intake gates are rejected, fully configured production intake is accepted, disabled intake does not parse stale secrets, and webhook secrets are not propagated through `ApiConfig`.

@@ -24,7 +24,14 @@ const operatorApiKeysEnvSchema = z
     }
   });
 
+const channelWebhookSecretSchema = z.object({
+  channel: z.string().min(1),
+  tenantId: z.string().min(1),
+  secret: z.string().min(12),
+});
+
 const apiConfigSchema = z.object({
+  NODE_ENV: z.string().optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
@@ -38,6 +45,17 @@ const apiConfigSchema = z.object({
     .optional()
     .default("false")
     .transform((value) => value === "true"),
+  REAL_CHANNEL_WEBHOOKS_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
+  REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(300)
+    .default(300),
   REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: z.coerce
     .number()
     .int()
@@ -54,6 +72,8 @@ export type ApiConfig = {
   wecomSandboxEnabled: boolean;
   operatorApiKeys: string;
   allowInsecureOperatorHeaders: boolean;
+  realChannelWebhooksEnabled: boolean;
+  realChannelWebhookMaxAgeSeconds: number;
   realChannelWebhookRateLimitPerMinute: number;
 };
 
@@ -66,10 +86,11 @@ export function loadApiConfig(
   options: LoadConfigOptions = {},
 ): ApiConfig {
   const includeDotEnv = options.includeDotEnv ?? shouldLoadDotEnv(env);
-  const parsed = apiConfigSchema.safeParse({
+  const mergedEnv = {
     ...(includeDotEnv ? loadDotEnv() : {}),
     ...env,
-  });
+  };
+  const parsed = apiConfigSchema.safeParse(mergedEnv);
 
   if (!parsed.success) {
     const details = parsed.error.issues
@@ -82,6 +103,13 @@ export function loadApiConfig(
     throw new Error(`Invalid API configuration: ${details}`);
   }
 
+  const productionGateIssues = productionRealChannelIntakeIssues(mergedEnv);
+  if (productionGateIssues.length > 0) {
+    throw new Error(
+      `Invalid API configuration: ${productionGateIssues.join("; ")}`,
+    );
+  }
+
   return {
     port: parsed.data.PORT,
     webOrigin: parsed.data.WEB_ORIGIN,
@@ -89,6 +117,9 @@ export function loadApiConfig(
     wecomSandboxEnabled: parsed.data.WECOM_SANDBOX_ENABLED,
     operatorApiKeys: parsed.data.OPERATOR_API_KEYS,
     allowInsecureOperatorHeaders: parsed.data.ALLOW_INSECURE_OPERATOR_HEADERS,
+    realChannelWebhooksEnabled: parsed.data.REAL_CHANNEL_WEBHOOKS_ENABLED,
+    realChannelWebhookMaxAgeSeconds:
+      parsed.data.REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS,
     realChannelWebhookRateLimitPerMinute:
       parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
   };
@@ -126,6 +157,82 @@ function loadDotEnv(startDir = process.cwd()): Record<string, string> {
         return [key, rawValue.replace(/^["']|["']$/g, "")];
       }),
   );
+}
+
+function productionRealChannelIntakeIssues(
+  env: Record<string, string | undefined>,
+) {
+  if (
+    env.NODE_ENV !== "production" ||
+    env.REAL_CHANNEL_WEBHOOKS_ENABLED !== "true"
+  ) {
+    return [];
+  }
+
+  const issues: string[] = [];
+
+  if (parseWebhookSecrets(env.REAL_CHANNEL_WEBHOOK_SECRETS).length === 0) {
+    issues.push(
+      "REAL_CHANNEL_WEBHOOK_SECRETS: production real-channel intake requires at least one configured tenant secret",
+    );
+  }
+  const rateLimitPerMinute = readRequiredNonNegativeInt(
+    env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
+  );
+  if (rateLimitPerMinute === undefined || rateLimitPerMinute <= 0) {
+    issues.push(
+      "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: production real-channel intake requires a positive per-minute limit",
+    );
+  }
+  if (readRequiredPositiveInt(env.REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS) === undefined) {
+    issues.push(
+      "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: production real-channel intake requires an explicit positive freshness window",
+    );
+  }
+  if (readRequiredNonNegativeInt(env.CHANNEL_QUEUE_PENDING_WARN_THRESHOLD) === undefined) {
+    issues.push(
+      "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD: production real-channel intake requires a queue backlog threshold",
+    );
+  }
+  if (readRequiredPositiveInt(env.CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS) === undefined) {
+    issues.push(
+      "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS: production real-channel intake requires an oldest-pending-age threshold",
+    );
+  }
+  if (readRequiredNonNegativeInt(env.CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD) === undefined) {
+    issues.push(
+      "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD: production real-channel intake requires a stale-processing threshold",
+    );
+  }
+  if (readRequiredPositiveInt(env.CHANNEL_QUEUE_STALE_AFTER_MINUTES) === undefined) {
+    issues.push(
+      "CHANNEL_QUEUE_STALE_AFTER_MINUTES: production real-channel intake requires a stale-processing age window",
+    );
+  }
+
+  return issues;
+}
+
+function parseWebhookSecrets(value: string | undefined) {
+  if (!value) return [];
+
+  try {
+    return z.array(channelWebhookSecretSchema).parse(JSON.parse(value));
+  } catch {
+    return [];
+  }
+}
+
+function readRequiredPositiveInt(value: string | undefined) {
+  const parsed = readRequiredNonNegativeInt(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+}
+
+function readRequiredNonNegativeInt(value: string | undefined) {
+  if (value === undefined || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return undefined;
+  return parsed;
 }
 
 function findUp(fileName: string, startDir: string): string | undefined {

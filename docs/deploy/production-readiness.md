@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR26 Production Real-Channel Intake Gates
+
+Production API startup now fails closed when `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true` are set without the required intake gates. A production real-channel intake must configure at least one webhook secret, a positive `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`, an explicit `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`, and all channel queue thresholds before the API can start.
+
+The required queue thresholds are `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD`, `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS`, `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD`, and `CHANNEL_QUEUE_STALE_AFTER_MINUTES`. This does not make the endpoint a full commercial automation path; it only prevents real webhook traffic from being enabled without rate limiting and queue observability.
+
 ## PR25 Real-Channel Webhook Rate Limit
 
 Signed real-channel webhook intake can now be protected with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`. The default is `0`, which keeps the limiter disabled for local development and existing sandboxes. A positive value enables a per-process, per-minute counter for each `channel:tenantId` pair.
@@ -90,6 +96,7 @@ WECOM_SANDBOX_ENABLED=true
 REAL_CHANNEL_WEBHOOKS_ENABLED=false
 REAL_CHANNEL_WEBHOOK_SECRETS=[]
 REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
+REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=0
 NEXT_PUBLIC_API_URL=http://localhost:4100
 NEXT_PUBLIC_WS_URL=http://localhost:4100
 NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
@@ -115,6 +122,7 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `REAL_CHANNEL_WEBHOOKS_ENABLED`：真实渠道 webhook 安全接收入口开关，默认必须为 `false`。只有在完成渠道密钥配置、迁移和安全 smoke 后才可显式设为 `true`。
 - `REAL_CHANNEL_WEBHOOK_SECRETS`：真实渠道 webhook 租户密钥 JSON 数组，格式为 `[{"channel":"taobao","tenantId":"tenant_1","secret":"long-random-secret"}]`。该值只能放在服务端 secret 管理中，不得提交到 Git，不得暴露给浏览器。
 - `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`：真实渠道 webhook 时间窗，默认 `300` 秒。过期、未来偏移过大、重复 `eventId` 都应拒绝。
+- `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`：真实渠道 webhook 应用层限流。`0` 表示关闭；生产环境若设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true`，该值必须显式设置为正整数。
 - `REAL_CHANNEL_WEBHOOK_SMOKE_SECRET`：本地 `npm run demo:real-channel-smoke` 使用的测试密钥，必须与服务端 `REAL_CHANNEL_WEBHOOK_SECRETS` 中同租户/渠道 secret 一致；不要用于真实商户。
 - `API_URL`：Web 服务端 BFF 访问 API 的内部地址，默认可指向 `http://localhost:4100`。
 - `NEXT_PUBLIC_API_URL`：旧健康检查客户端的公开 API 地址；客服台主数据路径不应再依赖它直连 API。

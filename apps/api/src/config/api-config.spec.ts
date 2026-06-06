@@ -15,6 +15,8 @@ describe("loadApiConfig", () => {
       wecomSandboxEnabled: true,
       operatorApiKeys: "[]",
       allowInsecureOperatorHeaders: false,
+      realChannelWebhooksEnabled: false,
+      realChannelWebhookMaxAgeSeconds: 300,
       realChannelWebhookRateLimitPerMinute: 0,
     });
   });
@@ -105,5 +107,119 @@ describe("loadApiConfig", () => {
         }),
       /REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE/,
     );
+  });
+
+  it("does not parse real-channel secrets when the production intake is disabled", () => {
+    const config = loadApiConfig({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+      REAL_CHANNEL_WEBHOOKS_ENABLED: "false",
+      REAL_CHANNEL_WEBHOOK_SECRETS: "{not-json",
+    });
+
+    assert.strictEqual(config.realChannelWebhooksEnabled, false);
+  });
+
+  it("requires every production intake gate when real-channel webhooks are enabled", () => {
+    const validProductionRealChannelEnv = {
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+      REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
+      REAL_CHANNEL_WEBHOOK_SECRETS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+          secret: "real_channel_secret_123",
+        },
+      ]),
+      REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "60",
+      REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: "300",
+      CHANNEL_QUEUE_PENDING_WARN_THRESHOLD: "100",
+      CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS: "900",
+      CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD: "0",
+      CHANNEL_QUEUE_STALE_AFTER_MINUTES: "15",
+    };
+
+    const cases: Array<{
+      field: keyof typeof validProductionRealChannelEnv;
+      value?: string;
+      expected: RegExp;
+    }> = [
+      {
+        field: "REAL_CHANNEL_WEBHOOK_SECRETS",
+        value: "[]",
+        expected: /REAL_CHANNEL_WEBHOOK_SECRETS/,
+      },
+      {
+        field: "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+        value: "0",
+        expected: /REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE/,
+      },
+      {
+        field: "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
+        value: undefined,
+        expected: /REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS/,
+      },
+      {
+        field: "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
+        value: undefined,
+        expected: /CHANNEL_QUEUE_PENDING_WARN_THRESHOLD/,
+      },
+      {
+        field: "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS",
+        value: undefined,
+        expected: /CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS/,
+      },
+      {
+        field: "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD",
+        value: undefined,
+        expected: /CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD/,
+      },
+      {
+        field: "CHANNEL_QUEUE_STALE_AFTER_MINUTES",
+        value: undefined,
+        expected: /CHANNEL_QUEUE_STALE_AFTER_MINUTES/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const env = { ...validProductionRealChannelEnv };
+      if (testCase.value === undefined) {
+        delete env[testCase.field];
+      } else {
+        env[testCase.field] = testCase.value;
+      }
+
+      assert.throws(
+        () => loadApiConfig(env),
+        testCase.expected,
+        `Expected ${testCase.field} to be required`,
+      );
+    }
+  });
+
+  it("accepts production real-channel webhooks when all intake gates are configured", () => {
+    const config = loadApiConfig({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+      REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
+      REAL_CHANNEL_WEBHOOK_SECRETS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+          secret: "real_channel_secret_123",
+        },
+      ]),
+      REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "60",
+      REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: "300",
+      CHANNEL_QUEUE_PENDING_WARN_THRESHOLD: "100",
+      CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS: "900",
+      CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD: "0",
+      CHANNEL_QUEUE_STALE_AFTER_MINUTES: "15",
+    });
+
+    assert.strictEqual(config.realChannelWebhooksEnabled, true);
+    assert.strictEqual(config.realChannelWebhookMaxAgeSeconds, 300);
+    assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 60);
   });
 });

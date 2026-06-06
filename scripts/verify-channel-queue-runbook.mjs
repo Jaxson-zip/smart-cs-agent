@@ -8,6 +8,8 @@ const files = {
   runbook: "docs/deploy/channel-queue-runbook.md",
   envExample: ".env.example",
   publicApi: "docs/deploy/public-api-surface.md",
+  productionReadiness: "docs/deploy/production-readiness.md",
+  sandboxCiExample: "docs/deploy/sandbox-ci.yml.example",
   healthController: "apps/api/src/health/health.controller.ts",
   channelController: "apps/api/src/channels/channel-events.controller.ts",
   channelService: "apps/api/src/channels/channel-event-review.service.ts",
@@ -94,6 +96,9 @@ const queueEnvVars = [
 
 const envVars = [
   ...queueEnvVars,
+  "REAL_CHANNEL_WEBHOOKS_ENABLED",
+  "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
 ];
 
@@ -144,10 +149,13 @@ mustContainAll("runbook operations", content.runbook, [
   "Review queue audit summary",
   "no longer than 24 hours",
   "Intake Rate Limit",
+  "Production Intake Gates",
+  "fail closed",
   "per-process",
 ]);
 
 mustContainAll(".env.example", content.envExample, envVars);
+mustContainAll("sandbox CI example", content.sandboxCiExample, envVars);
 mustContainAll("public API surface endpoints", content.publicApi, endpoints);
 mustContainAll("public API surface safety", content.publicApi, [
   "Real-channel metrics are read-only",
@@ -158,12 +166,31 @@ mustContainAll("public API surface safety", content.publicApi, [
   "bounded windows up to 24 hours",
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
   "HTTP 429 responses must not write replay receipts",
+  "Production real-channel webhook intake fails closed",
   "per process",
+]);
+mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR26 Production Real-Channel Intake Gates",
+  "NODE_ENV=production",
+  "REAL_CHANNEL_WEBHOOKS_ENABLED=true",
+  "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
+  "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
+  "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS",
+  "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD",
+  "CHANNEL_QUEUE_STALE_AFTER_MINUTES",
 ]);
 
 mustContainAll("api config rate limit", content.apiConfig, [
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  "REAL_CHANNEL_WEBHOOKS_ENABLED",
+  "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
+  "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
+  "productionRealChannelIntakeIssues",
   "realChannelWebhookRateLimitPerMinute",
+  "realChannelWebhooksEnabled",
   ".min(0)",
 ]);
 mustContainAll("real channel controller rate limit", content.realChannelController, [

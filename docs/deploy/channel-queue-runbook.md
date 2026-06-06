@@ -60,6 +60,20 @@ Signed real-channel webhook intake can be protected with `REAL_CHANNEL_WEBHOOK_R
 
 This is an application-level protection for the API process. Production deployments should still add gateway, CDN, or load-balancer rate limits because multi-process deployments do not share this in-memory counter.
 
+## Production Intake Gates
+
+When `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, the API must fail closed unless all production intake gates are configured:
+
+- `REAL_CHANNEL_WEBHOOK_SECRETS`: at least one tenant/channel secret.
+- `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`: a positive per-minute application limit.
+- `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`: an explicit positive freshness window.
+- `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD`: a backlog warning threshold.
+- `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS`: an oldest-pending-age threshold.
+- `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD`: a stale-processing warning threshold.
+- `CHANNEL_QUEUE_STALE_AFTER_MINUTES`: a stale-processing age window.
+
+These gates protect the real-channel intake from being enabled without rate limiting and queue observability. They do not replace provider allowlists, gateway/CDN rate limits, or the later production readiness verifier.
+
 ## Triage Steps
 
 ### 1. Check readiness
