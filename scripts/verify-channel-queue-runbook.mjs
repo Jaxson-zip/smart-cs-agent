@@ -14,6 +14,8 @@ const files = {
   productionAlerts: "docs/deploy/production-alerts.prometheus.yml.example",
   productionCanarySchedule: "docs/deploy/production-canary-schedule.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
+  productionLaunch: "docs/deploy/production-launch-runbook.md",
+  productionLaunchVerifier: "scripts/verify-production-launch.mjs",
   packageJson: "package.json",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionCanaryTest: "scripts/verify-production-canary.test.mjs",
@@ -163,6 +165,9 @@ mustContainAll("runbook operations", content.runbook, [
   "SmartCsAgentDatabaseDown",
   "SmartCsAgentRealChannelMisconfigured",
   "SmartCsAgentStaleProcessingClaims",
+  "Production launch and rollback",
+  "docs/deploy/production-launch-runbook.md",
+  "npm run verify:production-launch",
   "Recover stale processing claims",
   "Review recent recovery records",
   "Recheck readiness",
@@ -187,6 +192,8 @@ mustContainAll(".env.example", content.envExample, envVars);
 mustContainAll("package scripts", content.packageJson, [
   "verify:production-alerting",
   "scripts/verify-production-alerting.mjs",
+  "verify:production-launch",
+  "scripts/verify-production-launch.mjs",
   "verify:production-canary",
   "scripts/verify-production-canary.mjs",
 ]);
@@ -211,10 +218,13 @@ mustContainAll("public API surface safety", content.publicApi, [
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
   "PR33 Production Alerting Pack",
+  "PR34 Production Launch And Rollback Runbook",
   "docs/deploy/production-alerting.md",
   "docs/deploy/production-alerts.prometheus.yml.example",
   "docs/deploy/production-canary-schedule.yml.example",
+  "docs/deploy/production-launch-runbook.md",
   "npm run verify:production-alerting",
+  "npm run verify:production-launch",
   "PR32 Production Canary Verifier",
   "npm run verify:production-canary",
   "--require-real-channel",
@@ -254,6 +264,35 @@ mustContainAll("production alerting guide", content.productionAlerting, [
   "must not include operator API keys",
   "must not include webhook secrets",
   "npm run verify:production-alerting",
+]);
+mustContainAll("production launch runbook", content.productionLaunch, [
+  "PR34 Production Launch And Rollback Runbook",
+  "Launch Decision",
+  "Preflight Commands",
+  "Rollback Triggers",
+  "Rollback Sequence",
+  "Stale Claim Recovery",
+  "Post-Launch Evidence",
+  "Rehearsal",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+  "REAL_CHANNEL_WEBHOOKS_ENABLED=false",
+  "npm run verify:production-readiness",
+  "npm run verify:production-canary",
+  "npm run verify:production-alerting",
+  "npm run verify:channel-runbook",
+  "npm run verify:production-launch",
+  "must not execute real refunds",
+]);
+mustContainAll("production launch verifier", content.productionLaunchVerifier, [
+  "docs/deploy/production-launch-runbook.md",
+  "verify:production-readiness",
+  "verify:production-canary",
+  "verify:production-alerting",
+  "verify:channel-runbook",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+  "REAL_CHANNEL_WEBHOOKS_ENABLED=false",
 ]);
 mustContainAll("production prometheus alerts", content.productionAlerts, [
   "smart-cs-agent-production",

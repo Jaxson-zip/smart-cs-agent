@@ -41,6 +41,12 @@ Use `docs/deploy/production-alerting.md` with `docs/deploy/production-alerts.pro
 
 The full pack also covers the real-channel kill switch, queue degraded state, and oldest pending review age. Keep the alert labels aggregate; they must not include tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
 
+## Production launch and rollback
+
+Use `docs/deploy/production-launch-runbook.md` for launch rehearsal, rollback triggers, kill-switch or allowlist rollback, and post-launch evidence collection. Run `npm run verify:production-launch` after changing launch, rollback, recovery, readiness, canary, alerting, or queue operations guidance.
+
+The launch runbook is still an operations guardrail. It must not be used as proof that real refunds, address changes, coupons, logistics edits, or customer-visible replies are safe to automate.
+
 ## Queue States
 
 - `pending`: a normalized real-channel event is waiting for an operator to generate a reviewed after-sales case or ignore it.

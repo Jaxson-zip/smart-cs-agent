@@ -1,5 +1,14 @@
 # Production-Readiness Baseline
 
+## PR34 Production Launch And Rollback Runbook
+
+Production release operations now have a checked launch rehearsal:
+
+- `docs/deploy/production-launch-runbook.md`: launch decision gate, preflight commands, deploy sequence, rollback triggers, rollback sequence, stale-claim recovery, post-launch evidence, and rehearsal scenarios.
+- `npm run verify:production-launch`: checks that launch guidance remains connected to production readiness, canary, alerting, channel queue operations, rollback controls, recovery evidence, and no-secret/no-customer-action boundaries.
+
+Run `npm run verify:production-launch` before opening a new real-channel allowlist window or changing production rollback behavior. This launch runbook does not prove real refunds, address changes, coupons, logistics edits, or customer-visible replies are safe to automate.
+
 ## PR33 Production Alerting Pack
 
 Production monitoring now has a checked alerting pack:
@@ -201,7 +210,7 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `NEXT_PUBLIC_API_URL`：旧健康检查客户端的公开 API 地址；客服台主数据路径不应再依赖它直连 API。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
 - `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO`：离线演示工单开关，默认必须为 `false`。生产和可部署沙盒不得用假工单掩盖 403/503/配置错误。
-- `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"<operator-api-key>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
+- `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"<operator-api-key>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <operator-key>` 或 `x-api-key`。
 - `OPERATOR_API_KEY`：本地 smoke 脚本或直连 API 验证时使用的 operator key，应匹配 `OPERATOR_API_KEYS` 中的一项。Web 客服台 BFF 不再直接使用该变量，也不要使用 `NEXT_PUBLIC_` 前缀。
 - `OPERATOR_SESSION_SECRET`：Web 客服台签发 HttpOnly 登录 cookie 的服务端密钥。部署环境必须使用长随机值，并通过 secret 管理；生产环境会拒绝占位值和过短密钥。
 - `OPERATOR_SESSION_ACCOUNTS`：Web 客服台沙盒账号配置，格式为 JSON 数组，例如 `[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin","apiKey":"<operator-api-key>","sessionVersion":1}]`。登录后 BFF 会从该账号派生 `apiKey`、`tenantId` 和 `operatorId` 调用 API；生产环境会拒绝默认 demo 账号和明文 `password`。`role` 当前支持 `admin`、`operator`、`viewer`，并映射为 Web 侧权限。`disabled: true` 会禁止登录并让已有 session 失效；提升 `sessionVersion` 可撤销旧 session。

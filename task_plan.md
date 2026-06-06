@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR33 - Production Alerting Pack
+## Current Stage: PR34 - Production Launch And Rollback Runbook
 
 Status: verified
 
-PR33 adds checked production alerting assets: Prometheus alert rules, canary scheduling, and operator-safe routing guidance for public readiness/metrics signals.
+PR34 adds a checked production launch rehearsal: preflight commands, deploy sequence, rollback triggers, rollback actions, stale-claim recovery evidence, post-launch evidence, and no-secret/no-customer-action boundaries.
 
 ### PR16 Scope
 
@@ -68,10 +68,11 @@ PR33 adds checked production alerting assets: Prometheus alert rules, canary sch
 - [x] PR31 public monitoring metrics.
 - [x] PR32 production canary verifier.
 - [x] PR33 production alerting pack.
+- [x] PR34 production launch and rollback runbook.
 
 ## Verification Gate
 
-Do not claim PR33 production alerting pack complete until these pass:
+Do not claim PR34 production launch and rollback runbook complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -80,7 +81,9 @@ Do not claim PR33 production alerting pack complete until these pass:
 - `node --test scripts/verify-production-canary.test.mjs`
 - `node --check scripts/verify-production-canary.mjs`
 - `node --check scripts/verify-production-alerting.mjs`
+- `node --check scripts/verify-production-launch.mjs`
 - `npm.cmd run verify:production-alerting`
+- `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
@@ -102,10 +105,11 @@ Do not claim PR33 production alerting pack complete until these pass:
 - Production canary failure checks: degraded readiness/queue fails unless `--allow-degraded`; `--require-real-channel` fails when webhook status is not `ok` or kill switch is enabled; forbidden tenant/channel/payload/secret markers in `/metrics` fail without echoing the marker.
 - Production alerting check: Prometheus alert examples cover API down, DB down, real-channel misconfiguration, kill switch, queue degraded, stale processing claims, and oldest pending age without tenant/customer/provider/secret labels.
 - Canary schedule check: the scheduled workflow calls `npm run verify:production-canary` every five minutes using `SMART_CS_API_URL`, without operator API keys or webhook secrets.
+- Production launch check: launch guidance covers preflight, deploy sequence, rollback triggers, kill-switch rollback, allowlist rollback, real-channel intake disablement, stale-claim recovery evidence, post-launch evidence, rehearsal scenarios, and no-secret/no-customer-action boundaries.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
-- `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
-- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
-- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`
+- `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=<operator-key> --timeout-ms=5000`
+- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=<tenant-slug> --secret=<matching-secret> --timeout-ms=5000`
+- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=<tenant-slug> --secret=<matching-secret> --replay --operator-api-key=<operator-key> --timeout-ms=5000`
 - Live admin check for `GET /v1/channel-events/audit-summary` and `GET /api/operator/channel-events/audit-summary`.
 - Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; queue status remains visible; admin queue audit summary and operation records do not expose `webhook`, `normalized`, `channel-events`, tenant IDs, payloads, event IDs, source names, external IDs, or API key terms in the operator UI.
 
