@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR39 Provider Read Operations Visibility
+
+Provider readonly attempts now have admin-only operations visibility:
+
+- `GET /v2/provider-reads/runs`: admin operator API route for recent sanitized provider read runs in the authenticated tenant.
+- `GET /v2/provider-reads/summary`: admin operator API route for capped 24-hour aggregate counts by status, channel, and read capability.
+- `GET /api/operator/provider-reads/runs` and `GET /api/operator/provider-reads/summary`: Web BFF admin routes that proxy the same data without exposing operator API keys to the browser.
+- Direct `/v2/provider-reads/*` operations visibility rejects the legacy insecure `x-tenant-id` header fallback and requires a real admin operator API key.
+- Returned rows expose `lookupKeys`, `lookupFingerprint`, and `requestFingerprint`, not raw lookup values, full hashes, idempotency keys, provider payloads, provider responses, customer data, operator API keys, provider tokens, or tenant secrets.
+- `npm run verify:provider-read-operations`: checks that API, BFF, docs, tests, and launch guidance preserve the admin-only/no-raw-data boundary.
+
+This is an operations surface for launch support. It is not part of the normal客服工作台 and still does not enable live provider reads, real provider network execution, or provider data return.
+
 ## PR38 Provider Read Audit And Idempotency
 
 Provider readonly execution now leaves a sanitized audit trail:

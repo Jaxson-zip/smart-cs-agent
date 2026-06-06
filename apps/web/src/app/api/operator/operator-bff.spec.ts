@@ -13,6 +13,8 @@ import { POST as recoverStaleChannelEvents } from "./channel-events/recover-stal
 import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
+import { GET as listProviderReadRuns } from "./provider-reads/runs/route";
+import { GET as getProviderReadSummary } from "./provider-reads/summary/route";
 import {
   GET as listOperators,
   POST as createOperator,
@@ -1037,6 +1039,164 @@ describe("operator BFF routes", () => {
     });
   });
 
+  it("lets admin sessions list sanitized provider read runs through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json([
+        {
+          id: "provider_read_run_1",
+          caseId: "case_1",
+          operatorId: "operator_1",
+          channel: "taobao",
+          readCapability: "get_order",
+          status: "policy_accepted",
+          networkExecution: "not_implemented",
+          providerDataReturned: false,
+          lookupKeys: {
+            hasOrderId: true,
+            hasLogisticsId: false,
+          },
+          lookupFingerprint: "abcdef123456",
+          requestFingerprint: "123456abcdef",
+          policyReason: null,
+          createdAt: "2026-06-06T08:00:00.000Z",
+          updatedAt: "2026-06-06T08:00:00.000Z",
+          lookupHash: "must_not_leak",
+          requestHash: "must_not_leak",
+          idempotencyKey: "must_not_leak",
+          providerPayload: { secret: true },
+          providerResponse: { raw: true },
+          operatorApiKey: "operator_api_key_must_not_leak",
+          orderId: "raw_order_1",
+          logisticsId: "raw_logistics_1",
+          customerName: "customer_name_must_not_leak",
+          customerPhone: "customer_phone_must_not_leak",
+          customerAddress: "customer_address_must_not_leak",
+          customerMessage: "customer_message_must_not_leak",
+          tenantId: "must_not_leak",
+        },
+      ]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listProviderReadRuns(
+      new Request(
+        "http://localhost/api/operator/provider-reads/runs?limit=10&status=policy_accepted",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-reads/runs?limit=10&status=policy_accepted",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.deepStrictEqual(await response.json(), [
+      {
+        id: "provider_read_run_1",
+        caseId: "case_1",
+        operatorId: "operator_1",
+        channel: "taobao",
+        readCapability: "get_order",
+        status: "policy_accepted",
+        networkExecution: "not_implemented",
+        providerDataReturned: false,
+        lookupKeys: {
+          hasOrderId: true,
+          hasLogisticsId: false,
+        },
+        lookupFingerprint: "abcdef123456",
+        requestFingerprint: "123456abcdef",
+        policyReason: null,
+        createdAt: "2026-06-06T08:00:00.000Z",
+        updatedAt: "2026-06-06T08:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("lets admin sessions read sanitized provider read summaries through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+
+    globalThis.fetch = async (input) => {
+      proxiedUrl = String(input);
+      return Response.json({
+        measuredAt: "2026-06-06T08:00:00.000Z",
+        window: {
+          from: "2026-06-06T07:00:00.000Z",
+          to: "2026-06-06T08:00:00.000Z",
+        },
+        totals: {
+          totalCount: 4,
+          policyAcceptedCount: 2,
+          blockedCount: 1,
+          failedCount: 1,
+        },
+        byChannel: [{ key: "taobao", count: 4 }],
+        byCapability: [{ key: "get_order", count: 3 }],
+        latestCreatedAt: "2026-06-06T07:45:00.000Z",
+        tenantId: "must_not_leak",
+        lookupHash: "must_not_leak",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await getProviderReadSummary(
+      new Request(
+        "http://localhost/api/operator/provider-reads/summary?from=2026-06-06T07%3A00%3A00.000Z&to=2026-06-06T08%3A00%3A00.000Z",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-reads/summary?from=2026-06-06T07%3A00%3A00.000Z&to=2026-06-06T08%3A00%3A00.000Z",
+    );
+    assert.deepStrictEqual(await response.json(), {
+      measuredAt: "2026-06-06T08:00:00.000Z",
+      window: {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      totals: {
+        totalCount: 4,
+        policyAcceptedCount: 2,
+        blockedCount: 1,
+        failedCount: 1,
+      },
+      byChannel: [{ key: "taobao", count: 4 }],
+      byCapability: [{ key: "get_order", count: 3 }],
+      latestCreatedAt: "2026-06-06T07:45:00.000Z",
+    });
+  });
+
   it("rejects malformed queue audit summary fields in the BFF", async () => {
     process.env.API_URL = "http://api.internal:4100";
     process.env.OPERATOR_SESSION_SECRET = "test_secret";
@@ -1104,6 +1264,37 @@ describe("operator BFF routes", () => {
     assert.strictEqual(response.status, 403);
     assert.deepStrictEqual(await response.json(), {
       error: "Channel event audit summary requires admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+  });
+
+  it("blocks non-admin sessions from provider read operation visibility in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json([]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await listProviderReadRuns(
+      new Request("http://localhost/api/operator/provider-reads/runs", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider read operations require admin permission",
     });
     assert.strictEqual(fetchCalled, false);
   });

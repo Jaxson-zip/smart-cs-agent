@@ -29,6 +29,73 @@ export class OpsService {
     return this.providerAdapters.listIntegrations(tenantId);
   }
 
+  async listProviderReadRuns(input: ListProviderReadRunsInput) {
+    if (!this.prisma) return [];
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    const runs = (await this.prisma.providerReadRun.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(input.status ? { status: input.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    })) as ProviderReadRunRecord[];
+
+    return runs.map(toSanitizedProviderReadRun);
+  }
+
+  async getProviderReadSummary(input: ProviderReadSummaryInput) {
+    if (!this.prisma) return emptyProviderReadSummary(input);
+
+    const measuredAt = input.now ?? new Date();
+    const to = input.to ?? measuredAt;
+    const from = input.from ?? new Date(to.getTime() - PROVIDER_READ_SUMMARY_WINDOW_MS);
+    const where = {
+      tenantId: input.tenantId,
+      createdAt: { gte: from, lte: to },
+    };
+
+    const [totalCount, policyAcceptedCount, blockedCount, failedCount, runs] =
+      await Promise.all([
+        this.prisma.providerReadRun.count({ where }),
+        this.prisma.providerReadRun.count({
+          where: { ...where, status: "policy_accepted" },
+        }),
+        this.prisma.providerReadRun.count({
+          where: { ...where, status: "blocked" },
+        }),
+        this.prisma.providerReadRun.count({
+          where: { ...where, status: "failed" },
+        }),
+        this.prisma.providerReadRun.findMany({
+          where,
+          select: {
+            channel: true,
+            readCapability: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+    return {
+      measuredAt: measuredAt.toISOString(),
+      window: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      totals: {
+        totalCount,
+        policyAcceptedCount,
+        blockedCount,
+        failedCount,
+      },
+      byChannel: summarizeProviderReadRuns(runs, "channel"),
+      byCapability: summarizeProviderReadRuns(runs, "readCapability"),
+      latestCreatedAt: runs[0]?.createdAt.toISOString() ?? null,
+    };
+  }
+
   ingestMessage(): AgentCaseDecision {
     return {
       caseId: "case_mock_ingested",
@@ -327,12 +394,36 @@ type ProviderReadMetadata = {
 
 type ProviderReadRunRecord = {
   id: string;
+  caseId?: string;
+  operatorId?: string | null;
+  channel?: string;
+  readCapability?: string;
   status: string;
   networkExecution: string;
   providerDataReturned: boolean;
   operatorVisibleResult: string;
+  lookupHash?: string;
+  lookupKeys?: unknown;
   requestHash: string;
+  policyReason?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
+
+type ListProviderReadRunsInput = {
+  tenantId: string;
+  limit?: number;
+  status?: string;
+};
+
+type ProviderReadSummaryInput = {
+  tenantId: string;
+  from?: Date;
+  to?: Date;
+  now?: Date;
+};
+
+const PROVIDER_READ_SUMMARY_WINDOW_MS = 24 * 60 * 60_000;
 
 function providerReadMetadata(request: ProviderReadRequest): ProviderReadMetadata {
   const lookupHash = sha256(stableJson(request.lookup));
@@ -391,4 +482,74 @@ function sortJson(value: unknown): unknown {
 function isUniqueConstraintError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   return "code" in error && (error as { code?: unknown }).code === "P2002";
+}
+
+function toSanitizedProviderReadRun(run: ProviderReadRunRecord) {
+  return {
+    id: run.id,
+    caseId: run.caseId ?? "",
+    operatorId: run.operatorId ?? null,
+    channel: run.channel ?? "",
+    readCapability: run.readCapability ?? "",
+    status: run.status,
+    networkExecution: run.networkExecution,
+    providerDataReturned: false,
+    lookupKeys: sanitizeLookupKeys(run.lookupKeys),
+    lookupFingerprint: fingerprint(run.lookupHash),
+    requestFingerprint: fingerprint(run.requestHash),
+    policyReason: run.policyReason ?? null,
+    createdAt: run.createdAt?.toISOString() ?? "",
+    updatedAt: run.updatedAt?.toISOString() ?? "",
+  };
+}
+
+function sanitizeLookupKeys(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { hasOrderId: false, hasLogisticsId: false };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    hasOrderId: record.hasOrderId === true,
+    hasLogisticsId: record.hasLogisticsId === true,
+  };
+}
+
+function fingerprint(hash?: string) {
+  return typeof hash === "string" ? hash.slice(0, 12) : "";
+}
+
+function summarizeProviderReadRuns(
+  runs: Array<{ channel?: string; readCapability?: string }>,
+  field: "channel" | "readCapability",
+) {
+  const counts = new Map<string, number>();
+  for (const run of runs) {
+    const key = run[field] ?? "unknown";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+}
+
+function emptyProviderReadSummary(input: ProviderReadSummaryInput) {
+  const measuredAt = input.now ?? new Date();
+  const to = input.to ?? measuredAt;
+  const from = input.from ?? new Date(to.getTime() - PROVIDER_READ_SUMMARY_WINDOW_MS);
+  return {
+    measuredAt: measuredAt.toISOString(),
+    window: {
+      from: from.toISOString(),
+      to: to.toISOString(),
+    },
+    totals: {
+      totalCount: 0,
+      policyAcceptedCount: 0,
+      blockedCount: 0,
+      failedCount: 0,
+    },
+    byChannel: [],
+    byCapability: [],
+    latestCreatedAt: null,
+  };
 }

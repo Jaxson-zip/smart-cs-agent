@@ -181,3 +181,9 @@
 - Addressed independent review findings by verifying `caseId + authenticated tenant` before persisted provider reads, blocking cross-tenant case attachment before `ProviderReadRun` creation, and auditing that failure without a case-scoped audit log or raw lookup values.
 - Added `npm run verify:provider-read-audit` and connected PR38 into provider docs, production readiness, public API surface, launch runbook, and the task plan.
 - Final PR38 verification passed: Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, build, provider read audit/contract/readonly/adapters verifiers, launch/alerting/channel/operator verifiers, production canary tests, script syntax checks, `git diff --check`, and independent review follow-up fixes.
+- Started PR39 provider read operations visibility.
+- Added admin-only `GET /v2/provider-reads/runs` and `GET /v2/provider-reads/summary` for tenant-scoped, sanitized provider read run visibility.
+- Added admin-only Web BFF routes at `/api/operator/provider-reads/runs` and `/api/operator/provider-reads/summary`, with response whitelisting so raw lookup values, full hashes, provider payloads/responses, customer data, tenant secrets, operator API keys, and provider tokens do not reach the browser.
+- Addressed independent review findings by rejecting the legacy insecure `x-tenant-id` header fallback for direct provider read operations visibility, requiring a real admin operator API key, and widening verifier leak sentinels for provider responses, raw lookup values, operator API key fields, and customer data.
+- Added `npm run verify:provider-read-operations` and connected PR39 into provider docs, production readiness, public API surface, launch runbook, and the task plan.
+- Final PR39 verification passed: provider read operations verifier, production launch verifier, API tests, Web tests, typecheck, lint, build, and `git diff --check`.

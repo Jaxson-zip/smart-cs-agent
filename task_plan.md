@@ -2,11 +2,15 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR38 - Provider Read Audit And Idempotency
+## Current Stage: PR39 - Provider Read Operations Visibility
 
 Status: verified
 
-Previous Stage: PR37 - Provider Read Execution Contract was verified.
+Previous Stage: PR38 - Provider Read Audit And Idempotency was verified.
+
+Provider Read Contract Stage: PR37 - Provider Read Execution Contract was verified and must stay connected to provider read checks.
+
+PR38 Safety Boundary: persisted provider reads must still verify `caseId + authenticated tenant` before creating run records or case-scoped audit logs.
 
 Readonly Stage: PR36 - Real Provider Readonly Foundation was verified and must stay connected to provider readonly checks.
 
@@ -14,19 +18,17 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR38 persists sanitized provider read run records and audit entries for future readonly provider calls. It adds idempotency for `POST /v2/provider-reads/execute` without storing raw order IDs, logistics IDs, provider payloads, customer data, or live provider responses.
+PR39 adds admin-only operations visibility for provider read runs. It lets launch/support operators inspect recent sanitized provider read attempts and aggregate counts without exposing raw lookup values, full hashes, provider payloads, customer data, operator API keys, provider tokens, or live provider responses.
 
-### PR38 Scope
+### PR39 Scope
 
-- Add a `ProviderReadRun` table with tenant-scoped idempotency on `tenantId + idempotencyKey`.
-- Persist provider read status, network execution state, safe lookup hash, lookup key summary, and request hash.
-- Reuse identical idempotency keys for identical requests and fail closed when the same key is reused for a different request.
-- Verify persisted provider reads against `caseId + authenticated tenant` before creating run records or case-scoped audit logs.
-- Write sanitized audit records for new provider read attempts and idempotency conflicts.
-- Keep raw order IDs, logistics IDs, provider payloads, customer data, and provider responses out of persisted records and audit details.
-- Add verifier coverage so provider read audit/idempotency drift fails before launch.
+- Add admin-only API routes for provider read run listing and 24-hour summary.
+- Add Web BFF admin routes for the same data without exposing operator API keys to the browser.
+- Return fingerprints and aggregate counts only; do not expose full lookup hashes, request hashes, idempotency keys, raw lookup values, provider payloads, customer data, or provider responses.
+- Keep this out of the normal客服工作台; this is launch/support visibility only.
+- Add verifier coverage so provider read operations visibility drift fails before launch.
 
-### Out Of Scope For PR38
+### Out Of Scope For PR39
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -85,10 +87,11 @@ PR38 persists sanitized provider read run records and audit entries for future r
 - [x] PR36 real provider readonly foundation.
 - [x] PR37 provider read execution contract.
 - [x] PR38 provider read audit and idempotency.
+- [x] PR39 provider read operations visibility.
 
 ## Verification Gate
 
-Do not claim PR38 provider read audit and idempotency complete until these pass:
+Do not claim PR39 provider read operations visibility complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -102,10 +105,12 @@ Do not claim PR38 provider read audit and idempotency complete until these pass:
 - `node --check scripts/verify-provider-readonly.mjs`
 - `node --check scripts/verify-provider-read-contract.mjs`
 - `node --check scripts/verify-provider-read-audit.mjs`
+- `node --check scripts/verify-provider-read-operations.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
 - `npm.cmd run verify:provider-read-audit`
+- `npm.cmd run verify:provider-read-operations`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

@@ -663,6 +663,124 @@ describe("OpsService provider adapter contract", () => {
       false,
     );
   });
+
+  it("lists sanitized provider read runs for one tenant only", async () => {
+    const persistence = createProviderReadPersistence();
+    persistence.seedRun({
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      idempotencyKey: "read_list_1",
+      lookup: { orderId: "secret_order_1" },
+      status: "policy_accepted",
+      networkExecution: "not_implemented",
+      operatorVisibleResult: "accepted",
+      createdAt: new Date("2026-06-06T08:00:00.000Z"),
+    });
+    persistence.seedRun({
+      tenantId: "tenant_2",
+      operatorId: "operator_2",
+      caseId: "case_2",
+      channel: "douyin",
+      readCapability: "query_logistics",
+      idempotencyKey: "read_list_2",
+      lookup: { logisticsId: "secret_logistics_2" },
+      status: "blocked",
+      networkExecution: "not_started",
+      operatorVisibleResult: "blocked",
+      createdAt: new Date("2026-06-06T09:00:00.000Z"),
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const runs = await service.listProviderReadRuns({
+      tenantId: "tenant_1",
+      limit: 10,
+    });
+
+    assert.strictEqual(runs.length, 1);
+    assert.strictEqual(runs[0].caseId, "case_1");
+    assert.strictEqual(runs[0].channel, "taobao");
+    assert.strictEqual(runs[0].lookupKeys.hasOrderId, true);
+    assert.match(runs[0].lookupFingerprint, /^[a-f0-9]{12}$/);
+    assert.match(runs[0].requestFingerprint, /^[a-f0-9]{12}$/);
+    assert.strictEqual("lookupHash" in runs[0], false);
+    assert.strictEqual("requestHash" in runs[0], false);
+    assert.strictEqual(JSON.stringify(runs).includes("secret_order_1"), false);
+    assert.strictEqual(JSON.stringify(runs).includes("secret_logistics_2"), false);
+  });
+
+  it("summarizes provider read runs without leaking lookup data", async () => {
+    const persistence = createProviderReadPersistence();
+    persistence.seedRun({
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      idempotencyKey: "read_summary_1",
+      lookup: { orderId: "secret_order_1" },
+      status: "policy_accepted",
+      networkExecution: "not_implemented",
+      operatorVisibleResult: "accepted",
+      createdAt: new Date("2026-06-06T08:00:00.000Z"),
+    });
+    persistence.seedRun({
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "taobao",
+      readCapability: "query_logistics",
+      idempotencyKey: "read_summary_2",
+      lookup: { logisticsId: "secret_logistics_1" },
+      status: "failed",
+      networkExecution: "not_started",
+      operatorVisibleResult: "failed",
+      createdAt: new Date("2026-06-06T09:00:00.000Z"),
+    });
+    persistence.seedRun({
+      tenantId: "tenant_2",
+      operatorId: "operator_2",
+      caseId: "case_2",
+      channel: "douyin",
+      readCapability: "get_order",
+      idempotencyKey: "read_summary_3",
+      lookup: { orderId: "secret_order_2" },
+      status: "blocked",
+      networkExecution: "not_started",
+      operatorVisibleResult: "blocked",
+      createdAt: new Date("2026-06-06T09:30:00.000Z"),
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const summary = await service.getProviderReadSummary({
+      tenantId: "tenant_1",
+      from: new Date("2026-06-06T07:00:00.000Z"),
+      to: new Date("2026-06-06T10:00:00.000Z"),
+      now: new Date("2026-06-06T10:00:00.000Z"),
+    });
+
+    assert.strictEqual(summary.totals.totalCount, 2);
+    assert.strictEqual(summary.totals.policyAcceptedCount, 1);
+    assert.strictEqual(summary.totals.failedCount, 1);
+    assert.deepStrictEqual(summary.byChannel, [{ key: "taobao", count: 2 }]);
+    assert.deepStrictEqual(summary.byCapability, [
+      { key: "get_order", count: 1 },
+      { key: "query_logistics", count: 1 },
+    ]);
+    assert.strictEqual(summary.latestCreatedAt, "2026-06-06T09:00:00.000Z");
+    assert.strictEqual(JSON.stringify(summary).includes("secret_order_1"), false);
+    assert.strictEqual(JSON.stringify(summary).includes("secret_order_2"), false);
+  });
 });
 
 type ProviderReadRunRecord = {
@@ -691,6 +809,7 @@ type ProviderReadCaseRecord = {
 };
 
 type SeedProviderReadRunInput = {
+  id?: string;
   tenantId: string;
   operatorId: string;
   caseId: string;
@@ -701,6 +820,7 @@ type SeedProviderReadRunInput = {
   status: string;
   networkExecution: string;
   operatorVisibleResult: string;
+  createdAt?: Date;
 };
 
 function createProviderReadPersistence(
@@ -721,8 +841,13 @@ function createProviderReadPersistence(
 
   const seedRun = (input: SeedProviderReadRunInput) => {
     const lookupHash = testSha256(stableTestJson(input.lookup));
+    const timestamp = input.createdAt ?? new Date("2026-06-06T00:00:00.000Z");
     runs.push({
-      id: "provider_read_run_seeded",
+      id:
+        input.id ??
+        (runs.length === 0
+          ? "provider_read_run_seeded"
+          : `provider_read_run_seeded_${runs.length + 1}`),
       tenantId: input.tenantId,
       operatorId: input.operatorId,
       caseId: input.caseId,
@@ -748,8 +873,8 @@ function createProviderReadPersistence(
       providerDataReturned: false,
       operatorVisibleResult: input.operatorVisibleResult,
       policyReason: null,
-      createdAt: new Date("2026-06-06T00:00:00.000Z"),
-      updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+      createdAt: timestamp,
+      updatedAt: timestamp,
     });
   };
 
@@ -771,6 +896,34 @@ function createProviderReadPersistence(
         },
       },
       providerReadRun: {
+        findMany: async ({
+          where,
+          select,
+          orderBy,
+          take,
+        }: {
+          where?: ProviderReadRunWhere;
+          select?: Record<string, true>;
+          orderBy?: { createdAt?: "asc" | "desc" };
+          take?: number;
+        }) => {
+          const sorted = filterRuns(runs, where).sort((left, right) => {
+            const direction = orderBy?.createdAt === "asc" ? 1 : -1;
+            return direction * (left.createdAt.getTime() - right.createdAt.getTime());
+          });
+          const limited = take === undefined ? sorted : sorted.slice(0, take);
+          if (!select) return limited;
+          return limited.map((run) =>
+            Object.fromEntries(
+              Object.keys(select).map((key) => [
+                key,
+                run[key as keyof ProviderReadRunRecord],
+              ]),
+            ),
+          );
+        },
+        count: async ({ where }: { where?: ProviderReadRunWhere }) =>
+          filterRuns(runs, where).length,
         findUnique: async ({
           where,
         }: {
@@ -890,4 +1043,27 @@ function sortTestJson(value: unknown): unknown {
     );
   }
   return value;
+}
+
+type ProviderReadRunWhere = {
+  tenantId?: string;
+  status?: string;
+  createdAt?: { gte?: Date; lte?: Date };
+};
+
+function filterRuns(
+  runs: ProviderReadRunRecord[],
+  where: ProviderReadRunWhere | undefined,
+) {
+  return runs.filter((run) => {
+    if (where?.tenantId && run.tenantId !== where.tenantId) return false;
+    if (where?.status && run.status !== where.status) return false;
+    if (where?.createdAt?.gte && run.createdAt < where.createdAt.gte) {
+      return false;
+    }
+    if (where?.createdAt?.lte && run.createdAt > where.createdAt.lte) {
+      return false;
+    }
+    return true;
+  });
 }

@@ -7,6 +7,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 export type RequestHeaders = Record<string, string | string[] | undefined>;
+export type RequestAuthMethod = "operator_api_key" | "insecure_headers";
 
 const operatorApiKeySchema = z.object({
   key: z.string().min(8),
@@ -19,6 +20,7 @@ export type RequestContext = {
   tenantId: string;
   operatorId: string;
   role: "admin" | "operator" | "viewer";
+  authMethod?: RequestAuthMethod;
 };
 
 export function requireRequestContext(
@@ -44,11 +46,14 @@ export function requireRequestContext(
       throw new ForbiddenException("Operator API key does not allow requested tenant");
     }
 
-    return {
-      tenantId: matchedKey.tenantId,
-      operatorId: matchedKey.operatorId,
-      role: matchedKey.role,
-    };
+    return withAuthMethod(
+      {
+        tenantId: matchedKey.tenantId,
+        operatorId: matchedKey.operatorId,
+        role: matchedKey.role,
+      },
+      "operator_api_key",
+    );
   }
 
   if (env.NODE_ENV === "production" && env.ALLOW_INSECURE_OPERATOR_HEADERS !== "true") {
@@ -62,11 +67,14 @@ export function requireRequestContext(
     throw new UnauthorizedException("Missing x-tenant-id header");
   }
 
-  return {
-    tenantId,
-    operatorId,
-    role: "admin",
-  };
+  return withAuthMethod(
+    {
+      tenantId,
+      operatorId,
+      role: "admin",
+    },
+    "insecure_headers",
+  );
 }
 
 export function requireTenantParamAccess(
@@ -120,4 +128,14 @@ function secureCompare(expected: string, actual: string) {
     expectedBuffer.length === actualBuffer.length &&
     timingSafeEqual(expectedBuffer, actualBuffer)
   );
+}
+
+function withAuthMethod(
+  context: Omit<RequestContext, "authMethod">,
+  authMethod: RequestAuthMethod,
+): RequestContext {
+  return Object.defineProperty(context, "authMethod", {
+    value: authMethod,
+    enumerable: false,
+  });
 }

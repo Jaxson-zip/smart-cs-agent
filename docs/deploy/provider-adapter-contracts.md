@@ -2,6 +2,26 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR39 Provider Read Operations Visibility
+
+PR39 adds admin-only visibility for provider read audit records:
+
+- `GET /v2/provider-reads/runs`: returns recent provider read run rows for the authenticated tenant.
+- `GET /v2/provider-reads/summary`: returns bounded 24-hour aggregates for the authenticated tenant.
+- `GET /api/operator/provider-reads/runs` and `GET /api/operator/provider-reads/summary`: Web BFF routes that require an HttpOnly admin session and proxy through the server-side operator API key.
+
+The direct API routes require an authenticated admin operator API key. They reject the legacy insecure `x-tenant-id` header fallback even outside production, so sandbox convenience headers cannot access launch/support operations visibility.
+
+These routes return sanitized operational fields only: case reference, operator reference, channel, read capability, status, network execution state, `providerDataReturned=false`, lookup key presence booleans, `lookupFingerprint`, `requestFingerprint`, policy reason, and timestamps. They do not return raw order IDs, raw logistics IDs, full lookup hashes, full request hashes, idempotency keys, provider payloads, provider responses, customer data, provider tokens, operator API keys, or tenant secrets.
+
+Run:
+
+```bash
+npm run verify:provider-read-operations
+```
+
+This verifier checks the admin-only API and BFF routes, sanitized response mapping, tests, docs, launch runbook, and task plan.
+
 ## PR38 Provider Read Audit And Idempotency
 
 PR38 persists a sanitized `ProviderReadRun` record for each new `POST /v2/provider-reads/execute` attempt when database persistence is available.

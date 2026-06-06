@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Headers, Post } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  Post,
+  Query,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { z } from "zod";
 import {
   ChannelMessageIngestSchema,
   CompensationDeclinedRequestSchema,
@@ -13,9 +24,21 @@ import {
 } from "@smart-cs-agent/shared";
 import {
   requireRequestContext,
+  type RequestContext,
   type RequestHeaders,
 } from "../auth/request-context";
 import { OpsService } from "./ops.service";
+
+const providerReadRunsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  status: z.enum(["policy_accepted", "blocked", "failed"]).optional(),
+});
+
+const providerReadSummaryQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+const PROVIDER_READ_SUMMARY_WINDOW_MS = 24 * 60 * 60_000;
 
 @Controller("v2")
 export class OpsController {
@@ -25,6 +48,51 @@ export class OpsController {
   listIntegrations(@Headers() headers: RequestHeaders) {
     const context = requireRequestContext(headers);
     return this.opsService.listIntegrations(context.tenantId);
+  }
+
+  @Get("provider-reads/runs")
+  async listProviderReadRuns(
+    @Query() query: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderReadAdminAccess(context);
+    const parsed = providerReadRunsQuerySchema.safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+    return this.opsService.listProviderReadRuns({
+      tenantId: context.tenantId,
+      limit: parsed.data.limit,
+      status: parsed.data.status,
+    });
+  }
+
+  @Get("provider-reads/summary")
+  async providerReadSummary(
+    @Query() query: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderReadAdminAccess(context);
+    const parsed = providerReadSummaryQuerySchema.safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+
+    const to = parsed.data.to ? new Date(parsed.data.to) : new Date();
+    const from = parsed.data.from
+      ? new Date(parsed.data.from)
+      : new Date(to.getTime() - PROVIDER_READ_SUMMARY_WINDOW_MS);
+    if (from > to || to.getTime() - from.getTime() > PROVIDER_READ_SUMMARY_WINDOW_MS) {
+      throw new BadRequestException("Provider read summary window is invalid");
+    }
+
+    return this.opsService.getProviderReadSummary({
+      tenantId: context.tenantId,
+      from,
+      to,
+    });
   }
 
   @Post("channel-events")
@@ -83,5 +151,14 @@ export class OpsController {
     requireRequestContext(headers);
     const request = HandoffRequestSchema.parse(body);
     return this.opsService.createHandoff(request);
+  }
+}
+
+function requireProviderReadAdminAccess(context: RequestContext) {
+  if (context.role !== "admin") {
+    throw new ForbiddenException("Provider read operations require admin permission");
+  }
+  if (context.authMethod !== "operator_api_key") {
+    throw new UnauthorizedException("Operator API key is required");
   }
 }

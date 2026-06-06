@@ -8,6 +8,8 @@ It does not prove that real refunds, address changes, coupons, logistics edits, 
 
 Provider read attempts may persist sanitized `ProviderReadRun` rows for audit and idempotency only after the case is verified inside the authenticated tenant. Launch evidence may reference run counts and hashes, but must not include raw order IDs, logistics IDs, provider payloads, provider responses, customer data, operator API keys, or provider tokens.
 
+Admin-only provider read operations routes may be used during launch support to inspect recent run status and aggregate counts. Direct `/v2/provider-reads/*` routes require an authenticated admin operator API key and reject the legacy insecure `x-tenant-id` header fallback. They must expose only fingerprints and counts, never raw lookup values, provider payloads, provider responses, operator API keys, provider tokens, or tenant secrets.
+
 ## Launch Decision
 
 Use this runbook before every production launch or gray release that changes real-channel intake, queue handling, identity, readiness, metrics, alerting, or operator review behavior.
@@ -23,6 +25,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
 - `npm run verify:provider-read-contract` passes when `POST /v2/provider-reads/execute`, provider read policy, or readonly response shape changes.
 - `npm run verify:provider-read-audit` passes when provider read persistence, idempotency, or audit behavior changes.
+- `npm run verify:provider-read-operations` passes when provider read operations visibility, BFF mapping, or sanitized response behavior changes.
 - Alert routes for API down, database down, real-channel misconfiguration, queue degradation, stale processing, and oldest pending age are enabled.
 - Alert routes for `SmartCsAgentApiDown`, `SmartCsAgentDatabaseDown`, `SmartCsAgentRealChannelMisconfigured`, `SmartCsAgentRealChannelKillSwitchEnabled`, `SmartCsAgentChannelQueueDegraded`, `SmartCsAgentStaleProcessingClaims`, and `SmartCsAgentOldestPendingTooOld` are enabled and have owners.
 - The first launch allowlist is intentionally small and every allowlisted pair has a matching webhook secret.
@@ -47,6 +50,7 @@ npm run verify:provider-adapters
 npm run verify:provider-readonly
 npm run verify:provider-read-contract
 npm run verify:provider-read-audit
+npm run verify:provider-read-operations
 npm run verify:channel-runbook
 ```
 
@@ -151,3 +155,5 @@ Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAP
 Run `npm run verify:provider-read-contract` alongside it when `POST /v2/provider-reads/execute`, provider read policy, or readonly response fields change.
 
 Run `npm run verify:provider-read-audit` alongside it when `ProviderReadRun`, provider read idempotency, lookup hashing, or sanitized audit behavior changes.
+
+Run `npm run verify:provider-read-operations` alongside it when provider read operations visibility, admin-only BFF routes, or sanitized run summaries change.
