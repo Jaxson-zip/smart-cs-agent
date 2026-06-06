@@ -27,6 +27,15 @@ export type OperatorProfile = {
   };
 };
 
+export type OperatorAccountSummary = {
+  username: string;
+  tenantId: string;
+  operatorId: string;
+  role: OperatorProfile["role"];
+  disabled: boolean;
+  sessionVersion: number;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -112,6 +121,108 @@ export async function fetchApiReadiness(): Promise<ApiReadiness> {
       checkedAt,
     };
   }
+}
+
+export async function fetchOperatorAccounts(): Promise<OperatorAccountSummary[]> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/operators`);
+
+  if (!res.ok) {
+    throw new ApiError("客服账号暂时无法同步", res.status);
+  }
+
+  const body = (await res.json()) as { operators?: unknown };
+  if (!Array.isArray(body.operators)) {
+    throw new ApiError("客服账号数据格式异常", 502);
+  }
+
+  return body.operators.map(toOperatorAccountSummary);
+}
+
+export async function createOperatorAccount(input: {
+  username: string;
+  password: string;
+  operatorId: string;
+  role: OperatorProfile["role"];
+}): Promise<OperatorAccountSummary> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/operators`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    throw new ApiError("客服账号创建失败", res.status);
+  }
+
+  const body = (await res.json()) as { operator?: unknown };
+  return toOperatorAccountSummary(body.operator);
+}
+
+export async function updateOperatorAccount(
+  operatorId: string,
+  input: {
+    role?: OperatorProfile["role"];
+    disabled?: boolean;
+    revokeSessions?: boolean;
+  },
+): Promise<OperatorAccountSummary> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/operators/${encodeURIComponent(operatorId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!res.ok) {
+    throw new ApiError("客服账号更新失败", res.status);
+  }
+
+  const body = (await res.json()) as { operator?: unknown };
+  return toOperatorAccountSummary(body.operator);
+}
+
+function toOperatorAccountSummary(value: unknown): OperatorAccountSummary {
+  if (!isRecord(value)) {
+    throw new ApiError("客服账号数据格式异常", 502);
+  }
+
+  return {
+    username: readString(value, "username"),
+    tenantId: readString(value, "tenantId"),
+    operatorId: readString(value, "operatorId"),
+    role: readOperatorRole(value.role),
+    disabled: value.disabled === true,
+    sessionVersion: readPositiveInteger(value, "sessionVersion"),
+  };
+}
+
+function readString(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (typeof field !== "string" || field.length === 0) {
+    throw new ApiError("客服账号数据格式异常", 502);
+  }
+  return field;
+}
+
+function readOperatorRole(value: unknown): OperatorProfile["role"] {
+  if (value === "admin" || value === "operator" || value === "viewer") {
+    return value;
+  }
+  throw new ApiError("客服账号数据格式异常", 502);
+}
+
+function readPositiveInteger(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (typeof field !== "number" || !Number.isInteger(field) || field < 1) {
+    throw new ApiError("客服账号数据格式异常", 502);
+  }
+  return field;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function fetchWithTimeout(

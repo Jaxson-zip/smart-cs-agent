@@ -2,26 +2,25 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR10 - Operator Account Management
+## Current Stage: PR12 - Production Identity Boundary
 
-Status: in progress
+Status: queued
 
-PR10 adds a minimal admin-managed operator account lifecycle on top of the PR9 database-backed account store.
+PR12 will turn the current operator login into a production identity boundary that can later swap to SSO/OIDC without weakening the existing HttpOnly session and RBAC model.
 
-### PR10 Scope
+### PR12 Scope
 
-- Add admin-only Web BFF routes for listing operator accounts.
-- Add admin-only Web BFF route for creating operator accounts with hashed passwords.
-- Add admin-only Web BFF route for changing role, disabling accounts, and revoking sessions.
-- Keep account management responses sanitized; never expose `passwordHash` or `apiKey`.
-- Persist audit records for account creation and updates.
-- Preserve tenant boundaries by deriving tenant and API key from the admin session.
+- Define an identity-provider adapter boundary for operator authentication.
+- Keep database-backed accounts as the local/default provider.
+- Preserve HttpOnly signed sessions, tenant scoping, role mapping, disabled-account checks, and session-version revocation.
+- Keep `/api/operator/me` sanitized and permission-derived.
+- Document how production SSO/OIDC will attach to the adapter.
 
-### Out Of Scope For PR10
+### Out Of Scope For PR12
 
 - Real Taobao/Douyin callbacks.
 - Real payment/refund/coupon execution.
-- Full SSO/OIDC, password reset flows, polished account management UI, persisted permission policies, and billing.
+- Full IAM, SCIM, organization sync, password reset flows, persisted permission policies, and billing.
 - Production WeCom credentials.
 
 ## Phases
@@ -41,12 +40,13 @@ PR10 adds a minimal admin-managed operator account lifecycle on top of the PR9 d
 - [x] PR7 operator identity/RBAC baseline.
 - [x] PR8 operator account hardening.
 - [x] PR9 database-backed operator account service.
-- [ ] PR10 operator account management endpoints and audit.
-- [ ] PR11 production-grade identity provider or account management UI.
+- [x] PR10 operator account management endpoints and audit.
+- [x] PR11 operator account management UI.
+- [ ] PR12 production identity provider boundary.
 
 ## Verification Gate
 
-Do not claim PR10 operator account management complete until these pass:
+Do not claim PR12 production identity boundary complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -55,7 +55,7 @@ Do not claim PR10 operator account management complete until these pass:
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
-- Browser desktop and narrow viewport checks if UI files changed.
+- Browser checks if UI files changed.
 
 ## Errors Encountered
 

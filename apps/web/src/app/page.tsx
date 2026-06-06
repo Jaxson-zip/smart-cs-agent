@@ -16,26 +16,40 @@ import {
   LogIn,
   LogOut,
   PackageCheck,
+  RefreshCw,
   Search,
   Send,
   ShieldAlert,
   TicketCheck,
   Truck,
+  UserPlus,
   UserRound,
+  UsersRound,
+  X,
 } from "lucide-react";
 import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
 import {
   ApiError,
+  createOperatorAccount,
   fetchCases,
   fetchCurrentOperator,
+  fetchOperatorAccounts,
   loginOperator,
   logoutOperator,
+  updateOperatorAccount,
+  type OperatorAccountSummary,
   type OperatorProfile,
 } from "../lib/api";
 import { fallbackCases, mapApiCaseToUiCase, type QueueStatus, type UiCase } from "../lib/cases";
 
 type ChannelId = "all" | "wechat" | "taobao" | "douyin" | "shopify" | "email";
 type DataState = "loading" | "login" | "ready" | "empty" | "fallback" | "error";
+type NewOperatorForm = {
+  username: string;
+  password: string;
+  operatorId: string;
+  role: OperatorProfile["role"];
+};
 
 type ChannelMeta = {
   id: ChannelId;
@@ -146,6 +160,17 @@ export default function OperatorWorkbench() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [syncError, setSyncError] = useState("售后工单暂时无法同步，请稍后重试。");
   const [operator, setOperator] = useState<OperatorProfile>();
+  const [operatorPanelOpen, setOperatorPanelOpen] = useState(false);
+  const [operatorAccounts, setOperatorAccounts] = useState<OperatorAccountSummary[]>([]);
+  const [operatorAccountsLoading, setOperatorAccountsLoading] = useState(false);
+  const [operatorAccountsError, setOperatorAccountsError] = useState("");
+  const [operatorAccountSaving, setOperatorAccountSaving] = useState("");
+  const [newOperator, setNewOperator] = useState({
+    username: "",
+    password: "",
+    operatorId: "",
+    role: "operator",
+  } satisfies NewOperatorForm);
 
   const loadCases = useCallback(() => {
     let ignore = false;
@@ -202,6 +227,23 @@ export default function OperatorWorkbench() {
   useEffect(() => {
     return loadCases();
   }, [loadCases]);
+
+  const loadOperatorAccounts = useCallback(async () => {
+    if (!operator?.permissions.manageOperators) return;
+
+    setOperatorAccountsLoading(true);
+    setOperatorAccountsError("");
+
+    try {
+      setOperatorAccounts(await fetchOperatorAccounts());
+    } catch (error) {
+      setOperatorAccountsError(
+        error instanceof Error ? error.message : "客服账号暂时无法同步",
+      );
+    } finally {
+      setOperatorAccountsLoading(false);
+    }
+  }, [operator?.permissions.manageOperators]);
 
   const needActionCases = useMemo(
     () => cases.filter((item) => item.status !== "auto_resolved"),
@@ -415,7 +457,69 @@ export default function OperatorWorkbench() {
     setOperator(undefined);
     setCases([]);
     setSelectedId(undefined);
+    setOperatorPanelOpen(false);
+    setOperatorAccounts([]);
     setDataState("login");
+  }
+
+  async function openOperatorPanel() {
+    setOperatorPanelOpen(true);
+    await loadOperatorAccounts();
+  }
+
+  async function handleCreateOperator(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newOperator.username || !newOperator.password || !newOperator.operatorId) {
+      setOperatorAccountsError("请填写账号、密码和客服 ID");
+      return;
+    }
+
+    setOperatorAccountSaving("create");
+    setOperatorAccountsError("");
+
+    try {
+      await createOperatorAccount(newOperator);
+      setNewOperator({
+        username: "",
+        password: "",
+        operatorId: "",
+        role: "operator",
+      });
+      await loadOperatorAccounts();
+    } catch (error) {
+      setOperatorAccountsError(
+        error instanceof Error ? error.message : "客服账号创建失败",
+      );
+    } finally {
+      setOperatorAccountSaving("");
+    }
+  }
+
+  async function handleUpdateOperatorAccount(
+    account: OperatorAccountSummary,
+    input: {
+      role?: OperatorProfile["role"];
+      disabled?: boolean;
+      revokeSessions?: boolean;
+    },
+  ) {
+    setOperatorAccountSaving(account.operatorId);
+    setOperatorAccountsError("");
+
+    try {
+      const updated = await updateOperatorAccount(account.operatorId, input);
+      setOperatorAccounts((items) =>
+        items.map((item) =>
+          item.operatorId === updated.operatorId ? updated : item,
+        ),
+      );
+    } catch (error) {
+      setOperatorAccountsError(
+        error instanceof Error ? error.message : "客服账号更新失败",
+      );
+    } finally {
+      setOperatorAccountSaving("");
+    }
   }
 
   return (
@@ -535,13 +639,25 @@ export default function OperatorWorkbench() {
                 </h2>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                {operator?.permissions.manageOperators ? (
+                  <button
+                    onClick={openOperatorPanel}
+                    data-testid="open-operator-accounts"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
+                    aria-label="客服账号"
+                  >
+                    <UsersRound size={15} />
+                    <span className="hidden sm:inline">客服账号</span>
+                  </button>
+                ) : null}
                 <button
                   onClick={() => setShowAudit((value) => !value)}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
+                  aria-label="审计"
                 >
                   <History size={15} />
-                  审计
+                  <span className="hidden sm:inline">审计</span>
                   <ChevronDown
                     size={14}
                     className={`transition ${showAudit ? "rotate-180" : ""}`}
@@ -550,17 +666,19 @@ export default function OperatorWorkbench() {
                 <button
                   onClick={handleTakeover}
                   disabled={selected.status === "auto_resolved" || !canTakeoverCases}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:px-3"
+                  aria-label="接管"
                 >
                   <Headphones size={15} />
-                  接管
+                  <span className="hidden sm:inline">接管</span>
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-2.5 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 sm:px-3"
+                  aria-label="退出"
                 >
                   <LogOut size={15} />
-                  退出
+                  <span className="hidden sm:inline">退出</span>
                 </button>
               </div>
             </div>
@@ -740,7 +858,264 @@ export default function OperatorWorkbench() {
           </div>
         </aside>
       </div>
+
+      {operatorPanelOpen && operator?.permissions.manageOperators ? (
+        <OperatorAccountsPanel
+          accounts={operatorAccounts}
+          form={newOperator}
+          loading={operatorAccountsLoading}
+          saving={operatorAccountSaving}
+          error={operatorAccountsError}
+          onClose={() => setOperatorPanelOpen(false)}
+          onRefresh={loadOperatorAccounts}
+          onCreate={handleCreateOperator}
+          onFormChange={(field, value) =>
+            setNewOperator((form) => ({ ...form, [field]: value }))
+          }
+          onUpdate={handleUpdateOperatorAccount}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function OperatorAccountsPanel({
+  accounts,
+  form,
+  loading,
+  saving,
+  error,
+  onClose,
+  onRefresh,
+  onCreate,
+  onFormChange,
+  onUpdate,
+}: {
+  accounts: OperatorAccountSummary[];
+  form: NewOperatorForm;
+  loading: boolean;
+  saving: string;
+  error: string;
+  onClose: () => void;
+  onRefresh: () => void;
+  onCreate: (event: FormEvent<HTMLFormElement>) => void;
+  onFormChange: (field: keyof NewOperatorForm, value: string) => void;
+  onUpdate: (
+    account: OperatorAccountSummary,
+    input: {
+      role?: OperatorProfile["role"];
+      disabled?: boolean;
+      revokeSessions?: boolean;
+    },
+  ) => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-slate-950/28 backdrop-blur-[2px]"
+      data-testid="operator-accounts-panel"
+    >
+      <section className="flex h-full w-full max-w-[520px] flex-col bg-white shadow-2xl ring-1 ring-slate-200">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500">账号管理</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
+              客服账号
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading}
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-300"
+              aria-label="刷新客服账号"
+            >
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white hover:bg-slate-800"
+              aria-label="关闭客服账号"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {error ? (
+            <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-700 ring-1 ring-rose-100">
+              {error}
+            </div>
+          ) : null}
+
+          <form
+            onSubmit={onCreate}
+            data-testid="operator-create-form"
+            className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200"
+          >
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <UserPlus size={16} />
+              新增客服
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <LabeledInput
+                label="账号"
+                value={form.username}
+                onChange={(value) => onFormChange("username", value)}
+                autoComplete="off"
+              />
+              <LabeledInput
+                label="客服 ID"
+                value={form.operatorId}
+                onChange={(value) => onFormChange("operatorId", value)}
+                autoComplete="off"
+              />
+              <LabeledInput
+                label="初始密码"
+                type="password"
+                value={form.password}
+                onChange={(value) => onFormChange("password", value)}
+                autoComplete="new-password"
+              />
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-500">
+                  角色
+                </span>
+                <select
+                  value={form.role}
+                  onChange={(event) => onFormChange("role", event.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+                >
+                  <option value="operator">客服</option>
+                  <option value="viewer">只读</option>
+                  <option value="admin">管理员</option>
+                </select>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={saving === "create"}
+              className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-300"
+            >
+              <UserPlus size={15} />
+              {saving === "create" ? "正在创建" : "创建账号"}
+            </button>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {accounts.map((account) => {
+              const isSaving = saving === account.operatorId;
+
+              return (
+                <div
+                  key={account.operatorId}
+                  data-operator-id={account.operatorId}
+                  className="rounded-xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-950">
+                          {account.username}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
+                            account.disabled
+                              ? "bg-slate-100 text-slate-500 ring-slate-200"
+                              : "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                          }`}
+                        >
+                          {account.disabled ? "已停用" : "可使用"}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500">
+                        {account.operatorId} · 登录批次 {account.sessionVersion}
+                      </p>
+                    </div>
+                    <select
+                      value={account.role}
+                      disabled={isSaving}
+                      onChange={(event) =>
+                        onUpdate(account, {
+                          role: event.target.value as OperatorProfile["role"],
+                        })
+                      }
+                      className="h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-sm outline-none focus:border-slate-400 disabled:text-slate-400"
+                    >
+                      <option value="admin">管理员</option>
+                      <option value="operator">客服</option>
+                      <option value="viewer">只读</option>
+                    </select>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      data-testid="operator-toggle-disabled"
+                      onClick={() =>
+                        onUpdate(account, { disabled: !account.disabled })
+                      }
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
+                    >
+                      {account.disabled ? <Check size={15} /> : <X size={15} />}
+                      {account.disabled ? "启用" : "停用"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      data-testid="operator-revoke-session"
+                      onClick={() => onUpdate(account, { revokeSessions: true })}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
+                    >
+                      <RefreshCw size={15} className={isSaving ? "animate-spin" : ""} />
+                      撤销登录
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!loading && accounts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                暂无客服账号
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: "text" | "password";
+  autoComplete?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-slate-500">
+        {label}
+      </span>
+      <input
+        value={value}
+        type={type}
+        autoComplete={autoComplete}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+      />
+    </label>
   );
 }
 

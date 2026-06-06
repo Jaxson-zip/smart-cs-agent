@@ -148,3 +148,9 @@ PR10 增加管理员账号管理 BFF：`GET /api/operator/operators`、`POST /ap
 创建账号时，BFF 使用管理员 session 的租户和服务端 API key 派生新账号上下文，浏览器不需要也不能提交 `apiKey`。密码只以 `scrypt:<salt>:<hash>` 形式写入数据库，响应只返回 `username`、`tenantId`、`operatorId`、`role`、`disabled` 和 `sessionVersion`。
 
 更新账号时，管理员可以调整 `role`、设置 `disabled`，或通过 `revokeSessions` 提升 `sessionVersion` 来撤销旧 cookie。创建和更新都会写入 `AuditLog`，审计详情只包含 actor、target、tenant、role/disabled/revokedSessions 等非 secret 字段。
+
+## PR11 Operator Management UI
+
+PR11 在客服工作台中为 `admin` 账号增加“客服账号”入口。该入口以右侧抽屉打开，不改变一屏客服处理台的主布局。管理员可以查看当前租户账号、创建新客服、切换角色、停用/启用账号，并执行“撤销登录”来提升目标账号的 `sessionVersion`。
+
+该 UI 只调用同源 `/api/operator/operators` BFF 路由；浏览器仍不会接触 `apiKey` 或 `passwordHash`。非管理员不会看到入口，即使直接访问 BFF 也会由 PR10 的权限边界返回 403。
