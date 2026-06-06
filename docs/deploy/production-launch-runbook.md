@@ -25,6 +25,7 @@ Launch may proceed only when all of these are true:
 - A rollback owner, incident owner, and operator lead are named in the deploy ticket.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
+- `npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly` passes for every tenant/channel pair included in the launch allowlist.
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
@@ -53,6 +54,7 @@ npm run typecheck --workspaces --if-present -- --pretty false
 npm run lint --workspaces --if-present -- --max-warnings=0
 npm run build --workspaces --if-present
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
+npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-alerting
 npm run verify:provider-adapters

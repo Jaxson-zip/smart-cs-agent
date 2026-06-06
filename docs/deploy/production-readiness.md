@@ -1,5 +1,17 @@
 # Production-Readiness Baseline
 
+## PR43 Merchant Launch Preflight
+
+Merchant/channel launch now has a checked local preflight command:
+
+```bash
+npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly
+```
+
+The command reads only local environment configuration. It does not call the API, connect to the database, read a secret manager or vault, call Taobao/Douyin/provider networks, execute provider actions, or send customer-visible replies.
+
+It checks that the target tenant/channel has production-safe operator identity, an admin operator key, real-channel webhook allowlist and matching secret when required, queue thresholds, provider readonly adapter configuration when required, and a matching `PROVIDER_CREDENTIALS` ref-only inventory record. Its output is sanitized: it may show `tenantFingerprint`, channel, booleans, and credential fingerprints, but it must not print raw tenant IDs, webhook secrets, operator API keys, provider credential refs, provider tokens, provider payloads, or customer data.
+
 ## PR42 Provider Readonly Sandbox Harness
 
 Provider readonly execution now has a checked sandbox harness for future live read clients:

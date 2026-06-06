@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR42 - Provider Readonly Sandbox Harness
+## Current Stage: PR43 - Merchant Launch Preflight
 
 Status: verified
 
-Previous Stage: PR41 - Provider Credential Store Boundary was verified.
+Previous Stage: PR42 - Provider Readonly Sandbox Harness was verified.
+
+Provider Credential Store Stage: PR41 - Provider Credential Store Boundary was verified and must stay connected to credential inventory checks.
 
 Credential Resolution Stage: PR40 - Provider Credential Resolution Boundary was verified and must stay connected to provider credential boundary checks.
 
@@ -24,17 +26,17 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR42 adds a provider readonly sandbox harness for future real provider read clients. It introduces the execution-planning interface that future Taobao/Douyin readonly clients must pass through, while the current implementation remains a no-network sandbox that returns no provider data and only writes sanitized audit metadata.
+PR43 adds a merchant/channel launch preflight command. It checks whether a target tenant/channel pair is ready for a controlled launch window without calling the API, connecting to the database, reading a secret manager, calling provider networks, or exposing raw tenant IDs and secrets in output.
 
-### PR42 Scope
+### PR43 Scope
 
-- Add a `ProviderReadonlyClientHarnessService` with a typed execution plan/result for `get_order` and `query_logistics`.
-- Keep the current implementation no-network: `networkAttempted=false`, `providerDataReturned=false`, `networkExecution=not_implemented`, and no real Taobao/Douyin/provider calls.
-- Add bounded harness config for timeout and retry shape so future real clients have an explicit interface before implementation.
-- Audit only sanitized execution metadata such as execution mode, timeout/retry settings, credential readiness, and provider-request-prepared booleans; never audit lookup values, provider payloads, provider responses, tokens, or full credential refs.
-- Add verifier coverage so provider readonly harness drift fails before launch.
+- Add `npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel>` as a local preflight for one merchant/channel pair.
+- Check real-channel launch prerequisites when `--require-real-channel` is set: production toggles, kill switch off, allowlist match, matching webhook secret, rate limit, freshness window, and queue thresholds.
+- Check provider readonly prerequisites when `--require-provider-readonly` is set: readonly adapter match, secret/vault credential reference shape, and matching `PROVIDER_CREDENTIALS` ref-only inventory record.
+- Check production operator identity basics for the target tenant: DB-backed identity/account source and at least one admin operator key.
+- Keep output sanitized: show tenant fingerprints, channel, booleans, and credential fingerprints only; never print raw tenant IDs, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, or customer data.
 
-### Out Of Scope For PR42
+### Out Of Scope For PR43
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -43,6 +45,7 @@ PR42 adds a provider readonly sandbox harness for future real provider read clie
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
+- Calling production API readiness, database, vault, or provider networks from the merchant preflight command.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -101,10 +104,11 @@ PR42 adds a provider readonly sandbox harness for future real provider read clie
 - [x] PR40 provider credential resolution boundary.
 - [x] PR41 provider credential store boundary.
 - [x] PR42 provider readonly sandbox harness.
+- [x] PR43 merchant launch preflight.
 
 ## Verification Gate
 
-Do not claim PR42 provider readonly sandbox harness complete until these pass:
+Do not claim PR43 merchant launch preflight complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -122,6 +126,8 @@ Do not claim PR42 provider readonly sandbox harness complete until these pass:
 - `node --check scripts/verify-provider-credential-boundary.mjs`
 - `node --check scripts/verify-provider-credential-store.mjs`
 - `node --check scripts/verify-provider-read-harness.mjs`
+- `node --check scripts/verify-merchant-launch-preflight.mjs`
+- `node --test scripts/verify-merchant-launch-preflight.test.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -130,6 +136,7 @@ Do not claim PR42 provider readonly sandbox harness complete until these pass:
 - `npm.cmd run verify:provider-credential-boundary`
 - `npm.cmd run verify:provider-credential-store`
 - `npm.cmd run verify:provider-read-harness`
+- `npm.cmd run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

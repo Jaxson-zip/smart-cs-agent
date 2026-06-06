@@ -50,6 +50,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-credential-boundary",
   "verify:provider-credential-store",
   "verify:provider-read-harness",
+  "verify:merchant-launch-preflight",
   "verify:channel-runbook",
 ]);
 
@@ -89,6 +90,9 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-credential-boundary",
   "npm run verify:provider-credential-store",
   "npm run verify:provider-read-harness",
+  "npm run verify:merchant-launch-preflight",
+  "--tenant=<tenant-slug>",
+  "--channel=<channel>",
   "npm run verify:channel-runbook",
 ]);
 
@@ -187,6 +191,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-credential-boundary",
   "verify:provider-credential-store",
   "verify:provider-read-harness",
+  "verify:merchant-launch-preflight",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
