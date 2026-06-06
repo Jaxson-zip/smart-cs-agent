@@ -78,6 +78,7 @@ function sliceBetween(label, haystack, startNeedle, endNeedle) {
 
 const endpoints = [
   "/health/ready",
+  "/metrics",
   "/v1/channel-events/metrics",
   "/v1/channel-events/operation-audits",
   "/v1/channel-events/audit-summary",
@@ -146,6 +147,7 @@ mustContainAll("runbook response states", content.runbook, [
 ]);
 mustContainAll("runbook operations", content.runbook, [
   "Check readiness",
+  "Check monitoring metrics",
   "Check queue metrics",
   "Recover stale processing claims",
   "Review recent recovery records",
@@ -175,8 +177,15 @@ mustContainAll("public API surface safety", content.publicApi, [
   "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
   "per process",
   "HTTP 503 kill-switch responses must not spend application rate-limit quota",
+  "Public monitoring metrics may expose only aggregate numeric gauges",
+  "`/metrics` must not use tenant ID",
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR31 Public Monitoring Metrics",
+  "GET /metrics",
+  "smart_cs_agent_api_up 1",
+  "smart_cs_agent_database_ready 0",
+  "`/metrics` must remain a no-tenant/no-secret boundary",
   "PR30 Real-Channel Emergency Kill Switch",
   "PR28 Real-Channel Gray-Release Allowlist",
   "PR26 Production Real-Channel Intake Gates",
@@ -235,6 +244,19 @@ mustContainAll("real channel rate limit service", content.realChannelRateLimitSe
 ]);
 
 mustContainAll("health controller env vars", content.healthController, queueEnvVars);
+mustContainAll("health metrics controller", content.healthController, [
+  "HealthMetricsController",
+  '@Get("metrics")',
+  "text/plain; version=0.0.4; charset=utf-8",
+  "smart_cs_agent_api_up",
+  "smart_cs_agent_database_ready",
+  "smart_cs_agent_real_channel_webhook_kill_switch_enabled",
+  "smart_cs_agent_real_channel_webhook_status",
+  "smart_cs_agent_channel_queue_degraded",
+  "smart_cs_agent_channel_queue_pending_total",
+  "smart_cs_agent_channel_queue_stale_processing_total",
+  "smart_cs_agent_channel_queue_degraded_reason",
+]);
 mustContainAll("channel controller routes", content.channelController, [
   '@Controller("v1/channel-events")',
   '@Get("metrics")',

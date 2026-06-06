@@ -130,3 +130,8 @@
 - Updated readiness, shared schema, config parsing, production-readiness verifier, env examples, channel queue runbook, public API surface, and production-readiness docs for `disabled_by_kill_switch`.
 - Addressed independent review by making the kill switch take precedence over `REAL_CHANNEL_WEBHOOKS_ENABLED`, so intake, readiness, and production warnings consistently show the emergency stop state even if the normal intake flag is off.
 - Final PR30 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, operator bootstrap verifier, script syntax checks, production-readiness kill-switch pass/fail/warning scenarios, and independent code review follow-up fixes.
+- Started PR31 public monitoring metrics.
+- Added a public `GET /metrics` API endpoint that returns Prometheus text for API up, database readiness, real-channel webhook readiness, kill-switch state, source-wide queue counts, oldest pending age, and known degraded reasons without tenant/channel/customer/payload/secret labels.
+- Added DB-down metrics behavior so monitoring can still scrape `smart_cs_agent_api_up 1` and `smart_cs_agent_database_ready 0` without exposing the database error.
+- Addressed independent review by adding PR31 production-readiness text checks to `npm run verify:channel-runbook`.
+- Final PR31 verification passed: API tests, Web tests, full typecheck, lint, production build, Prisma generate/migrate deploy, runbook verifier, operator bootstrap verifier, script syntax checks, production-readiness pass/fail/warning scenarios, and independent code review follow-up.

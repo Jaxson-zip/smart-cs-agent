@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR30 - Real-Channel Emergency Kill Switch
+## Current Stage: PR31 - Public Monitoring Metrics
 
 Status: verified
 
-PR30 adds an emergency global kill switch for signed real-channel webhook intake so operators can stop real-channel normalization immediately without changing allowlists or secrets.
+PR31 adds a public Prometheus-compatible `/metrics` endpoint with aggregate service, database, real-channel intake, kill-switch, and queue gauges for production monitoring.
 
 ### PR16 Scope
 
@@ -65,10 +65,11 @@ PR30 adds an emergency global kill switch for signed real-channel webhook intake
 - [x] PR28 real-channel gray-release allowlist.
 - [x] PR29 production operator identity closure.
 - [x] PR30 real-channel emergency kill switch.
+- [x] PR31 public monitoring metrics.
 
 ## Verification Gate
 
-Do not claim PR30 real-channel emergency kill switch complete until these pass:
+Do not claim PR31 public monitoring metrics complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -89,6 +90,8 @@ Do not claim PR30 real-channel emergency kill switch complete until these pass:
 - Kill-switch check: signed real-channel webhook intake returns HTTP 503 when `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`, writes no `ChannelWebhookReceipt` or `NormalizedChannelEvent`, does not call Agent/Action/customer-visible replies, and does not consume application rate-limit quota.
 - Readiness check: `GET /health/ready` reports `checks.channelWebhooks.status=disabled_by_kill_switch` without tenant IDs, secrets, signatures, raw body, payloads, or customer messages.
 - Production verifier check: `--require-real-channel` fails when `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`; the same env without `--require-real-channel` passes with a warning and without printing secrets.
+- Monitoring metrics check: `GET /metrics` returns Prometheus text with API, database, webhook readiness, kill switch, queue count, oldest pending age, and degraded reason gauges without tenant IDs, channel names, customer messages, provider payloads, external IDs, operator keys, secrets, signatures, or raw bodies.
+- Monitoring failure check: `GET /metrics` remains scrapeable when the database is unavailable and reports `smart_cs_agent_database_ready 0` without leaking the database error.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`

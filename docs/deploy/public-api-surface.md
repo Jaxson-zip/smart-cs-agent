@@ -10,6 +10,7 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 | --- | --- | --- |
 | `GET /health` | Public liveness | No tenant data, no database details |
 | `GET /health/ready` | Public readiness | No tenant data; may return `ok`, `degraded`, or 503 `unhealthy` when DB unavailable |
+| `GET /metrics` | Public monitoring scrape | Prometheus text format; aggregate service/database/webhook/queue gauges only; no tenant, channel, customer, payload, or secret labels |
 | `GET /v1/cases` | Operator API | `Authorization: Bearer <operator-key>` or `x-api-key`; tenant derived from key |
 | `GET /v1/cases/:id` | Operator API | Same as `/v1/cases`; service filters by tenant |
 | `GET /v1/rules/:tenantId?` | Operator API | Same as `/v1/cases`; path tenant must match key tenant |
@@ -73,6 +74,7 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 - `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true` emergency-disables real-channel webhook intake before HMAC verification, rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies. HTTP 503 kill-switch responses must not spend application rate-limit quota.
 - Production real-channel webhook intake fails closed at API startup when `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true` are set without configured secrets, an allowlist with matching tenant/channel pairs, a positive rate limit, an explicit freshness window, and channel queue thresholds.
 - Real-channel readiness may expose configured channel names, allowlisted channel names, allowlisted pair counts, and the aggregate `disabled_by_kill_switch` status, but must never expose tenant IDs, webhook secrets, signatures, or raw request bodies.
+- Public monitoring metrics may expose only aggregate numeric gauges such as API up, database readiness, webhook readiness status, kill switch state, source-wide queue counts, oldest pending age, and known degraded reasons. `/metrics` must not use tenant ID, channel name, merchant ID, customer text, source name, provider payload, external IDs, operator API key, webhook secret, signature, or raw body as metric labels or values.
 - Real-channel replay APIs are operator-gated review controls over `NormalizedChannelEvent.source=real_channel_webhook` only. Replay may create an after-sales case, customer message, pending action rows, and audit logs, but must force `human_confirm` or `human_takeover`; it must never return `auto_execute`, call channel `sendMessage()`, or run action execution.
 - Real-channel metrics are read-only and tenant-scoped. They may expose counts, timestamps, and age seconds, but must not expose customer message text, tenant identifiers, source names, webhook payloads, external conversation IDs, or external message IDs to the browser.
 - Readiness may include aggregate real-channel queue health. It may report `degraded` when configured queue thresholds are exceeded, but it must not expose tenant identifiers, customer message text, payloads, external conversation IDs, or external message IDs.

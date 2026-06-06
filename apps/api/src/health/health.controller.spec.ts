@@ -4,7 +4,11 @@ import { describe, it } from "node:test";
 import { ChannelWebhookSecurityService } from "../channels/channel-webhook-security.service";
 import type { ChannelEventReviewService } from "../channels/channel-event-review.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { HealthController, HealthReadinessController } from "./health.controller";
+import {
+  HealthController,
+  HealthMetricsController,
+  HealthReadinessController,
+} from "./health.controller";
 
 describe("HealthController", () => {
   it("keeps liveness lightweight", () => {
@@ -224,6 +228,110 @@ describe("HealthController", () => {
       restoreEnv("CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD", previousStale);
       restoreEnv("CHANNEL_QUEUE_STALE_AFTER_MINUTES", previousStaleAfter);
     }
+  });
+
+  it("exposes sanitized Prometheus metrics for production monitoring", async () => {
+    const previousEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
+    const previousSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
+    const previousAllowlist = process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
+    const previousKillSwitch = process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH;
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "must_not_leak",
+      },
+    ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+      },
+    ]);
+    try {
+      const prisma = {
+        $queryRaw: async () => [{ "?column?": 1 }],
+      } as unknown as PrismaService;
+      const controller = new HealthMetricsController(
+        prisma,
+        new ChannelWebhookSecurityService(receiptStore()),
+        {
+          getQueueHealth: async () => ({
+            status: "degraded",
+            measuredAt: new Date("2026-06-06T08:00:00.000Z"),
+            pendingCount: 12,
+            processingCount: 2,
+            staleProcessingCount: 1,
+            oldestPendingAgeSeconds: 1800,
+            thresholds: {
+              pendingWarnThreshold: 10,
+              oldestPendingWarnSeconds: 900,
+              staleProcessingWarnThreshold: 0,
+              staleAfterMinutes: 15,
+            },
+            reasons: [
+              "pending_count_above_threshold",
+              "stale_processing_above_threshold",
+            ],
+          }),
+        } as unknown as ChannelEventReviewService,
+      );
+
+      const metrics = await controller.getMetrics();
+
+      assert.match(metrics, /^# HELP smart_cs_agent_api_up/m);
+      assert.match(metrics, /^smart_cs_agent_api_up 1$/m);
+      assert.match(metrics, /^smart_cs_agent_database_ready 1$/m);
+      assert.match(metrics, /^smart_cs_agent_real_channel_webhook_enabled 0$/m);
+      assert.match(metrics, /^smart_cs_agent_real_channel_webhook_kill_switch_enabled 1$/m);
+      assert.match(metrics, /^smart_cs_agent_real_channel_webhook_status\{status="disabled_by_kill_switch"\} 1$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_degraded 1$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_pending_total 12$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_processing_total 2$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_stale_processing_total 1$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_oldest_pending_age_seconds 1800$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_degraded_reason\{reason="pending_count_above_threshold"\} 1$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_degraded_reason\{reason="oldest_pending_age_above_threshold"\} 0$/m);
+      assert.match(metrics, /^smart_cs_agent_channel_queue_degraded_reason\{reason="stale_processing_above_threshold"\} 1$/m);
+      assert.ok(!metrics.includes("tenant_1"));
+      assert.ok(!metrics.includes("must_not_leak"));
+      assert.ok(!metrics.includes("taobao"));
+    } finally {
+      restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", previousEnabled);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", previousSecrets);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_ALLOWLIST", previousAllowlist);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_KILL_SWITCH", previousKillSwitch);
+    }
+  });
+
+  it("keeps metrics scrapeable when the database is unavailable", async () => {
+    const prisma = {
+      $queryRaw: async () => {
+        throw new Error("connection refused");
+      },
+    } as unknown as PrismaService;
+    const queueHealth = queueHealthService();
+    let queueHealthCalled = false;
+    const controller = new HealthMetricsController(
+      prisma,
+      new ChannelWebhookSecurityService(receiptStore()),
+      {
+        getQueueHealth: async () => {
+          queueHealthCalled = true;
+          return queueHealth.getQueueHealth();
+        },
+      } as unknown as ChannelEventReviewService,
+    );
+
+    const metrics = await controller.getMetrics();
+
+    assert.match(metrics, /^smart_cs_agent_api_up 1$/m);
+    assert.match(metrics, /^smart_cs_agent_database_ready 0$/m);
+    assert.match(metrics, /^smart_cs_agent_real_channel_webhook_status\{status="disabled"\} 1$/m);
+    assert.ok(!metrics.includes("connection refused"));
+    assert.strictEqual(queueHealthCalled, false);
   });
 });
 

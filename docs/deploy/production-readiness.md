@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR31 Public Monitoring Metrics
+
+The API now exposes `GET /metrics` in Prometheus text format. It is public like `/health` and `/health/ready`, but it contains only aggregate numeric gauges: API up, database readiness, real-channel webhook enabled state, emergency kill switch state, one-hot webhook readiness status, source-wide queue counts, oldest pending age, and known degraded reasons.
+
+`/metrics` must remain a no-tenant/no-secret boundary. It must not include tenant IDs, merchant IDs, channel names, customer messages, provider payloads, source names, external conversation IDs, external message IDs, operator API keys, webhook secrets, signatures, or raw request bodies. When the database is unavailable, the endpoint should still be scrapeable with `smart_cs_agent_api_up 1` and `smart_cs_agent_database_ready 0`, without leaking the database error.
+
 ## PR30 Real-Channel Emergency Kill Switch
 
 Real-channel intake now has an emergency shutoff. Set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true` to make `POST /v1/channels/:channel/webhook/events` fail closed with HTTP 503 before HMAC verification, rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
@@ -74,7 +80,7 @@ The Web API client keeps queue metrics sanitized to counts, timestamps, and age 
 
 ## PR21 Channel Queue Operations Runbook
 
-Channel queue operations are now documented in `docs/deploy/channel-queue-runbook.md`. The runbook covers `/health/ready`, `GET /v1/channel-events/metrics`, `POST /v1/channel-events/recover-stale`, the Web BFF equivalents, threshold env vars, degraded reason codes, triage steps, and safety boundaries.
+Channel queue operations are now documented in `docs/deploy/channel-queue-runbook.md`. The runbook covers `/health/ready`, `/metrics`, `GET /v1/channel-events/metrics`, `POST /v1/channel-events/recover-stale`, the Web BFF equivalents, threshold env vars, degraded reason codes, triage steps, and safety boundaries.
 
 The runbook is guarded by `npm run verify:channel-runbook`, which checks the runbook, `.env.example`, `docs/deploy/public-api-surface.md`, and the relevant API source files for required operational facts. Any future change to readiness, queue metrics, stale recovery, or the public API surface should update the runbook and keep this verifier passing.
 
@@ -213,6 +219,7 @@ curl http://localhost:4100/health
 PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `/health`：
 
 - `GET /health/ready` 能确认 API 到数据库的路径是否可用；数据库不可用时应返回 HTTP 503。
+- `GET /metrics` 能被 Prometheus 或部署平台抓取聚合指标；数据库不可用时仍应返回文本指标，其中 `smart_cs_agent_database_ready` 为 `0`，且不得泄露数据库错误、tenant ID、渠道名、客户消息或 secret。
 - `GET /health/ready` 的 `checks.channelWebhooks` 会展示真实渠道 webhook 的 readiness：默认 `disabled`，启用但缺少/损坏密钥时为 `misconfigured`，配置正确时为 `ok`，应急关闭时为 `disabled_by_kill_switch`。该响应只能出现渠道名，不得出现 tenant ID、secret、signature、raw body。
 - `POST /v1/channels/:channel/webhook/events` 是真实渠道安全接收和归一化入口。启用后必须携带 `x-smartcs-signature-version: v1`、`x-smartcs-tenant-id`、`x-smartcs-event-id`、`x-smartcs-timestamp` 和 `x-smartcs-signature`；签名 payload 为 `version/channel/tenantId/timestamp/eventId/sha256(rawBody)` 逐行拼接后做 HMAC-SHA256。成功返回 `202`、`mode: normalized_only` 和 `normalizedEventId`，但不回显客户消息文本。
 - 真实渠道入口会先完成签名验证和 payload 归一化，再在同一事务中写入 replay receipt 与 `NormalizedChannelEvent`。归一化失败时不应写 replay receipt，以免合法重试被重复事件保护误拦截。

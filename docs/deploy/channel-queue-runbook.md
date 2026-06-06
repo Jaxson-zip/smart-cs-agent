@@ -11,6 +11,7 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | Signal | Purpose | Access |
 | --- | --- | --- |
 | `GET /health/ready` | Public readiness with database, webhook config, and source-wide aggregate channel queue health | No operator session required; no tenant data |
+| `GET /metrics` | Public Prometheus scrape with aggregate service, database, real-channel intake, and queue gauges | No operator session required; no tenant data, channel labels, customer messages, payloads, external IDs, or secrets |
 | `GET /v1/channel-events/metrics` | Tenant-scoped real-channel queue metrics | Operator API key required |
 | `GET /api/operator/channel-events/metrics` | Same metrics through the Web BFF | Operator session required |
 | `GET /v1/channel-events/operation-audits` | Tenant-scoped recent queue recovery records | Admin operator API key required |
@@ -101,7 +102,23 @@ If `status` is `unhealthy`, treat this as database or readiness dependency avail
 
 If `status` is `degraded`, inspect `checks.channelQueue.reasons`.
 
-### 2. Check queue metrics
+### 2. Check monitoring metrics
+
+```bash
+curl -sS http://localhost:4100/metrics
+```
+
+Alert on these aggregate gauges:
+
+- `smart_cs_agent_database_ready == 0`: API process is up, but database readiness failed.
+- `smart_cs_agent_real_channel_webhook_kill_switch_enabled == 1`: real-channel intake is emergency-disabled.
+- `smart_cs_agent_real_channel_webhook_status{status="misconfigured"} == 1`: real-channel intake config is broken.
+- `smart_cs_agent_channel_queue_degraded == 1`: queue thresholds are exceeded.
+- `smart_cs_agent_channel_queue_stale_processing_total > 0`: at least one review claim may be stuck.
+
+The `/metrics` response must stay aggregate. It must not include tenant IDs, merchant IDs, channel names, customer messages, provider payloads, source names, external conversation IDs, external message IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
+
+### 3. Check queue metrics
 
 ```bash
 curl -sS \
@@ -116,7 +133,7 @@ Look at:
 - `staleProcessingCount`: claimed events older than the stale cutoff.
 - `oldestPendingAgeSeconds`: how long the oldest pending customer message has waited.
 
-### 3. Recover stale processing claims
+### 4. Recover stale processing claims
 
 Use this only when `staleProcessingCount` is above the threshold or an interrupted replay left events stuck in `processing`.
 
@@ -142,7 +159,7 @@ Expected result:
 
 Recovery moves old `processing` events back to `pending`, clears the processing claim, and writes an audit record.
 
-### 4. Review recent recovery records
+### 5. Review recent recovery records
 
 Use this after recovery to confirm who ran it, how many claims were restored, and whether stale processing claims were cleared afterward.
 
@@ -172,7 +189,7 @@ Expected result:
 ]
 ```
 
-### 5. Recheck readiness
+### 6. Recheck readiness
 
 ```bash
 curl -sS http://localhost:4100/health/ready
@@ -182,7 +199,7 @@ If the only degraded reason was `stale_processing_above_threshold`, readiness sh
 
 If `pending_count_above_threshold` or `oldest_pending_age_above_threshold` remains, recovery is not the fix. Pause or reduce real-channel intake where possible, add operator capacity, and continue reviewing pending messages.
 
-### 6. Review queue audit summary
+### 7. Review queue audit summary
 
 Use this during daily operations or incident follow-up to see how many real-channel review messages became cases, were intentionally not handled, or were recovered from stale processing.
 
@@ -228,7 +245,7 @@ Recovery is an operations safety valve, not a customer action.
 
 It must not call AgentService, must not create cases, must not execute actions, and must not send customer-visible replies.
 
-Metrics and readiness must not expose tenant IDs, must not expose customer messages, must not expose provider payloads, must not expose external conversation IDs, must not expose external message IDs, must not expose operator API keys, and must not expose secrets.
+Metrics and readiness must not expose tenant IDs, must not expose channel names as labels, must not expose customer messages, must not expose provider payloads, must not expose external conversation IDs, must not expose external message IDs, must not expose operator API keys, and must not expose secrets.
 
 The Web BFF route may return tenant-scoped counts, timestamps, and age seconds to the browser. It must strip tenant/source/internal fields before responding.
 
