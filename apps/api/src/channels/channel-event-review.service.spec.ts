@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { ChannelEventReviewService } from "./channel-event-review.service";
 import type { PrismaService } from "../prisma/prisma.service";
 import type { AgentService } from "../agent/agent.service";
@@ -115,8 +115,9 @@ describe("ChannelEventReviewService", () => {
     const createdActions: unknown[] = [];
     const auditLogs: unknown[] = [];
     const updates: unknown[] = [];
+    const updateManyQueries: unknown[] = [];
     const findFirstQueries: unknown[] = [];
-    const event = normalizedEvent();
+    const event = normalizedEvent({ reviewStatus: "processing" });
     const service = new ChannelEventReviewService(
       transactionStore({
         event,
@@ -125,6 +126,7 @@ describe("ChannelEventReviewService", () => {
         createdActions,
         auditLogs,
         updates,
+        updateManyQueries,
         findFirstQueries,
       }),
       fakeAgent({
@@ -145,13 +147,28 @@ describe("ChannelEventReviewService", () => {
     assert.strictEqual(result.eventId, "event_1");
     assert.strictEqual(result.caseId, "case_replay_event_1");
     assert.strictEqual(result.automationMode, "human_confirm");
-    assert.deepStrictEqual(findFirstQueries, [
+    assert.deepStrictEqual(updateManyQueries, [
       {
         where: {
           id: "event_1",
           merchantId: "tenant_1",
           source: "real_channel_webhook",
           reviewStatus: "pending",
+        },
+        data: {
+          reviewStatus: "processing",
+          reviewedBy: "operator_1",
+          reviewedAt: result.reviewedAt,
+        },
+      },
+    ]);
+    assert.deepStrictEqual(findFirstQueries, [
+      {
+        where: {
+          id: "event_1",
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
         },
       },
     ]);
@@ -211,6 +228,7 @@ describe("ChannelEventReviewService", () => {
             updates.push(query);
             return { count: 0 };
           },
+          findFirst: async () => null,
         },
       } as unknown as PrismaService,
       fakeAgent(),
@@ -242,15 +260,38 @@ describe("ChannelEventReviewService", () => {
     ]);
   });
 
+  it("returns a conflict when ignoring an event that was already reviewed", async () => {
+    const service = new ChannelEventReviewService(
+      {
+        normalizedChannelEvent: {
+          updateMany: async () => ({ count: 0 }),
+          findFirst: async () => ({ id: "event_1", reviewStatus: "replayed" }),
+        },
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+
+    await assert.rejects(
+      () =>
+        service.ignore("event_1", {
+          tenantId: "tenant_1",
+          operatorId: "operator_1",
+        }),
+      ConflictException,
+    );
+  });
+
   it("does not replay events outside the request tenant", async () => {
     const service = new ChannelEventReviewService(
       transactionStore({
         event: null,
+        claimCount: 0,
         createdCases: [],
         createdMessages: [],
         createdActions: [],
         auditLogs: [],
         updates: [],
+        updateManyQueries: [],
         findFirstQueries: [],
       }),
       fakeAgent(),
@@ -265,9 +306,42 @@ describe("ChannelEventReviewService", () => {
       NotFoundException,
     );
   });
+
+  it("returns a conflict without calling the agent when replaying an already reviewed event", async () => {
+    let agentCalled = false;
+    const service = new ChannelEventReviewService(
+      transactionStore({
+        event: normalizedEvent({ reviewStatus: "ignored" }),
+        claimCount: 0,
+        createdCases: [],
+        createdMessages: [],
+        createdActions: [],
+        auditLogs: [],
+        updates: [],
+        updateManyQueries: [],
+        findFirstQueries: [],
+      }),
+      {
+        decide: async () => {
+          agentCalled = true;
+          return fakeAgentDecision();
+        },
+      } as unknown as AgentService,
+    );
+
+    await assert.rejects(
+      () =>
+        service.replay("event_1", {
+          tenantId: "tenant_1",
+          operatorId: "operator_1",
+        }),
+      ConflictException,
+    );
+    assert.strictEqual(agentCalled, false);
+  });
 });
 
-function normalizedEvent() {
+function normalizedEvent(input: { reviewStatus?: string } = {}) {
   return {
     id: "event_1",
     source: "real_channel_webhook",
@@ -279,7 +353,7 @@ function normalizedEvent() {
     text: "Where is my order?",
     receivedAt: new Date("2026-06-06T05:00:00.000Z"),
     createdAt: new Date("2026-06-06T05:01:00.000Z"),
-    reviewStatus: "pending",
+    reviewStatus: input.reviewStatus ?? "pending",
     reviewedBy: null,
     reviewedAt: null,
     replayedCaseId: null,
@@ -288,15 +362,21 @@ function normalizedEvent() {
 }
 
 function fakeAgent(decision = {
-  category: "unknown",
-  riskLevel: "high",
-  automationMode: "human_takeover",
-  replyText: "Please wait.",
-  suggestedActions: [{ type: "create_handoff", status: "pending" }],
+  ...fakeAgentDecision(),
 }) {
   return {
     decide: async () => decision,
   } as unknown as AgentService;
+}
+
+function fakeAgentDecision() {
+  return {
+    category: "unknown",
+    riskLevel: "high",
+    automationMode: "human_takeover",
+    replyText: "Please wait.",
+    suggestedActions: [{ type: "create_handoff", status: "pending" }],
+  };
 }
 
 function transactionStore({
@@ -306,7 +386,9 @@ function transactionStore({
   createdActions,
   auditLogs,
   updates,
+  updateManyQueries = [],
   findFirstQueries = [],
+  claimCount = 1,
 }: {
   event: ReturnType<typeof normalizedEvent> | null;
   createdCases: unknown[];
@@ -314,11 +396,14 @@ function transactionStore({
   createdActions: unknown[];
   auditLogs: unknown[];
   updates: unknown[];
+  updateManyQueries?: unknown[];
   findFirstQueries?: unknown[];
+  claimCount?: number;
 }) {
   type Store = {
     $transaction<T>(callback: (tx: Store) => Promise<T>): Promise<T>;
     normalizedChannelEvent: {
+      updateMany(args: unknown): Promise<{ count: number }>;
       findFirst(args: unknown): Promise<typeof event>;
       update(args: unknown): Promise<unknown>;
     };
@@ -330,6 +415,10 @@ function transactionStore({
   const store: Store = {
     $transaction: async <T>(callback: (tx: Store) => Promise<T>) => callback(store),
     normalizedChannelEvent: {
+      updateMany: async (args: unknown) => {
+        updateManyQueries.push(args);
+        return { count: claimCount };
+      },
       findFirst: async (args: unknown) => {
         findFirstQueries.push(args);
         return event;

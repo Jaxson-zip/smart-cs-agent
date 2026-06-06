@@ -90,6 +90,7 @@ model AfterSalesCase {
 
 enum ChannelEventReviewStatus {
   pending
+  processing
   replayed
   ignored
 }

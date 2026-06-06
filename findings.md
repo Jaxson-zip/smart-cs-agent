@@ -2,6 +2,7 @@
 
 ## 2026-06-06
 
+- PR17 closes a real commercial race: replaying a real-channel event must be claimed atomically with `pending -> processing` before AgentService or case creation runs. If another operator already reviewed the event, the API should return 409 Conflict and must not call AgentService.
 - The V1.2 branch is clean at commit `04469dd`.
 - API currently has a basic `/health` endpoint only; it does not prove database connectivity.
 - `.env.example` includes `DATABASE_URL`, `WEB_ORIGIN`, `PORT`, and `WECOM_SANDBOX_ENABLED`, but runtime env validation is not centralized.

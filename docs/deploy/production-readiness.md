@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR17 Channel Review Concurrency
+
+Real-channel review replay now uses a server-side `pending -> processing -> replayed` lifecycle. The `processing` status is an internal claim state, not an operator-facing product state. Its purpose is to prevent two operators from generating duplicate after-sales cases from the same pending real-channel message.
+
+If replay or ignore loses the claim because the event has already been reviewed, the API returns HTTP 409 Conflict. If the event does not belong to the operator tenant or real-channel source, the API returns 404. Replay still forces `human_confirm` or `human_takeover`; it must not execute commerce actions or send real customer replies.
+
 本文档定义 PR1 的可部署沙盒门槛。当前目标是 deployable sandbox / production-readiness baseline，用于让团队和 GitHub 自动验证基础质量；它不代表已经接入真实淘宝、抖音或企业微信生产链路，也不声称系统已生产可用。
 
 ## 范围

@@ -61,3 +61,7 @@
 - Added the "待接入消息" workbench queue and verified in browser that pending messages can generate an internal human-reviewed case.
 - Tightened `GET /api/operator/channel-events` so the browser receives only UI-safe fields and not tenant or external conversation/message identifiers.
 - Final PR16 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and browser checks at 1366x768 plus 390x844 with no page-level overflow or internal terminology visible.
+- Started PR17 channel event replay atomic claim safety.
+- Added a `processing` review status so real-channel replay first claims a pending event before creating an internal after-sales case.
+- Updated replay and ignore flows to return 409 Conflict for already reviewed events instead of treating them as missing or allowing duplicate replay work.
+- Final PR17 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.

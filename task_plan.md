@@ -51,12 +51,14 @@ PR16 builds on PR15 by exposing the real-channel review pool through the Web BFF
 - [x] PR14 real channel payload normalization.
 - [x] PR15 real channel review replay pool.
 - [x] PR16 operator workbench review pool UI.
+- [x] PR17 channel event replay atomic claim safety.
 
 ## Verification Gate
 
-Do not claim PR16 operator workbench review pool UI complete until these pass:
+Do not claim PR17 channel event replay atomic claim safety complete until these pass:
 
 - `npm.cmd run db:generate`
+- `npm.cmd run db:migrate:deploy`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
 - `npm.cmd run test --workspace @smart-cs-agent/web`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
