@@ -103,7 +103,13 @@ function checkStaticProductionEnv(input, options) {
   }
 
   if (input.REAL_CHANNEL_WEBHOOKS_ENABLED === "true") {
-    mustHaveProductionWebhookSecrets(input.REAL_CHANNEL_WEBHOOK_SECRETS);
+    const webhookSecrets = mustHaveProductionWebhookSecrets(
+      input.REAL_CHANNEL_WEBHOOK_SECRETS,
+    );
+    mustHaveProductionWebhookAllowlist(
+      input.REAL_CHANNEL_WEBHOOK_ALLOWLIST,
+      webhookSecrets,
+    );
     mustBePositiveInt(
       input.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
       "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
@@ -167,6 +173,15 @@ async function checkReadiness(apiUrl, options) {
   ) {
     failures.push(
       "GET /health/ready checks.channelWebhooks.status must be ok when --require-real-channel is set",
+    );
+  }
+  if (
+    options.requireRealChannel &&
+    (!Number.isInteger(payload?.checks?.channelWebhooks?.allowlistedPairCount) ||
+      payload.checks.channelWebhooks.allowlistedPairCount <= 0)
+  ) {
+    failures.push(
+      "GET /health/ready checks.channelWebhooks.allowlistedPairCount must be positive when --require-real-channel is set",
     );
   }
 
@@ -309,10 +324,10 @@ function mustHaveProductionOperatorApiKeys(value) {
 
 function mustHaveProductionWebhookSecrets(value) {
   const secrets = parseJsonArray(value, "REAL_CHANNEL_WEBHOOK_SECRETS");
-  if (!secrets) return;
+  if (!secrets) return undefined;
   if (secrets.length === 0) {
     failures.push("REAL_CHANNEL_WEBHOOK_SECRETS must contain at least one secret");
-    return;
+    return secrets;
   }
 
   for (const [index, item] of secrets.entries()) {
@@ -335,6 +350,45 @@ function mustHaveProductionWebhookSecrets(value) {
     ) {
       failures.push(
         `REAL_CHANNEL_WEBHOOK_SECRETS[${index}].secret must not be a demo or placeholder secret`,
+      );
+    }
+  }
+
+  return secrets;
+}
+
+function mustHaveProductionWebhookAllowlist(value, webhookSecrets) {
+  const allowlist = parseJsonArray(value, "REAL_CHANNEL_WEBHOOK_ALLOWLIST");
+  if (!allowlist) return;
+  if (allowlist.length === 0) {
+    failures.push("REAL_CHANNEL_WEBHOOK_ALLOWLIST must contain at least one tenant/channel pair");
+    return;
+  }
+
+  const secretBoundaries = new Set(
+    (webhookSecrets ?? [])
+      .filter(isRecord)
+      .map((item) => boundaryKey(item.channel, item.tenantId)),
+  );
+
+  for (const [index, item] of allowlist.entries()) {
+    if (!isRecord(item)) {
+      failures.push(`REAL_CHANNEL_WEBHOOK_ALLOWLIST[${index}] must be an object`);
+      continue;
+    }
+    for (const field of ["channel", "tenantId"]) {
+      if (typeof item[field] !== "string" || item[field].length === 0) {
+        failures.push(`REAL_CHANNEL_WEBHOOK_ALLOWLIST[${index}].${field} is required`);
+      }
+    }
+    if (
+      typeof item.channel === "string" &&
+      typeof item.tenantId === "string" &&
+      secretBoundaries.size > 0 &&
+      !secretBoundaries.has(boundaryKey(item.channel, item.tenantId))
+    ) {
+      failures.push(
+        `REAL_CHANNEL_WEBHOOK_ALLOWLIST[${index}] must match a configured webhook secret`,
       );
     }
   }
@@ -408,4 +462,8 @@ function hasValue(value) {
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundaryKey(channel, tenantId) {
+  return JSON.stringify([channel, tenantId]);
 }

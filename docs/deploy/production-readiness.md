@@ -1,5 +1,13 @@
 # Production-Readiness Baseline
 
+## PR28 Real-Channel Gray-Release Allowlist
+
+Real-channel intake now has a merchant/channel allowlist gate. When `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, every signed webhook must match an exact pair in `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, and every allowlisted pair must have a matching item in `REAL_CHANNEL_WEBHOOK_SECRETS`.
+
+`GET /health/ready` may report `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back a single merchant, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST`; to close all real-channel intake, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`. This allowlist only controls normalization intake. It does not enable real refunds, address changes, coupons, automated customer replies, or commerce actions.
+
+`npm run demo:real-channel-smoke` now requires the server to set `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, a matching `REAL_CHANNEL_WEBHOOK_SECRETS` item, and a matching `REAL_CHANNEL_WEBHOOK_ALLOWLIST` item for the same channel and tenant. The smoke still proves only normalization intake and optional human-reviewed replay.
+
 ## PR27 Production Readiness Verifier
 
 Production readiness now has an executable preflight:
@@ -8,13 +16,13 @@ Production readiness now has an executable preflight:
 npm run verify:production-readiness -- --env-file=/secure/path/production.env --require-real-channel --api=https://api.example.com
 ```
 
-The verifier checks the production environment without printing secret values. It fails when production uses local or sandbox defaults, enables legacy demo APIs, enables offline demo data, uses insecure operator headers, uses env-backed operator accounts, keeps placeholder session or API secrets, or opens real-channel webhooks without the PR26 intake gates. When `--api` is provided, it also checks `GET /health/ready`; by default readiness must be `ok`.
+The verifier checks the production environment without printing secret values. It fails when production uses local or sandbox defaults, enables legacy demo APIs, enables offline demo data, uses insecure operator headers, uses env-backed operator accounts, keeps placeholder session or API secrets, or opens real-channel webhooks without the PR28/PR26 intake gates. When `--api` is provided, it also checks `GET /health/ready`; by default readiness must be `ok`, and `--require-real-channel` also requires a positive `checks.channelWebhooks.allowlistedPairCount`.
 
 Use `--require-real-channel` for a launch where real signed webhook intake must be open. Omit it for a production deployment that is ready to serve the operator workbench but has real-channel intake intentionally closed.
 
 ## PR26 Production Real-Channel Intake Gates
 
-Production API startup now fails closed when `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true` are set without the required intake gates. A production real-channel intake must configure at least one webhook secret, a positive `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`, an explicit `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`, and all channel queue thresholds before the API can start.
+Production API startup now fails closed when `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true` are set without the required intake gates. A production real-channel intake must configure at least one webhook secret, at least one matching `REAL_CHANNEL_WEBHOOK_ALLOWLIST` tenant/channel pair, a positive `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`, an explicit `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`, and all channel queue thresholds before the API can start.
 
 The required queue thresholds are `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD`, `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS`, `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD`, and `CHANNEL_QUEUE_STALE_AFTER_MINUTES`. This does not make the endpoint a full commercial automation path; it only prevents real webhook traffic from being enabled without rate limiting and queue observability.
 
@@ -107,6 +115,7 @@ PORT=4100
 WECOM_SANDBOX_ENABLED=true
 REAL_CHANNEL_WEBHOOKS_ENABLED=false
 REAL_CHANNEL_WEBHOOK_SECRETS=[]
+REAL_CHANNEL_WEBHOOK_ALLOWLIST=[]
 REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
 REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=0
 NEXT_PUBLIC_API_URL=http://localhost:4100
@@ -148,6 +157,8 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `ENABLE_LEGACY_WEB_DEMO_API`：早期 Web demo 的 `/api/chat` 和 `/api/db` 开关，默认应为 `false`。部署沙盒和生产环境不得打开，除非是隔离的历史演示环境。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
+
+PR28 adds `REAL_CHANNEL_WEBHOOK_ALLOWLIST` as the real-channel gray-release gate. Use a JSON array such as `[{"channel":"taobao","tenantId":"tenant_1"}]`. Production requires this value when `REAL_CHANNEL_WEBHOOKS_ENABLED=true`; every allowlisted pair must have a matching `REAL_CHANNEL_WEBHOOK_SECRETS` record. Readiness and public docs may show allowlisted channel names and pair counts only, never tenant IDs or secrets.
 
 生产账号应使用 `passwordHash`，当前支持 `scrypt:<salt>:<hash>` 格式。可用下面的 Node 命令生成单个账号 hash：
 

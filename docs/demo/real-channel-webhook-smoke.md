@@ -9,6 +9,7 @@ Run the API with matching real-channel webhook settings:
 ```bash
 REAL_CHANNEL_WEBHOOKS_ENABLED=true
 REAL_CHANNEL_WEBHOOK_SECRETS='[{"channel":"taobao","tenantId":"tenant_1","secret":"real_channel_secret_123"}]'
+REAL_CHANNEL_WEBHOOK_ALLOWLIST='[{"channel":"taobao","tenantId":"tenant_1"}]'
 REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
 ```
 
@@ -73,4 +74,4 @@ The raw request body bytes are mandatory. If raw-body capture is unavailable, th
 
 ## Production Boundary
 
-PR15 is still not a real Taobao/Douyin business integration. Replay creates an internal, human-reviewed case only. The next stage must add operator UI, allowlisted tenants, provider-specific error handling, and rollback controls before any normalized event can reach automated after-sales actions.
+PR28 is still not a real Taobao/Douyin business integration. Replay creates an internal, human-reviewed case only. `REAL_CHANNEL_WEBHOOK_ALLOWLIST` controls which tenant/channel pairs can enter the normalization pool, but it does not permit real refunds, address changes, coupons, automated replies, or commerce actions.

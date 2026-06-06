@@ -69,6 +69,68 @@ describe("ChannelWebhookSecurityService", () => {
     ]);
   });
 
+  it("fails closed when no real-channel allowlist is configured", async () => {
+    const receipts: unknown[] = [];
+    const service = new ChannelWebhookSecurityService(receiptStore(receipts));
+    const rawBody = Buffer.from('{"text":"hello"}');
+
+    await assert.rejects(
+      () =>
+        service.acceptIncomingWebhook({
+          channel: "taobao",
+          headers: signedHeaders({
+            eventId: "event_1",
+            timestamp: "1780718400",
+            rawBody,
+          }),
+          body: { text: "hello" },
+          rawBody,
+          now: new Date("2026-06-06T04:00:30.000Z"),
+          env: {
+            REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
+            REAL_CHANNEL_WEBHOOK_SECRETS: JSON.stringify([
+              {
+                channel: "taobao",
+                tenantId: "tenant_1",
+                secret: "real_channel_secret_123",
+              },
+            ]),
+          },
+        }),
+      ForbiddenException,
+    );
+    assert.strictEqual(receipts.length, 0);
+  });
+
+  it("rejects signed webhooks outside the real-channel allowlist", async () => {
+    const receipts: unknown[] = [];
+    const service = new ChannelWebhookSecurityService(receiptStore(receipts));
+    const rawBody = Buffer.from('{"text":"hello"}');
+
+    await assert.rejects(
+      () =>
+        service.acceptIncomingWebhook({
+          channel: "taobao",
+          headers: signedHeaders({
+            eventId: "event_1",
+            timestamp: "1780718400",
+            rawBody,
+          }),
+          body: { text: "hello" },
+          rawBody,
+          now: new Date("2026-06-06T04:00:30.000Z"),
+          env: {
+            ...enabledEnv(),
+            REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+              { channel: "douyin", tenantId: "tenant_1" },
+            ]),
+          },
+        }),
+      ForbiddenException,
+    );
+    assert.strictEqual(receipts.length, 0);
+  });
+
   it("rejects webhooks with invalid signatures", async () => {
     const service = new ChannelWebhookSecurityService(receiptStore());
 
@@ -153,13 +215,32 @@ describe("ChannelWebhookSecurityService", () => {
       status: "misconfigured",
       enabled: true,
       configuredChannels: [],
+      allowlistedChannels: [],
+      allowlistedPairCount: 0,
       message: "No real channel webhook secrets are configured",
     });
     assert.deepStrictEqual(service.getReadiness(enabledEnv()), {
       status: "ok",
       enabled: true,
       configuredChannels: ["taobao"],
+      allowlistedChannels: ["taobao"],
+      allowlistedPairCount: 1,
     });
+    assert.deepStrictEqual(
+      service.getReadiness({
+        ...enabledEnv(),
+        REAL_CHANNEL_WEBHOOK_ALLOWLIST: "{not-json",
+      }),
+      {
+        status: "misconfigured",
+        enabled: true,
+        configuredChannels: [],
+        allowlistedChannels: [],
+        allowlistedPairCount: 0,
+        message: "Real channel webhook allowlist is invalid",
+      },
+    );
+    assert.ok(!JSON.stringify(service.getReadiness(enabledEnv())).includes("tenant_1"));
   });
 
   it("does not let signatures for equivalent JSON with different raw bytes pass", async () => {
@@ -208,6 +289,12 @@ describe("ChannelWebhookSecurityService", () => {
                 channel: "douyin",
                 tenantId: "tenant_1",
                 secret: "real_channel_secret_123",
+              },
+            ]),
+            REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+              {
+                channel: "douyin",
+                tenantId: "tenant_1",
               },
             ]),
           },
@@ -280,6 +367,12 @@ describe("ChannelWebhookSecurityService", () => {
           env: {
             REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
             REAL_CHANNEL_WEBHOOK_SECRETS: "{not-json",
+            REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+              {
+                channel: "taobao",
+                tenantId: "tenant_1",
+              },
+            ]),
           },
         }),
       UnauthorizedException,
@@ -309,6 +402,12 @@ function enabledEnv(): NodeJS.ProcessEnv {
         channel: "taobao",
         tenantId: "tenant_1",
         secret: "real_channel_secret_123",
+      },
+    ]),
+    REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
       },
     ]),
   };

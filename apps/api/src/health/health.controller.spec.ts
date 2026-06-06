@@ -92,12 +92,19 @@ describe("HealthController", () => {
   it("reports real channel webhook readiness without leaking secrets", async () => {
     const previousEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
     const previousSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
+    const previousAllowlist = process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
     process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
     process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
       {
         channel: "taobao",
         tenantId: "tenant_1",
         secret: "must_not_leak",
+      },
+    ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
       },
     ]);
     try {
@@ -116,11 +123,15 @@ describe("HealthController", () => {
         status: "ok",
         enabled: true,
         configuredChannels: ["taobao"],
+        allowlistedChannels: ["taobao"],
+        allowlistedPairCount: 1,
       });
       assert.ok(!JSON.stringify(response).includes("must_not_leak"));
+      assert.ok(!JSON.stringify(response).includes("tenant_1"));
     } finally {
       restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", previousEnabled);
       restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", previousSecrets);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_ALLOWLIST", previousAllowlist);
     }
   });
 

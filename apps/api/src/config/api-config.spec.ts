@@ -132,6 +132,12 @@ describe("loadApiConfig", () => {
           secret: "real_channel_secret_123",
         },
       ]),
+      REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+        },
+      ]),
       REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "60",
       REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: "300",
       CHANNEL_QUEUE_PENDING_WARN_THRESHOLD: "100",
@@ -149,6 +155,21 @@ describe("loadApiConfig", () => {
         field: "REAL_CHANNEL_WEBHOOK_SECRETS",
         value: "[]",
         expected: /REAL_CHANNEL_WEBHOOK_SECRETS/,
+      },
+      {
+        field: "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+        value: "[]",
+        expected: /REAL_CHANNEL_WEBHOOK_ALLOWLIST/,
+      },
+      {
+        field: "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+        value: "{not-json",
+        expected: /REAL_CHANNEL_WEBHOOK_ALLOWLIST/,
+      },
+      {
+        field: "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+        value: JSON.stringify([{ channel: "douyin", tenantId: "tenant_1" }]),
+        expected: /REAL_CHANNEL_WEBHOOK_ALLOWLIST/,
       },
       {
         field: "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
@@ -208,6 +229,12 @@ describe("loadApiConfig", () => {
           channel: "taobao",
           tenantId: "tenant_1",
           secret: "real_channel_secret_123",
+        },
+      ]),
+      REAL_CHANNEL_WEBHOOK_ALLOWLIST: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
         },
       ]),
       REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "60",

@@ -13,12 +13,14 @@ import type { PrismaService } from "../prisma/prisma.service";
 
 const originalEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
 const originalSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
+const originalAllowlist = process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
 const originalRateLimit = process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE;
 
 describe("RealChannelController", () => {
   afterEach(() => {
     restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", originalEnabled);
     restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", originalSecrets);
+    restoreEnv("REAL_CHANNEL_WEBHOOK_ALLOWLIST", originalAllowlist);
     restoreEnv(
       "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
       originalRateLimit,
@@ -34,6 +36,7 @@ describe("RealChannelController", () => {
         secret: "real_channel_secret_123",
       },
     ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
     const receipts: unknown[] = [];
     const normalizedEvents: unknown[] = [];
     const afterSalesCases: unknown[] = [];
@@ -102,6 +105,7 @@ describe("RealChannelController", () => {
         secret: "real_channel_secret_123",
       },
     ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
     const receipts: unknown[] = [];
     const normalizedEvents: unknown[] = [];
     const body = {
@@ -142,6 +146,7 @@ describe("RealChannelController", () => {
         secret: "real_channel_secret_123",
       },
     ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
     const receipts: unknown[] = [];
     const normalizedEvents: unknown[] = [];
     const body = {
@@ -188,6 +193,66 @@ describe("RealChannelController", () => {
     assert.strictEqual(normalizedEvents.length, 1);
   });
 
+  it("does not spend rate-limit quota or write data for signed webhooks outside the allowlist", async () => {
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE = "1";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "real_channel_secret_123",
+      },
+    ]);
+    const receipts: unknown[] = [];
+    const normalizedEvents: unknown[] = [];
+    const body = {
+      seller_id: "tenant_1",
+      buyer_nick: "Lin",
+      conversation_id: "tb_conv_1",
+      message_id: "tb_msg_1",
+      content: "When will my order ship?",
+      send_time: "2026-06-06T05:00:00.000Z",
+    };
+    const rawBody = Buffer.from(JSON.stringify(body));
+    const controller = new RealChannelController(
+      new ChannelWebhookSecurityService({} as PrismaService),
+      new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
+      persistenceStore({
+        receipts,
+        normalizedEvents,
+        afterSalesCases: [],
+        caseMessages: [],
+        caseActions: [],
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        controller.handleEvent(
+          "taobao",
+          signedHeaders(rawBody, { eventId: "not_allowlisted_event" }),
+          body,
+          { rawBody },
+        ),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 403,
+    );
+    assert.strictEqual(receipts.length, 0);
+    assert.strictEqual(normalizedEvents.length, 0);
+
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
+    await controller.handleEvent(
+      "taobao",
+      signedHeaders(rawBody, { eventId: "event_1" }),
+      body,
+      { rawBody },
+    );
+
+    assert.strictEqual(receipts.length, 1);
+    assert.strictEqual(normalizedEvents.length, 1);
+  });
+
   it("does not spend rate-limit quota for invalid signatures", async () => {
     process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
     process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE = "1";
@@ -198,6 +263,7 @@ describe("RealChannelController", () => {
         secret: "real_channel_secret_123",
       },
     ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
     const receipts: unknown[] = [];
     const normalizedEvents: unknown[] = [];
     const body = {
@@ -271,6 +337,15 @@ function signedHeaders(
       bodySha256: sha256Hex(rawBody),
     }),
   };
+}
+
+function taobaoTenantAllowlist() {
+  return JSON.stringify([
+    {
+      channel: "taobao",
+      tenantId: "tenant_1",
+    },
+  ]);
 }
 
 function persistenceStore({

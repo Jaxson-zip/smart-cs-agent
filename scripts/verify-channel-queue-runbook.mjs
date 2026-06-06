@@ -19,7 +19,9 @@ const files = {
   webRecoverRoute: "apps/web/src/app/api/operator/channel-events/recover-stale/route.ts",
   realChannelController: "apps/api/src/channels/real-channel.controller.ts",
   realChannelRateLimitService: "apps/api/src/channels/real-channel-rate-limit.service.ts",
+  channelWebhookSecurityService: "apps/api/src/channels/channel-webhook-security.service.ts",
   apiConfig: "apps/api/src/config/api-config.ts",
+  sharedApi: "packages/shared/src/api.ts",
 };
 
 const required = [];
@@ -98,6 +100,7 @@ const envVars = [
   ...queueEnvVars,
   "REAL_CHANNEL_WEBHOOKS_ENABLED",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
 ];
@@ -167,13 +170,16 @@ mustContainAll("public API surface safety", content.publicApi, [
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
   "HTTP 429 responses must not write replay receipts",
   "Production real-channel webhook intake fails closed",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "per process",
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR28 Real-Channel Gray-Release Allowlist",
   "PR26 Production Real-Channel Intake Gates",
   "NODE_ENV=production",
   "REAL_CHANNEL_WEBHOOKS_ENABLED=true",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
   "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
   "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
@@ -186,12 +192,24 @@ mustContainAll("api config rate limit", content.apiConfig, [
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
   "REAL_CHANNEL_WEBHOOKS_ENABLED",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
   "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
   "productionRealChannelIntakeIssues",
   "realChannelWebhookRateLimitPerMinute",
   "realChannelWebhooksEnabled",
   ".min(0)",
+]);
+mustContainAll("channel webhook security allowlist", content.channelWebhookSecurityService, [
+  "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+  "assertAllowlisted",
+  "allowlistedChannels",
+  "allowlistedPairCount",
+  "Real channel webhook tenant is not allowlisted",
+]);
+mustContainAll("shared readiness allowlist schema", content.sharedApi, [
+  "allowlistedChannels",
+  "allowlistedPairCount",
 ]);
 mustContainAll("real channel controller rate limit", content.realChannelController, [
   "RealChannelRateLimitService",

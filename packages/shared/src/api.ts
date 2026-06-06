@@ -22,6 +22,8 @@ export const HealthReadinessResponseSchema = z.object({
         status: z.enum(["ok", "disabled", "misconfigured"]),
         enabled: z.boolean(),
         configuredChannels: z.array(z.string()),
+        allowlistedChannels: z.array(z.string()).optional(),
+        allowlistedPairCount: z.number().optional(),
         message: z.string().optional(),
       })
       .optional(),

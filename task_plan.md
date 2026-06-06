@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR27 - Production Readiness Verifier
+## Current Stage: PR28 - Real-Channel Gray-Release Allowlist
 
 Status: verified
 
-PR27 adds an executable production preflight. The goal is to make launch readiness checkable through `npm run verify:production-readiness`, covering production env shape, dangerous sandbox/demo toggles, operator identity boundaries, real-channel intake gates, and optional live readiness.
+PR28 adds a merchant/channel allowlist gate for signed real-channel webhook intake. The goal is to let one real channel/tenant pair be opened deliberately without treating every configured secret as live traffic, while still keeping the path normalized-only and human-reviewed.
 
 ### PR16 Scope
 
@@ -62,10 +62,11 @@ PR27 adds an executable production preflight. The goal is to make launch readine
 - [x] PR25 real-channel webhook rate limit.
 - [x] PR26 production real-channel intake gates.
 - [x] PR27 production readiness verifier.
+- [x] PR28 real-channel gray-release allowlist.
 
 ## Verification Gate
 
-Do not claim PR27 production readiness verifier complete until these pass:
+Do not claim PR28 real-channel gray-release allowlist complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -78,8 +79,8 @@ Do not claim PR27 production readiness verifier complete until these pass:
 - `npm.cmd run verify:channel-runbook`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
 - `node --check scripts/demo/real-channel-webhook-smoke.mjs`
-- Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
-- Production readiness verifier check: a dangerous production env file fails, a fully configured production env file passes with `--require-real-channel`, and the script does not print secret values.
+- Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
+- Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`

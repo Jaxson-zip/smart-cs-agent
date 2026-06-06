@@ -16,7 +16,13 @@ const channelSecretSchema = z.object({
   secret: z.string().min(12),
 });
 
+const channelAllowlistItemSchema = z.object({
+  channel: z.string().min(1),
+  tenantId: z.string().min(1),
+});
+
 const channelSecretsSchema = z.array(channelSecretSchema);
+const channelAllowlistSchema = z.array(channelAllowlistItemSchema);
 const boundaryIdSchema = z
   .string()
   .trim()
@@ -71,6 +77,8 @@ export type ChannelWebhookReadiness = {
   status: "ok" | "disabled" | "misconfigured";
   enabled: boolean;
   configuredChannels: string[];
+  allowlistedChannels?: string[];
+  allowlistedPairCount?: number;
   message?: string;
 };
 
@@ -144,6 +152,8 @@ export class ChannelWebhookSecurityService {
       throw new UnauthorizedException("Real channel webhook signature is invalid");
     }
 
+    assertAllowlisted(env, channel, tenantId);
+
     return {
       channel,
       tenantId,
@@ -171,23 +181,60 @@ export class ChannelWebhookSecurityService {
           status: "misconfigured",
           enabled: true,
           configuredChannels: [],
+          allowlistedChannels: [],
+          allowlistedPairCount: 0,
           message: "No real channel webhook secrets are configured",
+        };
+      }
+
+      const allowlist = parseAllowlist(env);
+      if (allowlist.length === 0) {
+        return {
+          status: "misconfigured",
+          enabled: true,
+          configuredChannels: configuredChannels(secrets),
+          allowlistedChannels: [],
+          allowlistedPairCount: 0,
+          message: "No real channel webhook allowlist is configured",
+        };
+      }
+
+      const secretsByBoundary = new Set(
+        secrets.map((secret) => boundaryKey(secret.channel, secret.tenantId)),
+      );
+      const hasAllowlistWithoutSecret = allowlist.some(
+        (item) => !secretsByBoundary.has(boundaryKey(item.channel, item.tenantId)),
+      );
+      if (hasAllowlistWithoutSecret) {
+        return {
+          status: "misconfigured",
+          enabled: true,
+          configuredChannels: configuredChannels(secrets),
+          allowlistedChannels: configuredChannels(allowlist),
+          allowlistedPairCount: allowlist.length,
+          message: "Real channel webhook allowlist includes unconfigured tenants",
         };
       }
 
       return {
         status: "ok",
         enabled: true,
-        configuredChannels: [
-          ...new Set(secrets.map((secret) => secret.channel).sort()),
-        ],
+        configuredChannels: configuredChannels(secrets),
+        allowlistedChannels: configuredChannels(allowlist),
+        allowlistedPairCount: allowlist.length,
       };
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === "invalid_allowlist"
+          ? "Real channel webhook allowlist is invalid"
+          : "Real channel webhook secrets are invalid";
       return {
         status: "misconfigured",
         enabled: true,
         configuredChannels: [],
-        message: "Real channel webhook secrets are invalid",
+        allowlistedChannels: [],
+        allowlistedPairCount: 0,
+        message,
       };
     }
   }
@@ -315,6 +362,30 @@ function findSecret(
   return secret.secret;
 }
 
+function assertAllowlisted(
+  env: NodeJS.ProcessEnv,
+  channel: string,
+  tenantId: string,
+) {
+  let allowlist: z.infer<typeof channelAllowlistSchema>;
+  try {
+    allowlist = parseAllowlist(env);
+  } catch {
+    throw new ForbiddenException("Real channel webhook allowlist is misconfigured");
+  }
+
+  if (allowlist.length === 0) {
+    throw new ForbiddenException("Real channel webhook allowlist is not configured");
+  }
+
+  const allowed = allowlist.some(
+    (item) => item.channel === channel && item.tenantId === tenantId,
+  );
+  if (!allowed) {
+    throw new ForbiddenException("Real channel webhook tenant is not allowlisted");
+  }
+}
+
 function assertBoundaryId(value: string | undefined, label: string) {
   const parsed = boundaryIdSchema.safeParse(value);
   if (!parsed.success) {
@@ -329,6 +400,27 @@ function parseSecrets(env: NodeJS.ProcessEnv) {
   if (!raw) return [];
 
   return channelSecretsSchema.parse(JSON.parse(raw));
+}
+
+function parseAllowlist(env: NodeJS.ProcessEnv) {
+  const raw = env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
+  if (!raw) return [];
+
+  try {
+    return channelAllowlistSchema.parse(JSON.parse(raw));
+  } catch {
+    throw new Error("invalid_allowlist");
+  }
+}
+
+function configuredChannels(
+  values: Array<{ channel: string; tenantId: string }>,
+) {
+  return [...new Set(values.map((value) => value.channel).sort())];
+}
+
+function boundaryKey(channel: string, tenantId: string) {
+  return JSON.stringify([channel, tenantId]);
 }
 
 function readHeader(

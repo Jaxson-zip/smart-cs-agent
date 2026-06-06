@@ -116,3 +116,7 @@
 - Updated production-readiness docs and planning files to make the verifier part of the launch gate.
 - Addressed independent review findings by redacting unknown CLI argument values, validating `OPERATOR_API_KEYS[*].role`, and requiring `checks.channelWebhooks.status=ok` when `--require-real-channel` is combined with live `--api` readiness.
 - Final PR27 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, production-readiness verifier bad-env/good-env checks, unknown-argument redaction check, and live `/health/ready` checks for both success and channel-webhook subcheck failure.
+- Started PR28 real-channel gray-release allowlist.
+- Added `REAL_CHANNEL_WEBHOOK_ALLOWLIST` as an exact `channel + tenantId` gate after signature verification and before rate limiting or persistence.
+- Updated production startup gates, production readiness verifier, readiness schema, docs, smoke instructions, and runbook verifier so real-channel intake cannot be opened without an explicit allowlisted pair.
+- Final PR28 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, production-readiness verifier missing-allowlist failure, fully allowlisted production env success, and independent code review with no findings.

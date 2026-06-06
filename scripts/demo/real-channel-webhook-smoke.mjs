@@ -123,6 +123,9 @@ async function postSignedWebhook() {
     console.error(
       `  REAL_CHANNEL_WEBHOOK_SECRETS='[{"channel":"${channel}","tenantId":"${tenantId}","secret":"<matching-secret>"}]'`,
     );
+    console.error(
+      `  REAL_CHANNEL_WEBHOOK_ALLOWLIST='[{"channel":"${channel}","tenantId":"${tenantId}"}]'`,
+    );
     if (replay) {
       console.error("Replay smoke also requires:");
       console.error("  OPERATOR_API_KEYS with an operator key for the same tenant");

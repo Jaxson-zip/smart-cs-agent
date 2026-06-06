@@ -19,7 +19,7 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `GET /api/operator/channel-events/audit-summary` | Same queue audit summary through the Web BFF | Admin operator session required |
 | `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
-| `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC required; optional per-process rate limit |
+| `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC and `REAL_CHANNEL_WEBHOOK_ALLOWLIST` required; optional per-process rate limit |
 
 ## Queue States
 
@@ -46,6 +46,7 @@ Configure queue pressure through environment variables:
 | `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS` | Degrade readiness when the oldest pending event age is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD` | Degrade readiness when stale processing count is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_AFTER_MINUTES` | Age at which `processing` is considered stale | Defaults to `15` |
+| `REAL_CHANNEL_WEBHOOK_ALLOWLIST` | JSON array of tenant/channel pairs that may enter real-channel intake | Empty fails closed when real webhooks are enabled |
 | `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE` | Per-process signed webhook intake limit for each `channel:tenantId` pair | `0` disables the application-level limit |
 
 Readiness can report these degraded reasons:
@@ -60,11 +61,18 @@ Signed real-channel webhook intake can be protected with `REAL_CHANNEL_WEBHOOK_R
 
 This is an application-level protection for the API process. Production deployments should still add gateway, CDN, or load-balancer rate limits because multi-process deployments do not share this in-memory counter.
 
+## Gray-Release Allowlist
+
+Signed real-channel webhook intake must also pass `REAL_CHANNEL_WEBHOOK_ALLOWLIST`. The allowlist is a JSON array of exact tenant/channel pairs, for example `[{"channel":"taobao","tenantId":"tenant_1"}]`. A webhook that is correctly signed but not allowlisted returns HTTP 403 after signature verification and before rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
+
+Readiness may expose `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back one merchant without closing the endpoint globally, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST` and redeploy/restart the API. To close all real-channel intake, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`.
+
 ## Production Intake Gates
 
 When `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, the API must fail closed unless all production intake gates are configured:
 
 - `REAL_CHANNEL_WEBHOOK_SECRETS`: at least one tenant/channel secret.
+- `REAL_CHANNEL_WEBHOOK_ALLOWLIST`: at least one tenant/channel pair, and every pair must have a matching secret.
 - `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`: a positive per-minute application limit.
 - `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`: an explicit positive freshness window.
 - `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD`: a backlog warning threshold.
@@ -72,7 +80,7 @@ When `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, the API mus
 - `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD`: a stale-processing warning threshold.
 - `CHANNEL_QUEUE_STALE_AFTER_MINUTES`: a stale-processing age window.
 
-These gates protect the real-channel intake from being enabled without rate limiting and queue observability. They do not replace provider allowlists, gateway/CDN rate limits, or the later production readiness verifier.
+These gates protect the real-channel intake from being enabled without a controlled merchant rollout, rate limiting, and queue observability. They do not replace provider allowlists, gateway/CDN rate limits, or the later production readiness verifier.
 
 ## Triage Steps
 

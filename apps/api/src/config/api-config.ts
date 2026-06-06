@@ -30,6 +30,11 @@ const channelWebhookSecretSchema = z.object({
   secret: z.string().min(12),
 });
 
+const channelWebhookAllowlistItemSchema = z.object({
+  channel: z.string().min(1),
+  tenantId: z.string().min(1),
+});
+
 const apiConfigSchema = z.object({
   NODE_ENV: z.string().optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
@@ -171,10 +176,32 @@ function productionRealChannelIntakeIssues(
 
   const issues: string[] = [];
 
-  if (parseWebhookSecrets(env.REAL_CHANNEL_WEBHOOK_SECRETS).length === 0) {
+  const webhookSecrets = parseWebhookSecrets(env.REAL_CHANNEL_WEBHOOK_SECRETS);
+  if (webhookSecrets.length === 0) {
     issues.push(
       "REAL_CHANNEL_WEBHOOK_SECRETS: production real-channel intake requires at least one configured tenant secret",
     );
+  }
+  const webhookAllowlist = parseWebhookAllowlist(
+    env.REAL_CHANNEL_WEBHOOK_ALLOWLIST,
+  );
+  if (webhookAllowlist.length === 0) {
+    issues.push(
+      "REAL_CHANNEL_WEBHOOK_ALLOWLIST: production real-channel intake requires at least one allowlisted tenant/channel pair",
+    );
+  } else {
+    const secretBoundaries = new Set(
+      webhookSecrets.map((item) => boundaryKey(item.channel, item.tenantId)),
+    );
+    if (
+      webhookAllowlist.some(
+        (item) => !secretBoundaries.has(boundaryKey(item.channel, item.tenantId)),
+      )
+    ) {
+      issues.push(
+        "REAL_CHANNEL_WEBHOOK_ALLOWLIST: every allowlisted tenant/channel pair must have a matching webhook secret",
+      );
+    }
   }
   const rateLimitPerMinute = readRequiredNonNegativeInt(
     env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
@@ -221,6 +248,20 @@ function parseWebhookSecrets(value: string | undefined) {
   } catch {
     return [];
   }
+}
+
+function parseWebhookAllowlist(value: string | undefined) {
+  if (!value) return [];
+
+  try {
+    return z.array(channelWebhookAllowlistItemSchema).parse(JSON.parse(value));
+  } catch {
+    return [];
+  }
+}
+
+function boundaryKey(channel: string, tenantId: string) {
+  return JSON.stringify([channel, tenantId]);
 }
 
 function readRequiredPositiveInt(value: string | undefined) {
