@@ -13,6 +13,7 @@ import {
   ChannelWebhookSecurityService,
 } from "./channel-webhook-security.service";
 import { RealChannelNormalizerService } from "./real-channel-normalizer.service";
+import { RealChannelRateLimitService } from "./real-channel-rate-limit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 export type QueuedRealChannelWebhook = {
@@ -30,6 +31,7 @@ export class RealChannelController {
   constructor(
     private readonly security: ChannelWebhookSecurityService,
     private readonly normalizer: RealChannelNormalizerService,
+    private readonly rateLimit: RealChannelRateLimitService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -46,6 +48,10 @@ export class RealChannelController {
       headers,
       body,
       rawBody: request?.rawBody,
+    });
+    this.rateLimit.assertAllowed({
+      channel: verified.channel,
+      tenantId: verified.tenantId,
     });
 
     const normalizedEvent = this.normalizer.normalizeIncoming({

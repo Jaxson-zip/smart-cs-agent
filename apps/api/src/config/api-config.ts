@@ -38,6 +38,11 @@ const apiConfigSchema = z.object({
     .optional()
     .default("false")
     .transform((value) => value === "true"),
+  REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(0),
 });
 
 const webOriginSchema = z.string().url().default("http://localhost:3000");
@@ -49,6 +54,7 @@ export type ApiConfig = {
   wecomSandboxEnabled: boolean;
   operatorApiKeys: string;
   allowInsecureOperatorHeaders: boolean;
+  realChannelWebhookRateLimitPerMinute: number;
 };
 
 type LoadConfigOptions = {
@@ -83,6 +89,8 @@ export function loadApiConfig(
     wecomSandboxEnabled: parsed.data.WECOM_SANDBOX_ENABLED,
     operatorApiKeys: parsed.data.OPERATOR_API_KEYS,
     allowInsecureOperatorHeaders: parsed.data.ALLOW_INSECURE_OPERATOR_HEADERS,
+    realChannelWebhookRateLimitPerMinute:
+      parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
   };
 }
 

@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR24 - Queue Audit Summary
+## Current Stage: PR25 - Real-Channel Webhook Rate Limit
 
 Status: verified
 
-PR24 adds an admin-facing queue audit summary over a bounded time window. The goal is to let admins see how many real-channel review messages were generated into cases, marked not handled, and recovered from stale processing, plus per-operator activity totals, while keeping browser responses sanitized and avoiding Agent/Action/customer-visible side effects.
+PR25 adds an application-level intake guard for signed real-channel webhooks. The goal is to limit bursts per `channel:tenantId` after HMAC verification and before persistence, returning HTTP 429 without writing receipts, normalized events, cases, actions, or customer-visible replies.
 
 ### PR16 Scope
 
@@ -59,10 +59,11 @@ PR24 adds an admin-facing queue audit summary over a bounded time window. The go
 - [x] PR22 operator queue operations status.
 - [x] PR23 queue operation audit records.
 - [x] PR24 queue audit summary.
+- [x] PR25 real-channel webhook rate limit.
 
 ## Verification Gate
 
-Do not claim PR24 queue audit summary complete until these pass:
+Do not claim PR25 real-channel webhook rate limit complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -75,6 +76,7 @@ Do not claim PR24 queue audit summary complete until these pass:
 - `npm.cmd run verify:channel-runbook`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
 - `node --check scripts/demo/real-channel-webhook-smoke.mjs`
+- Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`

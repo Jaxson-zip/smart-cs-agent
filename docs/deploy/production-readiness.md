@@ -1,5 +1,13 @@
 # Production-Readiness Baseline
 
+## PR25 Real-Channel Webhook Rate Limit
+
+Signed real-channel webhook intake can now be protected with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`. The default is `0`, which keeps the limiter disabled for local development and existing sandboxes. A positive value enables a per-process, per-minute counter for each `channel:tenantId` pair.
+
+The limiter runs only after HMAC verification succeeds and before `ChannelWebhookReceipt` or `NormalizedChannelEvent` writes. When the limit is exceeded, the endpoint returns HTTP 429 and must not create receipts, normalized events, after-sales cases, actions, or customer-visible replies.
+
+This is an application-level guardrail, not the final commercial traffic-control layer. Production deployments should still add gateway, CDN, load-balancer, or shared-store rate limits because multiple API replicas do not share this in-memory counter.
+
 ## PR24 Queue Audit Summary
 
 Admin operators can now review bounded queue handling totals through `GET /v1/channel-events/audit-summary` and the same-origin BFF route `GET /api/operator/channel-events/audit-summary`. The summary includes generated-case counts, intentionally not-handled counts, stale recovery run counts, recovered event counts, and per-operator activity totals. Custom summary windows are capped at 24 hours.

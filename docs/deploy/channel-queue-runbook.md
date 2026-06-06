@@ -19,6 +19,7 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `GET /api/operator/channel-events/audit-summary` | Same queue audit summary through the Web BFF | Admin operator session required |
 | `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
+| `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC required; optional per-process rate limit |
 
 ## Queue States
 
@@ -45,12 +46,19 @@ Configure queue pressure through environment variables:
 | `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS` | Degrade readiness when the oldest pending event age is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD` | Degrade readiness when stale processing count is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_AFTER_MINUTES` | Age at which `processing` is considered stale | Defaults to `15` |
+| `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE` | Per-process signed webhook intake limit for each `channel:tenantId` pair | `0` disables the application-level limit |
 
 Readiness can report these degraded reasons:
 
 - `pending_count_above_threshold`
 - `oldest_pending_age_above_threshold`
 - `stale_processing_above_threshold`
+
+## Intake Rate Limit
+
+Signed real-channel webhook intake can be protected with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`. The limit is checked after HMAC verification and before any replay receipt or normalized event is written. When a tenant/channel pair exceeds the configured per-minute limit, the API returns HTTP 429 and does not persist the webhook.
+
+This is an application-level protection for the API process. Production deployments should still add gateway, CDN, or load-balancer rate limits because multi-process deployments do not share this in-memory counter.
 
 ## Triage Steps
 
@@ -198,6 +206,8 @@ The Web BFF route may return tenant-scoped counts, timestamps, and age seconds t
 Queue operation audit records are admin-only and read-only. They may return sanitized recovery counts, operator identity, timestamps, and queue-after counts. They must not expose raw audit JSON, tenant IDs, event ID lists, normalized event IDs, source names, provider payloads, external conversation IDs, external message IDs, operator API keys, or secrets.
 
 Queue audit summaries are admin-only and read-only. They may return bounded windows up to 24 hours, aggregate counts, operator IDs, and last activity timestamps. They must not expose raw audit JSON, tenant IDs, event ID lists, normalized event IDs, source names, provider payloads, customer messages, external conversation IDs, external message IDs, operator API keys, or secrets.
+
+Real-channel webhook rate limiting must run after signature verification and before persistence. A 429 response must not write replay receipts, must not write normalized channel events, after-sales cases, actions, audit records with payloads, or customer-visible replies.
 
 ## Verification
 

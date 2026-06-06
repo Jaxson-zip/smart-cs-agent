@@ -15,6 +15,7 @@ describe("loadApiConfig", () => {
       wecomSandboxEnabled: true,
       operatorApiKeys: "[]",
       allowInsecureOperatorHeaders: false,
+      realChannelWebhookRateLimitPerMinute: 0,
     });
   });
 
@@ -24,12 +25,14 @@ describe("loadApiConfig", () => {
       WEB_ORIGIN: "https://console.example.com",
       DATABASE_URL: "file:./dev.db",
       WECOM_SANDBOX_ENABLED: "false",
+      REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "120",
     });
 
     assert.strictEqual(config.port, 4200);
     assert.strictEqual(config.webOrigin, "https://console.example.com");
     assert.strictEqual(config.databaseUrl, "file:./dev.db");
     assert.strictEqual(config.wecomSandboxEnabled, false);
+    assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 120);
   });
 
   it("lets explicit environment values override local .env defaults", () => {
@@ -90,6 +93,17 @@ describe("loadApiConfig", () => {
           OPERATOR_API_KEYS: "not-json",
         }),
       /OPERATOR_API_KEYS/,
+    );
+  });
+
+  it("rejects invalid real-channel webhook rate limit configuration", () => {
+    assert.throws(
+      () =>
+        loadApiConfig({
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+          REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "-1",
+        }),
+      /REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE/,
     );
   });
 });

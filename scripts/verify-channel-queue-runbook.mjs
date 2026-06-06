@@ -15,6 +15,9 @@ const files = {
   webOperationAuditsRoute: "apps/web/src/app/api/operator/channel-events/operation-audits/route.ts",
   webAuditSummaryRoute: "apps/web/src/app/api/operator/channel-events/audit-summary/route.ts",
   webRecoverRoute: "apps/web/src/app/api/operator/channel-events/recover-stale/route.ts",
+  realChannelController: "apps/api/src/channels/real-channel.controller.ts",
+  realChannelRateLimitService: "apps/api/src/channels/real-channel-rate-limit.service.ts",
+  apiConfig: "apps/api/src/config/api-config.ts",
 };
 
 const required = [];
@@ -79,13 +82,19 @@ const endpoints = [
   "/api/operator/channel-events/operation-audits",
   "/api/operator/channel-events/audit-summary",
   "/api/operator/channel-events/recover-stale",
+  "/v1/channels/:channel/webhook/events",
 ];
 
-const envVars = [
+const queueEnvVars = [
   "CHANNEL_QUEUE_PENDING_WARN_THRESHOLD",
   "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS",
   "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD",
   "CHANNEL_QUEUE_STALE_AFTER_MINUTES",
+];
+
+const envVars = [
+  ...queueEnvVars,
+  "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
 ];
 
 const degradedReasons = [
@@ -106,6 +115,9 @@ const safetyBoundaries = [
   "must not expose external message IDs",
   "must not expose operator API keys",
   "must not expose secrets",
+  "HTTP 429",
+  "must not write replay receipts",
+  "must not write normalized channel events",
 ];
 
 mustContainAll("runbook endpoints", content.runbook, endpoints);
@@ -131,6 +143,8 @@ mustContainAll("runbook operations", content.runbook, [
   "Recheck readiness",
   "Review queue audit summary",
   "no longer than 24 hours",
+  "Intake Rate Limit",
+  "per-process",
 ]);
 
 mustContainAll(".env.example", content.envExample, envVars);
@@ -142,9 +156,30 @@ mustContainAll("public API surface safety", content.publicApi, [
   "Real-channel queue audit summaries are admin-only",
   "Readiness may include aggregate real-channel queue health",
   "bounded windows up to 24 hours",
+  "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  "HTTP 429 responses must not write replay receipts",
+  "per process",
 ]);
 
-mustContainAll("health controller env vars", content.healthController, envVars);
+mustContainAll("api config rate limit", content.apiConfig, [
+  "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  "realChannelWebhookRateLimitPerMinute",
+  ".min(0)",
+]);
+mustContainAll("real channel controller rate limit", content.realChannelController, [
+  "RealChannelRateLimitService",
+  "this.rateLimit.assertAllowed",
+  "channel: verified.channel",
+  "tenantId: verified.tenantId",
+]);
+mustContainAll("real channel rate limit service", content.realChannelRateLimitService, [
+  "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  "HttpStatus.TOO_MANY_REQUESTS",
+  "JSON.stringify([input.channel, input.tenantId])",
+  "cleanupExpiredBuckets",
+]);
+
+mustContainAll("health controller env vars", content.healthController, queueEnvVars);
 mustContainAll("channel controller routes", content.channelController, [
   '@Controller("v1/channel-events")',
   '@Get("metrics")',

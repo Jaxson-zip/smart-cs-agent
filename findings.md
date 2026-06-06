@@ -4,6 +4,11 @@
 
 - PR20 keeps readiness operationally useful: queue pressure should degrade readiness without pretending the process is down, while DB failure remains unhealthy/503. Queue readiness must stay aggregate and tenant-free.
 - PR24 adds admin queue audit summaries as operational aggregates only: summary responses may expose counts, bounded windows up to 24 hours, operator IDs, and last activity timestamps, but must not expose tenant IDs, source names, raw audit JSON, payloads, event IDs, external IDs, API keys, secrets, or customer message text.
+- PR25 adds application-level real-channel webhook rate limiting after HMAC verification and before persistence. A 429 response must not write receipts, normalized events, after-sales cases, actions, or customer-visible replies.
+- PR25's limiter is intentionally per process. It reduces accidental bursts and simple abuse, but commercial production still needs gateway/CDN/load-balancer or shared-store rate limits before true webhook traffic is opened.
+- PR25 rate-limit keys must be structured, not delimiter-concatenated. Channel and tenant IDs can contain separators, so `JSON.stringify([channel, tenantId])` avoids cross-pair quota collisions.
+- Invalid signatures must not consume rate-limit quota. Signature failures should stop before the limiter so spoofed requests cannot starve a valid tenant/channel pair.
+- After PR25, the highest-value next slices are PR26 production intake gates, PR27 production readiness verifier, PR28 real-provider gray adapter package, PR29 commercial identity/RBAC closure, and PR30 monitoring/kill-switch/rollback rehearsal.
 - PR21 makes queue operations auditable as documentation: the runbook must cover readiness, metrics, stale recovery, degraded reason codes, and data-leak boundaries, and the verifier should fail if those operational facts drift out of the docs or source.
 - PR22 closes the operator visibility gap for queue pressure: degraded readiness and queue metrics should be visible in the workbench as product-language status, while stale recovery remains admin-only through the BFF.
 - PR23 closes the recovery accountability gap: stale recovery should leave an admin-visible sanitized record showing actor, recovered count, cutoff, and queue-after health without exposing tenant IDs, raw audit JSON, event IDs, source names, payloads, external IDs, API keys, or secrets.

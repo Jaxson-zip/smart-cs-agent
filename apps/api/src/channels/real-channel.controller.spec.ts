@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { HttpException } from "@nestjs/common";
 import { afterEach, describe, it } from "node:test";
 import {
   ChannelWebhookSecurityService,
@@ -7,15 +8,21 @@ import {
 } from "./channel-webhook-security.service";
 import { RealChannelNormalizerService } from "./real-channel-normalizer.service";
 import { RealChannelController } from "./real-channel.controller";
+import { RealChannelRateLimitService } from "./real-channel-rate-limit.service";
 import type { PrismaService } from "../prisma/prisma.service";
 
 const originalEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
 const originalSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
+const originalRateLimit = process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE;
 
 describe("RealChannelController", () => {
   afterEach(() => {
     restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", originalEnabled);
     restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", originalSecrets);
+    restoreEnv(
+      "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+      originalRateLimit,
+    );
   });
 
   it("normalizes signed real-channel webhooks without processing customer-visible actions", async () => {
@@ -44,6 +51,7 @@ describe("RealChannelController", () => {
     const controller = new RealChannelController(
       new ChannelWebhookSecurityService({} as PrismaService),
       new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
       persistenceStore({
         receipts,
         normalizedEvents,
@@ -106,6 +114,7 @@ describe("RealChannelController", () => {
     const controller = new RealChannelController(
       new ChannelWebhookSecurityService({} as PrismaService),
       new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
       persistenceStore({
         receipts,
         normalizedEvents,
@@ -122,15 +131,135 @@ describe("RealChannelController", () => {
     assert.strictEqual(receipts.length, 0);
     assert.strictEqual(normalizedEvents.length, 0);
   });
+
+  it("rate-limits signed real-channel webhooks before writing receipts or normalized events", async () => {
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE = "1";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "real_channel_secret_123",
+      },
+    ]);
+    const receipts: unknown[] = [];
+    const normalizedEvents: unknown[] = [];
+    const body = {
+      seller_id: "tenant_1",
+      buyer_nick: "Lin",
+      conversation_id: "tb_conv_1",
+      message_id: "tb_msg_1",
+      content: "When will my order ship?",
+      send_time: "2026-06-06T05:00:00.000Z",
+    };
+    const rawBody = Buffer.from(JSON.stringify(body));
+    const controller = new RealChannelController(
+      new ChannelWebhookSecurityService({} as PrismaService),
+      new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
+      persistenceStore({
+        receipts,
+        normalizedEvents,
+        afterSalesCases: [],
+        caseMessages: [],
+        caseActions: [],
+      }),
+    );
+
+    await controller.handleEvent(
+      "taobao",
+      signedHeaders(rawBody, { eventId: "event_1" }),
+      body,
+      { rawBody },
+    );
+    await assert.rejects(
+      () =>
+        controller.handleEvent(
+          "taobao",
+          signedHeaders(rawBody, { eventId: "event_2" }),
+          body,
+          { rawBody },
+        ),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 429,
+    );
+
+    assert.strictEqual(receipts.length, 1);
+    assert.strictEqual(normalizedEvents.length, 1);
+  });
+
+  it("does not spend rate-limit quota for invalid signatures", async () => {
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE = "1";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "real_channel_secret_123",
+      },
+    ]);
+    const receipts: unknown[] = [];
+    const normalizedEvents: unknown[] = [];
+    const body = {
+      seller_id: "tenant_1",
+      buyer_nick: "Lin",
+      conversation_id: "tb_conv_1",
+      message_id: "tb_msg_1",
+      content: "When will my order ship?",
+      send_time: "2026-06-06T05:00:00.000Z",
+    };
+    const rawBody = Buffer.from(JSON.stringify(body));
+    const controller = new RealChannelController(
+      new ChannelWebhookSecurityService({} as PrismaService),
+      new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
+      persistenceStore({
+        receipts,
+        normalizedEvents,
+        afterSalesCases: [],
+        caseMessages: [],
+        caseActions: [],
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        controller.handleEvent(
+          "taobao",
+          {
+            ...signedHeaders(rawBody, { eventId: "invalid_signature_event" }),
+            "x-smartcs-signature": "v1=invalid",
+          },
+          body,
+          { rawBody },
+        ),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 401,
+    );
+
+    await controller.handleEvent(
+      "taobao",
+      signedHeaders(rawBody, { eventId: "event_1" }),
+      body,
+      { rawBody },
+    );
+
+    assert.strictEqual(receipts.length, 1);
+    assert.strictEqual(normalizedEvents.length, 1);
+  });
 });
 
-function signedHeaders(rawBody: Buffer) {
+function signedHeaders(
+  rawBody: Buffer,
+  input: { eventId?: string } = {},
+) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  const eventId = input.eventId ?? "event_1";
 
   return {
     "x-smartcs-signature-version": "v1",
     "x-smartcs-tenant-id": "tenant_1",
-    "x-smartcs-event-id": "event_1",
+    "x-smartcs-event-id": eventId,
     "x-smartcs-timestamp": timestamp,
     "x-smartcs-signature": signWebhook({
       secret: "real_channel_secret_123",
@@ -138,7 +267,7 @@ function signedHeaders(rawBody: Buffer) {
       channel: "taobao",
       tenantId: "tenant_1",
       timestamp,
-      eventId: "event_1",
+      eventId,
       bodySha256: sha256Hex(rawBody),
     }),
   };

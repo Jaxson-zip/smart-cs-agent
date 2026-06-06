@@ -4,6 +4,7 @@ import { ChannelWebhookSecurityService } from "./channel-webhook-security.servic
 import { ChannelEventReviewService } from "./channel-event-review.service";
 import { ChannelEventsController } from "./channel-events.controller";
 import { RealChannelNormalizerService } from "./real-channel-normalizer.service";
+import { RealChannelRateLimitService } from "./real-channel-rate-limit.service";
 import { RealChannelController } from "./real-channel.controller";
 
 @Module({
@@ -12,6 +13,7 @@ import { RealChannelController } from "./real-channel.controller";
   providers: [
     ChannelWebhookSecurityService,
     RealChannelNormalizerService,
+    RealChannelRateLimitService,
     ChannelEventReviewService,
   ],
   exports: [ChannelWebhookSecurityService, ChannelEventReviewService],
