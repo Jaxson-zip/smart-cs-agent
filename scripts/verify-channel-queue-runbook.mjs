@@ -99,6 +99,7 @@ const queueEnvVars = [
 const envVars = [
   ...queueEnvVars,
   "REAL_CHANNEL_WEBHOOKS_ENABLED",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
   "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
@@ -171,13 +172,17 @@ mustContainAll("public API surface safety", content.publicApi, [
   "HTTP 429 responses must not write replay receipts",
   "Production real-channel webhook intake fails closed",
   "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
   "per process",
+  "HTTP 503 kill-switch responses must not spend application rate-limit quota",
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR30 Real-Channel Emergency Kill Switch",
   "PR28 Real-Channel Gray-Release Allowlist",
   "PR26 Production Real-Channel Intake Gates",
   "NODE_ENV=production",
   "REAL_CHANNEL_WEBHOOKS_ENABLED=true",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
   "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
@@ -191,6 +196,7 @@ mustContainAll("production readiness intake gates", content.productionReadiness,
 mustContainAll("api config rate limit", content.apiConfig, [
   "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
   "REAL_CHANNEL_WEBHOOKS_ENABLED",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
   "REAL_CHANNEL_WEBHOOK_SECRETS",
   "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
   "REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS",
@@ -198,10 +204,13 @@ mustContainAll("api config rate limit", content.apiConfig, [
   "productionRealChannelIntakeIssues",
   "realChannelWebhookRateLimitPerMinute",
   "realChannelWebhooksEnabled",
+  "realChannelWebhookKillSwitch",
   ".min(0)",
 ]);
 mustContainAll("channel webhook security allowlist", content.channelWebhookSecurityService, [
   "REAL_CHANNEL_WEBHOOK_ALLOWLIST",
+  "REAL_CHANNEL_WEBHOOK_KILL_SWITCH",
+  "disabled_by_kill_switch",
   "assertAllowlisted",
   "allowlistedChannels",
   "allowlistedPairCount",
@@ -210,6 +219,7 @@ mustContainAll("channel webhook security allowlist", content.channelWebhookSecur
 mustContainAll("shared readiness allowlist schema", content.sharedApi, [
   "allowlistedChannels",
   "allowlistedPairCount",
+  "disabled_by_kill_switch",
 ]);
 mustContainAll("real channel controller rate limit", content.realChannelController, [
   "RealChannelRateLimitService",

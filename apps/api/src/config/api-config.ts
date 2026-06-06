@@ -55,6 +55,11 @@ const apiConfigSchema = z.object({
     .optional()
     .default("false")
     .transform((value) => value === "true"),
+  REAL_CHANNEL_WEBHOOK_KILL_SWITCH: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
   REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: z.coerce
     .number()
     .int()
@@ -78,6 +83,7 @@ export type ApiConfig = {
   operatorApiKeys: string;
   allowInsecureOperatorHeaders: boolean;
   realChannelWebhooksEnabled: boolean;
+  realChannelWebhookKillSwitch: boolean;
   realChannelWebhookMaxAgeSeconds: number;
   realChannelWebhookRateLimitPerMinute: number;
 };
@@ -123,6 +129,7 @@ export function loadApiConfig(
     operatorApiKeys: parsed.data.OPERATOR_API_KEYS,
     allowInsecureOperatorHeaders: parsed.data.ALLOW_INSECURE_OPERATOR_HEADERS,
     realChannelWebhooksEnabled: parsed.data.REAL_CHANNEL_WEBHOOKS_ENABLED,
+    realChannelWebhookKillSwitch: parsed.data.REAL_CHANNEL_WEBHOOK_KILL_SWITCH,
     realChannelWebhookMaxAgeSeconds:
       parsed.data.REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS,
     realChannelWebhookRateLimitPerMinute:

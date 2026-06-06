@@ -100,6 +100,15 @@ function checkStaticProductionEnv(input, options) {
       "true",
       "--require-real-channel requires REAL_CHANNEL_WEBHOOKS_ENABLED=true",
     );
+    mustNotEqual(
+      input.REAL_CHANNEL_WEBHOOK_KILL_SWITCH,
+      "true",
+      "--require-real-channel requires REAL_CHANNEL_WEBHOOK_KILL_SWITCH to be false",
+    );
+  } else if (input.REAL_CHANNEL_WEBHOOK_KILL_SWITCH === "true") {
+    warnings.push(
+      "REAL_CHANNEL_WEBHOOK_KILL_SWITCH is true; production can start, but real-channel intake is emergency-disabled.",
+    );
   }
 
   if (input.REAL_CHANNEL_WEBHOOKS_ENABLED === "true") {

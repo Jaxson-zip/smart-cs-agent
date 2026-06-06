@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR30 Real-Channel Emergency Kill Switch
+
+Real-channel intake now has an emergency shutoff. Set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true` to make `POST /v1/channels/:channel/webhook/events` fail closed with HTTP 503 before HMAC verification, rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
+
+`GET /health/ready` reports `checks.channelWebhooks.status=disabled_by_kill_switch` while preserving the same no-secret boundary: it may show channel names and allowlisted pair counts, but never tenant IDs, webhook secrets, signatures, raw request bodies, provider payloads, or customer messages. `npm run verify:production-readiness -- --require-real-channel` fails when this kill switch is true; without `--require-real-channel`, the verifier emits a warning because the operator workbench can still run while real-channel intake is intentionally emergency-disabled.
+
 ## PR29 Production Operator Identity Closure
 
 Production Web login now fails closed if `OPERATOR_IDENTITY_PROVIDER=env` or `OPERATOR_ACCOUNT_SOURCE=env` is selected. Env-backed operator accounts are local/sandbox only. A deployable environment must use `OPERATOR_IDENTITY_PROVIDER=database`, run migrations, and create the first admin account in the `OperatorAccount` table before operators can log in.
@@ -18,7 +24,7 @@ Use `npm run verify:operator-bootstrap` in CI to prove the bootstrap script dry-
 
 Real-channel intake now has a merchant/channel allowlist gate. When `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, every signed webhook must match an exact pair in `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, and every allowlisted pair must have a matching item in `REAL_CHANNEL_WEBHOOK_SECRETS`.
 
-`GET /health/ready` may report `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back a single merchant, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST`; to close all real-channel intake, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`. This allowlist only controls normalization intake. It does not enable real refunds, address changes, coupons, automated customer replies, or commerce actions.
+`GET /health/ready` may report `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back a single merchant, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST`; to close all real-channel intake for planned configuration, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`; for emergency rollback, set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`. This allowlist only controls normalization intake. It does not enable real refunds, address changes, coupons, automated customer replies, or commerce actions.
 
 `npm run demo:real-channel-smoke` now requires the server to set `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, a matching `REAL_CHANNEL_WEBHOOK_SECRETS` item, and a matching `REAL_CHANNEL_WEBHOOK_ALLOWLIST` item for the same channel and tenant. The smoke still proves only normalization intake and optional human-reviewed replay.
 
@@ -30,7 +36,7 @@ Production readiness now has an executable preflight:
 npm run verify:production-readiness -- --env-file=/secure/path/production.env --require-real-channel --api=https://api.example.com
 ```
 
-The verifier checks the production environment without printing secret values. It fails when production uses local or sandbox defaults, enables legacy demo APIs, enables offline demo data, uses insecure operator headers, uses env-backed operator accounts, keeps placeholder session or API secrets, or opens real-channel webhooks without the PR28/PR26 intake gates. When `--api` is provided, it also checks `GET /health/ready`; by default readiness must be `ok`, and `--require-real-channel` also requires a positive `checks.channelWebhooks.allowlistedPairCount`.
+The verifier checks the production environment without printing secret values. It fails when production uses local or sandbox defaults, enables legacy demo APIs, enables offline demo data, uses insecure operator headers, uses env-backed operator accounts, keeps placeholder session or API secrets, opens real-channel webhooks without the PR28/PR26 intake gates, or uses `--require-real-channel` while `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`. When `--api` is provided, it also checks `GET /health/ready`; by default readiness must be `ok`, and `--require-real-channel` also requires `checks.channelWebhooks.status=ok` plus a positive `checks.channelWebhooks.allowlistedPairCount`.
 
 Use `--require-real-channel` for a launch where real signed webhook intake must be open. Omit it for a production deployment that is ready to serve the operator workbench but has real-channel intake intentionally closed.
 
@@ -128,6 +134,7 @@ WEB_ORIGIN=http://localhost:3000
 PORT=4100
 WECOM_SANDBOX_ENABLED=true
 REAL_CHANNEL_WEBHOOKS_ENABLED=false
+REAL_CHANNEL_WEBHOOK_KILL_SWITCH=false
 REAL_CHANNEL_WEBHOOK_SECRETS=[]
 REAL_CHANNEL_WEBHOOK_ALLOWLIST=[]
 REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
@@ -155,6 +162,7 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `PORT`：API 监听端口，默认 `4100`。
 - `WECOM_SANDBOX_ENABLED`：沙盒入站模拟入口开关。本地演示可以为 `true`；生产环境未显式设为 `true` 时，`/v1/wecom/events` 默认不可用。
 - `REAL_CHANNEL_WEBHOOKS_ENABLED`：真实渠道 webhook 安全接收入口开关，默认必须为 `false`。只有在完成渠道密钥配置、迁移和安全 smoke 后才可显式设为 `true`。
+- `REAL_CHANNEL_WEBHOOK_KILL_SWITCH`：真实渠道 webhook 紧急全局关闭开关。设为 `true` 时，真实渠道入口返回 HTTP 503，且不会做签名校验、限流计数、入库、Agent 决策、动作执行或客户可见回复。
 - `REAL_CHANNEL_WEBHOOK_SECRETS`：真实渠道 webhook 租户密钥 JSON 数组，格式为 `[{"channel":"taobao","tenantId":"tenant_1","secret":"long-random-secret"}]`。该值只能放在服务端 secret 管理中，不得提交到 Git，不得暴露给浏览器。
 - `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`：真实渠道 webhook 时间窗，默认 `300` 秒。过期、未来偏移过大、重复 `eventId` 都应拒绝。
 - `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`：真实渠道 webhook 应用层限流。`0` 表示关闭；生产环境若设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true`，该值必须显式设置为正整数。
@@ -205,7 +213,7 @@ curl http://localhost:4100/health
 PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `/health`：
 
 - `GET /health/ready` 能确认 API 到数据库的路径是否可用；数据库不可用时应返回 HTTP 503。
-- `GET /health/ready` 的 `checks.channelWebhooks` 会展示真实渠道 webhook 的 readiness：默认 `disabled`，启用但缺少/损坏密钥时为 `misconfigured`，配置正确时为 `ok`。该响应只能出现渠道名，不得出现 secret、signature、raw body。
+- `GET /health/ready` 的 `checks.channelWebhooks` 会展示真实渠道 webhook 的 readiness：默认 `disabled`，启用但缺少/损坏密钥时为 `misconfigured`，配置正确时为 `ok`，应急关闭时为 `disabled_by_kill_switch`。该响应只能出现渠道名，不得出现 tenant ID、secret、signature、raw body。
 - `POST /v1/channels/:channel/webhook/events` 是真实渠道安全接收和归一化入口。启用后必须携带 `x-smartcs-signature-version: v1`、`x-smartcs-tenant-id`、`x-smartcs-event-id`、`x-smartcs-timestamp` 和 `x-smartcs-signature`；签名 payload 为 `version/channel/tenantId/timestamp/eventId/sha256(rawBody)` 逐行拼接后做 HMAC-SHA256。成功返回 `202`、`mode: normalized_only` 和 `normalizedEventId`，但不回显客户消息文本。
 - 真实渠道入口会先完成签名验证和 payload 归一化，再在同一事务中写入 replay receipt 与 `NormalizedChannelEvent`。归一化失败时不应写 replay receipt，以免合法重试被重复事件保护误拦截。
 - `GET /v1/cases` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的 seed 或 smoke 后售后工单。

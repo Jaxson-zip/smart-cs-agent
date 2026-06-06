@@ -19,7 +19,12 @@ export const HealthReadinessResponseSchema = z.object({
     }),
     channelWebhooks: z
       .object({
-        status: z.enum(["ok", "disabled", "misconfigured"]),
+        status: z.enum([
+          "ok",
+          "disabled",
+          "disabled_by_kill_switch",
+          "misconfigured",
+        ]),
         enabled: z.boolean(),
         configuredChannels: z.array(z.string()),
         allowlistedChannels: z.array(z.string()).optional(),

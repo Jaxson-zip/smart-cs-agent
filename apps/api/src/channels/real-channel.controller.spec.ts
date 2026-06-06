@@ -14,6 +14,7 @@ import type { PrismaService } from "../prisma/prisma.service";
 const originalEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
 const originalSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
 const originalAllowlist = process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
+const originalKillSwitch = process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH;
 const originalRateLimit = process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE;
 
 describe("RealChannelController", () => {
@@ -21,6 +22,7 @@ describe("RealChannelController", () => {
     restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", originalEnabled);
     restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", originalSecrets);
     restoreEnv("REAL_CHANNEL_WEBHOOK_ALLOWLIST", originalAllowlist);
+    restoreEnv("REAL_CHANNEL_WEBHOOK_KILL_SWITCH", originalKillSwitch);
     restoreEnv(
       "REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE",
       originalRateLimit,
@@ -303,6 +305,68 @@ describe("RealChannelController", () => {
         error instanceof HttpException && error.getStatus() === 401,
     );
 
+    await controller.handleEvent(
+      "taobao",
+      signedHeaders(rawBody, { eventId: "event_1" }),
+      body,
+      { rawBody },
+    );
+
+    assert.strictEqual(receipts.length, 1);
+    assert.strictEqual(normalizedEvents.length, 1);
+  });
+
+  it("does not spend rate-limit quota or write data when the kill switch is enabled", async () => {
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE = "1";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "real_channel_secret_123",
+      },
+    ]);
+    process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST = taobaoTenantAllowlist();
+    const receipts: unknown[] = [];
+    const normalizedEvents: unknown[] = [];
+    const body = {
+      seller_id: "tenant_1",
+      buyer_nick: "Lin",
+      conversation_id: "tb_conv_1",
+      message_id: "tb_msg_1",
+      content: "When will my order ship?",
+      send_time: "2026-06-06T05:00:00.000Z",
+    };
+    const rawBody = Buffer.from(JSON.stringify(body));
+    const controller = new RealChannelController(
+      new ChannelWebhookSecurityService({} as PrismaService),
+      new RealChannelNormalizerService(),
+      new RealChannelRateLimitService(),
+      persistenceStore({
+        receipts,
+        normalizedEvents,
+        afterSalesCases: [],
+        caseMessages: [],
+        caseActions: [],
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        controller.handleEvent(
+          "taobao",
+          signedHeaders(rawBody, { eventId: "kill_switch_event" }),
+          body,
+          { rawBody },
+        ),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 503,
+    );
+    assert.strictEqual(receipts.length, 0);
+    assert.strictEqual(normalizedEvents.length, 0);
+
+    process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH = "false";
     await controller.handleEvent(
       "taobao",
       signedHeaders(rawBody, { eventId: "event_1" }),

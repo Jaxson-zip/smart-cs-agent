@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { z } from "zod";
@@ -74,7 +75,7 @@ export type VerifiedChannelWebhook = Omit<
 };
 
 export type ChannelWebhookReadiness = {
-  status: "ok" | "disabled" | "misconfigured";
+  status: "ok" | "disabled" | "disabled_by_kill_switch" | "misconfigured";
   enabled: boolean;
   configuredChannels: string[];
   allowlistedChannels?: string[];
@@ -112,6 +113,11 @@ export class ChannelWebhookSecurityService {
 
   verifyIncomingWebhook(input: AcceptIncomingWebhookInput): VerifiedChannelWebhook {
     const env = input.env ?? process.env;
+    if (env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH === "true") {
+      throw new ServiceUnavailableException(
+        "Real channel webhook intake is disabled by emergency kill switch",
+      );
+    }
     if (env.REAL_CHANNEL_WEBHOOKS_ENABLED !== "true") {
       throw new ForbiddenException("Real channel webhook intake is disabled");
     }
@@ -165,6 +171,19 @@ export class ChannelWebhookSecurityService {
   }
 
   getReadiness(env: NodeJS.ProcessEnv = process.env): ChannelWebhookReadiness {
+    if (env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH === "true") {
+      const secrets = safeParseSecrets(env);
+      const allowlist = safeParseAllowlist(env);
+      return {
+        status: "disabled_by_kill_switch",
+        enabled: false,
+        configuredChannels: configuredChannels(secrets),
+        allowlistedChannels: configuredChannels(allowlist),
+        allowlistedPairCount: allowlist.length,
+        message: "Real channel webhooks are disabled by emergency kill switch",
+      };
+    }
+
     if (env.REAL_CHANNEL_WEBHOOKS_ENABLED !== "true") {
       return {
         status: "disabled",
@@ -410,6 +429,22 @@ function parseAllowlist(env: NodeJS.ProcessEnv) {
     return channelAllowlistSchema.parse(JSON.parse(raw));
   } catch {
     throw new Error("invalid_allowlist");
+  }
+}
+
+function safeParseSecrets(env: NodeJS.ProcessEnv) {
+  try {
+    return parseSecrets(env);
+  } catch {
+    return [];
+  }
+}
+
+function safeParseAllowlist(env: NodeJS.ProcessEnv) {
+  try {
+    return parseAllowlist(env);
+  } catch {
+    return [];
   }
 }
 

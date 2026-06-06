@@ -93,6 +93,7 @@ describe("HealthController", () => {
     const previousEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
     const previousSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
     const previousAllowlist = process.env.REAL_CHANNEL_WEBHOOK_ALLOWLIST;
+    const previousKillSwitch = process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH;
     process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
     process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
       {
@@ -128,10 +129,24 @@ describe("HealthController", () => {
       });
       assert.ok(!JSON.stringify(response).includes("must_not_leak"));
       assert.ok(!JSON.stringify(response).includes("tenant_1"));
+
+      process.env.REAL_CHANNEL_WEBHOOK_KILL_SWITCH = "true";
+      const killSwitchResponse = await controller.getReadiness();
+      assert.deepStrictEqual(killSwitchResponse.checks.channelWebhooks, {
+        status: "disabled_by_kill_switch",
+        enabled: false,
+        configuredChannels: ["taobao"],
+        allowlistedChannels: ["taobao"],
+        allowlistedPairCount: 1,
+        message: "Real channel webhooks are disabled by emergency kill switch",
+      });
+      assert.ok(!JSON.stringify(killSwitchResponse).includes("must_not_leak"));
+      assert.ok(!JSON.stringify(killSwitchResponse).includes("tenant_1"));
     } finally {
       restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", previousEnabled);
       restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", previousSecrets);
       restoreEnv("REAL_CHANNEL_WEBHOOK_ALLOWLIST", previousAllowlist);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_KILL_SWITCH", previousKillSwitch);
     }
   });
 

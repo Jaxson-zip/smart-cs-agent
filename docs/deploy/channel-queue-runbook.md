@@ -19,7 +19,7 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `GET /api/operator/channel-events/audit-summary` | Same queue audit summary through the Web BFF | Admin operator session required |
 | `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
-| `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC and `REAL_CHANNEL_WEBHOOK_ALLOWLIST` required; optional per-process rate limit |
+| `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC and `REAL_CHANNEL_WEBHOOK_ALLOWLIST` required; `REAL_CHANNEL_WEBHOOK_KILL_SWITCH` can emergency-disable all intake; optional per-process rate limit |
 
 ## Queue States
 
@@ -46,6 +46,7 @@ Configure queue pressure through environment variables:
 | `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS` | Degrade readiness when the oldest pending event age is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD` | Degrade readiness when stale processing count is greater than this value | Empty disables this warning |
 | `CHANNEL_QUEUE_STALE_AFTER_MINUTES` | Age at which `processing` is considered stale | Defaults to `15` |
+| `REAL_CHANNEL_WEBHOOK_KILL_SWITCH` | Emergency global shutoff for signed real-channel webhook intake | `true` returns HTTP 503 before HMAC, rate limiting, or persistence |
 | `REAL_CHANNEL_WEBHOOK_ALLOWLIST` | JSON array of tenant/channel pairs that may enter real-channel intake | Empty fails closed when real webhooks are enabled |
 | `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE` | Per-process signed webhook intake limit for each `channel:tenantId` pair | `0` disables the application-level limit |
 
@@ -61,11 +62,17 @@ Signed real-channel webhook intake can be protected with `REAL_CHANNEL_WEBHOOK_R
 
 This is an application-level protection for the API process. Production deployments should still add gateway, CDN, or load-balancer rate limits because multi-process deployments do not share this in-memory counter.
 
+## Emergency Kill Switch
+
+Set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true` to emergency-disable all signed real-channel webhook intake without changing the allowlist or secrets. The endpoint returns HTTP 503 before HMAC verification, rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies. Because the short-circuit happens before the rate limiter, turning the kill switch back to `false` does not consume the tenant/channel quota.
+
+`GET /health/ready` reports `checks.channelWebhooks.status=disabled_by_kill_switch` with channel names and allowlisted pair counts only. It must not expose tenant IDs, webhook secrets, signatures, raw request bodies, provider payloads, or customer messages.
+
 ## Gray-Release Allowlist
 
 Signed real-channel webhook intake must also pass `REAL_CHANNEL_WEBHOOK_ALLOWLIST`. The allowlist is a JSON array of exact tenant/channel pairs, for example `[{"channel":"taobao","tenantId":"tenant_1"}]`. A webhook that is correctly signed but not allowlisted returns HTTP 403 after signature verification and before rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
 
-Readiness may expose `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back one merchant without closing the endpoint globally, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST` and redeploy/restart the API. To close all real-channel intake, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`.
+Readiness may expose `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back one merchant without closing the endpoint globally, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST` and redeploy/restart the API. To close all real-channel intake for planned configuration, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`; for emergency rollback, set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`.
 
 ## Production Intake Gates
 

@@ -16,6 +16,7 @@ describe("loadApiConfig", () => {
       operatorApiKeys: "[]",
       allowInsecureOperatorHeaders: false,
       realChannelWebhooksEnabled: false,
+      realChannelWebhookKillSwitch: false,
       realChannelWebhookMaxAgeSeconds: 300,
       realChannelWebhookRateLimitPerMinute: 0,
     });
@@ -27,6 +28,7 @@ describe("loadApiConfig", () => {
       WEB_ORIGIN: "https://console.example.com",
       DATABASE_URL: "file:./dev.db",
       WECOM_SANDBOX_ENABLED: "false",
+      REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
       REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "120",
     });
 
@@ -34,6 +36,7 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.webOrigin, "https://console.example.com");
     assert.strictEqual(config.databaseUrl, "file:./dev.db");
     assert.strictEqual(config.wecomSandboxEnabled, false);
+    assert.strictEqual(config.realChannelWebhookKillSwitch, true);
     assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 120);
   });
 

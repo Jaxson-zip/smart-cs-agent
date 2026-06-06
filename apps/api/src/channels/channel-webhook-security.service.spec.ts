@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
   UnauthorizedException,
 } from "@nestjs/common";
 import {
@@ -27,6 +28,26 @@ describe("ChannelWebhookSecurityService", () => {
           env: {},
         }),
       ForbiddenException,
+    );
+  });
+
+  it("lets the real-channel kill switch take precedence over the enabled flag", async () => {
+    const service = new ChannelWebhookSecurityService(receiptStore());
+
+    await assert.rejects(
+      () =>
+        service.acceptIncomingWebhook({
+          channel: "taobao",
+          headers: {},
+          body: { text: "hello" },
+          rawBody: Buffer.from("{}"),
+          env: {
+            REAL_CHANNEL_WEBHOOKS_ENABLED: "false",
+            REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
+          },
+        }),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 503,
     );
   });
 
@@ -67,6 +88,34 @@ describe("ChannelWebhookSecurityService", () => {
         receivedAt: new Date("2026-06-06T04:01:00.000Z"),
       },
     ]);
+  });
+
+  it("fails closed without writing receipts when the real-channel kill switch is enabled", async () => {
+    const receipts: unknown[] = [];
+    const service = new ChannelWebhookSecurityService(receiptStore(receipts));
+    const rawBody = Buffer.from('{"text":"hello"}');
+
+    await assert.rejects(
+      () =>
+        service.acceptIncomingWebhook({
+          channel: "taobao",
+          headers: signedHeaders({
+            eventId: "event_1",
+            timestamp: "1780718400",
+            rawBody,
+          }),
+          body: { text: "hello" },
+          rawBody,
+          now: new Date("2026-06-06T04:00:30.000Z"),
+          env: {
+            ...enabledEnv(),
+            REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
+          },
+        }),
+      (error) =>
+        error instanceof HttpException && error.getStatus() === 503,
+    );
+    assert.strictEqual(receipts.length, 0);
   });
 
   it("fails closed when no real-channel allowlist is configured", async () => {
@@ -209,6 +258,20 @@ describe("ChannelWebhookSecurityService", () => {
       configuredChannels: [],
       message: "Real channel webhooks are disabled",
     });
+    assert.deepStrictEqual(
+      service.getReadiness({
+        REAL_CHANNEL_WEBHOOKS_ENABLED: "false",
+        REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
+      }),
+      {
+        status: "disabled_by_kill_switch",
+        enabled: false,
+        configuredChannels: [],
+        allowlistedChannels: [],
+        allowlistedPairCount: 0,
+        message: "Real channel webhooks are disabled by emergency kill switch",
+      },
+    );
     assert.deepStrictEqual(service.getReadiness({
       REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
     }), {
@@ -226,6 +289,20 @@ describe("ChannelWebhookSecurityService", () => {
       allowlistedChannels: ["taobao"],
       allowlistedPairCount: 1,
     });
+    assert.deepStrictEqual(
+      service.getReadiness({
+        ...enabledEnv(),
+        REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
+      }),
+      {
+        status: "disabled_by_kill_switch",
+        enabled: false,
+        configuredChannels: ["taobao"],
+        allowlistedChannels: ["taobao"],
+        allowlistedPairCount: 1,
+        message: "Real channel webhooks are disabled by emergency kill switch",
+      },
+    );
     assert.deepStrictEqual(
       service.getReadiness({
         ...enabledEnv(),
