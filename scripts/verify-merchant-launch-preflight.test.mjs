@@ -47,6 +47,43 @@ test("merchant launch preflight passes with sanitized evidence", async () => {
   );
 });
 
+test("merchant launch preflight reads launch target from safe env mode", async () => {
+  await withEnvFile(
+    productionEnv({
+      REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
+      PROVIDER_READONLY_ADAPTERS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_launch_secret",
+          credentialRef: "secret://smartcs/taobao/tenant_launch_secret",
+        },
+      ]),
+      PROVIDER_CREDENTIALS: JSON.stringify([
+        {
+          credentialRef: "secret://smartcs/taobao/tenant_launch_secret",
+        },
+      ]),
+    }),
+    async (envFile) => {
+      const result = await execPreflight(["--from-env"], {
+        SMARTCS_LAUNCH_CHANNEL: "taobao",
+        SMARTCS_LAUNCH_ENV_FILE: envFile,
+        SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY: "true",
+        SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL: "true",
+        SMARTCS_LAUNCH_TENANT: "tenant_launch_secret",
+      });
+
+      assert.match(result.stdout, /Merchant launch preflight passed\./);
+      assert.match(result.stdout, /tenantFingerprint=/);
+      assert.match(result.stdout, /channel=taobao/);
+      assert.strictEqual(result.stderr, "");
+      assert.ok(!result.stdout.includes("tenant_launch_secret"));
+      assert.ok(!result.stdout.includes("secret://smartcs"));
+      assert.ok(!result.stdout.includes("production_operator_key"));
+    },
+  );
+});
+
 test("merchant launch preflight fails when real-channel pair is not allowlisted", async () => {
   await withEnvFile(
     productionEnv({
@@ -186,11 +223,16 @@ function productionEnv(overrides = {}) {
   };
 }
 
-async function execPreflight(args) {
+async function execPreflight(args, env = {}) {
   return execFileAsync(process.execPath, [
     "scripts/verify-merchant-launch-preflight.mjs",
     ...args,
-  ]);
+  ], {
+    env: {
+      ...process.env,
+      ...env,
+    },
+  });
 }
 
 async function execPreflightFailure(args) {

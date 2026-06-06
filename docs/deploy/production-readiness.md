@@ -1,11 +1,34 @@
 # Production-Readiness Baseline
 
+## PR45 Launch Evidence Archive Safety
+
+Launch preflight and evidence generation now have safe env-mode commands for CI and launch terminals:
+
+```bash
+npm run verify:merchant-launch-preflight:safe
+npm run generate:launch-evidence:safe
+npm run verify:launch-evidence-archive:safe
+```
+
+These commands read launch target values from secure environment variables instead of command-line arguments: `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY`, and `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS`.
+
+Set these values for a real launch gate:
+
+| Command | Required environment values |
+| --- | --- |
+| `npm run verify:merchant-launch-preflight:safe` | `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true` |
+| `npm run generate:launch-evidence:safe` | `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true` |
+| `npm run verify:launch-evidence-archive:safe` | `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true` |
+
+Use the safe commands in launch tickets and CI so npm does not echo raw tenant IDs, env-file paths, or evidence output paths in command logs. The archive verifier reads the generated JSON evidence bundle, checks the schema and required launch tracks, and rejects forbidden raw fields or values such as tenant IDs, full credential refs, webhook secrets, operator API keys, provider tokens, provider payloads, customer data, order IDs, logistics IDs, response bodies, metric bodies, signatures, and raw bodies.
+
 ## PR44 Launch Evidence Bundle
 
 Launch evidence can now be generated as a sanitized local JSON bundle:
 
 ```bash
-npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>
+npm run generate:launch-evidence:safe
+npm run verify:launch-evidence-archive:safe
 npm run verify:launch-evidence
 ```
 
@@ -18,7 +41,7 @@ Evidence may include booleans such as `webhookSecretConfigured=true`, `providerC
 Merchant/channel launch now has a checked local preflight command:
 
 ```bash
-npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly
+npm run verify:merchant-launch-preflight:safe
 ```
 
 The command reads only local environment configuration. It does not call the API, connect to the database, read a secret manager or vault, call Taobao/Douyin/provider networks, execute provider actions, or send customer-visible replies.

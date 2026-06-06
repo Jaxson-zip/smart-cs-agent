@@ -9,6 +9,10 @@ const files = {
   packageJson: "package.json",
   evidenceScript: "scripts/generate-launch-evidence.mjs",
   evidenceTest: "scripts/generate-launch-evidence.test.mjs",
+  preflightScript: "scripts/verify-merchant-launch-preflight.mjs",
+  preflightTest: "scripts/verify-merchant-launch-preflight.test.mjs",
+  archiveVerifier: "scripts/verify-launch-evidence-archive.mjs",
+  archiveTest: "scripts/verify-launch-evidence-archive.test.mjs",
   productionReadiness: "docs/deploy/production-readiness.md",
   launchRunbook: "docs/deploy/production-launch-runbook.md",
   productionLaunchVerifier: "scripts/verify-production-launch.mjs",
@@ -26,6 +30,10 @@ const content = Object.fromEntries(
 mustContainAll("package scripts", content.packageJson, [
   "generate:launch-evidence",
   "scripts/generate-launch-evidence.mjs",
+  "generate:launch-evidence:safe",
+  "verify:merchant-launch-preflight:safe",
+  "verify:launch-evidence-archive",
+  "verify:launch-evidence-archive:safe",
   "verify:launch-evidence",
   "scripts/verify-launch-evidence.mjs",
 ]);
@@ -44,6 +52,9 @@ mustContainAll("evidence script", content.evidenceScript, [
   'flag: "wx"',
   "Output file must not already exist",
   "redactArgument",
+  "--from-env",
+  "SMARTCS_LAUNCH_EVIDENCE_OUT",
+  "SMARTCS_LAUNCH_TENANT",
 ]);
 mustNotContainAny("evidence script forbidden execution", content.evidenceScript, [
   "fetch(",
@@ -57,8 +68,18 @@ mustNotContainAny("evidence script forbidden execution", content.evidenceScript,
   "providerResponseCaptured=true",
 ]);
 
+mustContainAll("merchant preflight safe env support", content.preflightScript, [
+  "--from-env",
+  "SMARTCS_LAUNCH_ENV_FILE",
+  "SMARTCS_LAUNCH_TENANT",
+  "SMARTCS_LAUNCH_CHANNEL",
+  "SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL",
+  "SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY",
+]);
+
 mustContainAll("evidence tests", content.evidenceTest, [
   "launch evidence bundle writes sanitized JSON for a ready merchant",
+  "launch evidence bundle reads launch target from safe env mode",
   "launch evidence bundle fails closed without leaking missing credential refs",
   "launch evidence bundle redacts unknown argument values",
   "launch evidence bundle redacts invalid channel values",
@@ -71,7 +92,45 @@ mustContainAll("evidence tests", content.evidenceTest, [
   "plain_secret_token_must_not_leak",
 ]);
 
+mustContainAll("merchant preflight tests", content.preflightTest, [
+  "merchant launch preflight reads launch target from safe env mode",
+  "SMARTCS_LAUNCH_TENANT",
+  "SMARTCS_LAUNCH_ENV_FILE",
+]);
+
+mustContainAll("archive verifier", content.archiveVerifier, [
+  "Launch evidence archive verification passed.",
+  "Launch evidence archive verification failed:",
+  "SMARTCS_LAUNCH_EVIDENCE_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS",
+  "forbidden sensitive archive field",
+  "forbidden sensitive archive value",
+]);
+mustNotContainAny("archive verifier forbidden execution", content.archiveVerifier, [
+  "fetch(",
+  "execFile",
+  "spawn(",
+  "http.request",
+  "https.request",
+  "PrismaClient",
+]);
+
+mustContainAll("archive tests", content.archiveTest, [
+  "launch evidence archive verifier accepts a sanitized passing bundle",
+  "launch evidence archive verifier reads archive target from safe env mode",
+  "launch evidence archive verifier rejects bundles with raw sensitive fields",
+  "launch evidence archive verifier redacts unknown argument values",
+  "assertNoSecretMarkers",
+]);
+
 mustContainAll("production readiness docs", content.productionReadiness, [
+  "PR45 Launch Evidence Archive Safety",
+  "npm run verify:merchant-launch-preflight:safe",
+  "npm run generate:launch-evidence:safe",
+  "npm run verify:launch-evidence-archive:safe",
+  "SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true",
+  "SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true",
+  "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
   "PR44 Launch Evidence Bundle",
   "npm run generate:launch-evidence",
   "npm run verify:launch-evidence",
@@ -81,21 +140,28 @@ mustContainAll("production readiness docs", content.productionReadiness, [
 ]);
 
 mustContainAll("launch runbook", content.launchRunbook, [
-  "npm run generate:launch-evidence",
+  "npm run generate:launch-evidence:safe",
+  "npm run verify:merchant-launch-preflight:safe",
+  "npm run verify:launch-evidence-archive:safe",
   "npm run verify:launch-evidence",
-  "--out=<launch-evidence-json>",
+  "SMARTCS_LAUNCH_EVIDENCE_OUT",
+  "SMARTCS_LAUNCH_EVIDENCE_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
   "launch evidence bundle",
   "must not include raw tenant IDs",
 ]);
 
 mustContainAll("production launch verifier", content.productionLaunchVerifier, [
   "generate:launch-evidence",
+  "generate:launch-evidence:safe",
+  "verify:launch-evidence-archive",
   "verify:launch-evidence",
 ]);
 
 mustContainAll("task plan", content.taskPlan, [
-  "PR44 - Launch Evidence Bundle",
+  "PR45 - Launch Evidence Archive Safety",
   "generate:launch-evidence",
+  "verify:launch-evidence-archive",
   "verify:launch-evidence",
 ]);
 

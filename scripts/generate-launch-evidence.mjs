@@ -8,7 +8,7 @@ const CREDENTIAL_REF_PATTERN =
 
 const failures = [];
 const warnings = [];
-const args = parseArgs(process.argv.slice(2));
+const args = applySafeEnvDefaults(parseArgs(process.argv.slice(2)), process.env);
 const target = {
   tenantId: args.tenant,
   channel: args.channel,
@@ -326,6 +326,7 @@ function parseArgs(values) {
   const parsed = {
     channel: undefined,
     envFile: undefined,
+    fromEnv: false,
     out: undefined,
     requireProviderReadonly: false,
     requireRealChannel: false,
@@ -333,7 +334,9 @@ function parseArgs(values) {
   };
 
   for (const value of values) {
-    if (value === "--require-real-channel") {
+    if (value === "--from-env") {
+      parsed.fromEnv = true;
+    } else if (value === "--require-real-channel") {
       parsed.requireRealChannel = true;
     } else if (value === "--require-provider-readonly") {
       parsed.requireProviderReadonly = true;
@@ -351,6 +354,38 @@ function parseArgs(values) {
   }
 
   return parsed;
+}
+
+function applySafeEnvDefaults(parsed, input) {
+  if (!parsed.fromEnv) return parsed;
+
+  const result = { ...parsed };
+  result.channel = result.channel ?? input.SMARTCS_LAUNCH_CHANNEL;
+  result.envFile = result.envFile ?? input.SMARTCS_LAUNCH_ENV_FILE;
+  result.out = result.out ?? input.SMARTCS_LAUNCH_EVIDENCE_OUT;
+  result.tenant = result.tenant ?? input.SMARTCS_LAUNCH_TENANT;
+  result.requireProviderReadonly =
+    result.requireProviderReadonly ||
+    readLaunchBoolean(
+      input.SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY,
+      "SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY",
+    );
+  result.requireRealChannel =
+    result.requireRealChannel ||
+    readLaunchBoolean(
+      input.SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL,
+      "SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL",
+    );
+  return result;
+}
+
+function readLaunchBoolean(value, label) {
+  if (!hasValue(value)) return false;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes"].includes(normalized)) return true;
+  if (["0", "false", "no"].includes(normalized)) return false;
+  failures.push(`${label} must be true or false`);
+  return false;
 }
 
 function loadEnvFile(path) {

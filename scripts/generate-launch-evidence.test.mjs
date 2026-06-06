@@ -54,6 +54,45 @@ test("launch evidence bundle writes sanitized JSON for a ready merchant", async 
   );
 });
 
+test("launch evidence bundle reads launch target from safe env mode", async () => {
+  await withEnvFile(
+    productionEnv({
+      REAL_CHANNEL_WEBHOOKS_ENABLED: "true",
+      PROVIDER_READONLY_ADAPTERS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_launch_secret",
+          credentialRef: "secret://smartcs/taobao/tenant_launch_secret",
+        },
+      ]),
+      PROVIDER_CREDENTIALS: JSON.stringify([
+        {
+          credentialRef: "secret://smartcs/taobao/tenant_launch_secret",
+        },
+      ]),
+    }),
+    async ({ envFile, dir }) => {
+      const outFile = join(dir, "safe-launch-evidence.json");
+      const result = await execEvidence(["--from-env"], {
+        SMARTCS_LAUNCH_CHANNEL: "taobao",
+        SMARTCS_LAUNCH_ENV_FILE: envFile,
+        SMARTCS_LAUNCH_EVIDENCE_OUT: outFile,
+        SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY: "true",
+        SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL: "true",
+        SMARTCS_LAUNCH_TENANT: "tenant_launch_secret",
+      });
+
+      assert.match(result.stdout, /Launch evidence bundle generated\./);
+      assert.match(result.stdout, /outputWritten=true/);
+      const bundleText = await readFile(outFile, "utf8");
+      const bundle = JSON.parse(bundleText);
+      assert.strictEqual(bundle.summary.status, "pass");
+      assert.strictEqual(bundle.target.channel, "taobao");
+      assertNoSecretMarkers(`${result.stdout}\n${result.stderr}\n${bundleText}`);
+    },
+  );
+});
+
 test("launch evidence bundle fails closed without leaking missing credential refs", async () => {
   await withEnvFile(
     productionEnv({
@@ -205,11 +244,16 @@ function productionEnv(overrides = {}) {
   };
 }
 
-async function execEvidence(args) {
+async function execEvidence(args, env = {}) {
   return execFileAsync(process.execPath, [
     "scripts/generate-launch-evidence.mjs",
     ...args,
-  ]);
+  ], {
+    env: {
+      ...process.env,
+      ...env,
+    },
+  });
 }
 
 async function execEvidenceFailure(args) {

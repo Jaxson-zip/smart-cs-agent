@@ -25,8 +25,9 @@ Launch may proceed only when all of these are true:
 - A rollback owner, incident owner, and operator lead are named in the deploy ticket.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
-- `npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly` passes for every tenant/channel pair included in the launch allowlist.
-- `npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>` has produced a sanitized launch evidence bundle for every tenant/channel pair in scope.
+- `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.
+- `npm run generate:launch-evidence:safe` has produced a sanitized launch evidence bundle for every tenant/channel pair in scope.
+- `npm run verify:launch-evidence-archive:safe` has verified each archived launch evidence bundle with pass, real-channel, and provider-readonly requirements enabled through secure environment variables.
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
@@ -55,8 +56,9 @@ npm run typecheck --workspaces --if-present -- --pretty false
 npm run lint --workspaces --if-present -- --max-warnings=0
 npm run build --workspaces --if-present
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
-npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly
-npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>
+npm run verify:merchant-launch-preflight:safe
+npm run generate:launch-evidence:safe
+npm run verify:launch-evidence-archive:safe
 npm run verify:launch-evidence
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-alerting
@@ -70,6 +72,8 @@ npm run verify:provider-credential-store
 npm run verify:provider-read-harness
 npm run verify:channel-runbook
 ```
+
+Inject `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true`, and `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true` through the CI secret/environment layer before running the safe commands. Use `SMARTCS_LAUNCH_EVIDENCE_OUT` for generation and `SMARTCS_LAUNCH_EVIDENCE_FILE` for archive verification. Do not pass raw tenant IDs, env-file paths, evidence output paths, or evidence archive paths as npm command arguments in recorded launch logs.
 
 Do not put operator API keys, webhook secrets, signatures, raw request bodies, customer messages, provider payloads, tenant IDs, or API URLs with query-string secrets into the deploy ticket, CI logs, Prometheus labels, alert annotations, or this repository.
 
