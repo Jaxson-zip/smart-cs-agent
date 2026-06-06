@@ -23,6 +23,8 @@ The Docker-backed gate builds both images locally with:
 
 It uses `--pull=false` and does not pass runtime environment variables, operator keys, webhook secrets, provider credentials, tenant IDs, or customer data into the build command.
 
+After the images build, run `npm run verify:production-container-smoke:docker` from `docs/deploy/production-container-smoke.yml.example` to verify the API and Web containers can start and answer their minimal runtime probes without publishing images.
+
 ## CI Example
 
 Use `docs/deploy/production-image-build.yml.example` as the template for a GitHub Actions job. Keep it as a build-only job until a separate release process defines registry ownership, image signing, SBOM generation, provenance, and promotion rules.

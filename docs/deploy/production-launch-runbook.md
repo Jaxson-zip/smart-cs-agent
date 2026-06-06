@@ -32,6 +32,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-deploy-artifacts` passes, and `docs/deploy/production-deployment-artifacts.md` matches the API/Web artifacts being deployed.
 - `npm run verify:production-image-builds` passes from the release branch, and `npm run verify:production-image-builds:docker` passes in a Docker-enabled CI job before publishing or deploying images.
+- `npm run verify:production-container-smoke` passes from the release branch, and `npm run verify:production-container-smoke:docker` passes in a Docker-enabled CI job to prove the built API/Web containers start before publishing or deploying images.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
 - `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
@@ -67,6 +68,7 @@ npm run verify:launch-evidence
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-deploy-artifacts
 npm run verify:production-image-builds
+npm run verify:production-container-smoke
 npm run verify:production-alerting
 npm run verify:provider-adapters
 npm run verify:provider-readonly
@@ -185,6 +187,10 @@ Run `npm run verify:production-deploy-artifacts` alongside it when Dockerfiles, 
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 
 See `docs/deploy/production-image-builds.md` for the build-only image gate and `docs/deploy/production-image-build.yml.example` for the GitHub Actions template.
+
+Run `npm run verify:production-container-smoke` alongside it when Docker runtime smoke scripts, container smoke CI examples, container startup commands, or runtime probe guidance changes. Run `npm run verify:production-container-smoke:docker` in CI or another Docker-enabled environment before publishing image artifacts.
+
+See `docs/deploy/production-container-smoke.md` for the runtime smoke gate and `docs/deploy/production-container-smoke.yml.example` for the GitHub Actions template.
 
 Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAPTERS`, provider readonly config parsing, or `readCapabilities` changes.
 

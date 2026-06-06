@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR49 Production Container Runtime Smoke Gate
+
+Production container runtime smoke is now checked by:
+
+```bash
+npm run verify:production-container-smoke
+npm run verify:production-container-smoke:docker
+```
+
+The default command validates the runtime smoke gate, docs, workflow example, and launch references. The `:docker` command starts temporary API and Web containers plus a synthetic local Postgres dependency, checks API `GET /health` and Web `GET /`, and then cleans up. Use `docs/deploy/production-container-smoke.yml.example` after the image build workflow. This gate still does not publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR48 Production Image Build Gate
 
 Production image builds are now checked by:

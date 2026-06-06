@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR48 - Production Image Build Gate
+## Current Stage: PR49 - Production Container Runtime Smoke Gate
 
 Status: verified
 
-Previous Stage: PR47 - Production Deployment Artifacts was verified.
+Previous Stage: PR48 - Production Image Build Gate was verified.
+
+Image Build Stage: PR48 - Production Image Build Gate was verified with `production-image-build.yml.example` and must stay connected to production launch and container smoke checks.
 
 Deployment Artifact Stage: PR47 - Production Deployment Artifacts was verified with `docker-compose.production.yml.example` and must stay connected to production launch and image build checks.
 
@@ -36,18 +38,18 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR48 adds a production image build gate. It gives release owners a static image-build verifier, a Docker-backed build command for API/Web images, and a GitHub Actions example that builds images without publishing them.
+PR49 adds a production container runtime smoke gate. It gives release owners a static runtime-smoke verifier, a Docker-backed command that starts the API and Web images with synthetic production-shaped env, and a GitHub Actions example that proves the containers start without publishing images.
 
-### PR48 Scope
+### PR49 Scope
 
-- Add `npm run verify:production-image-builds` for static image-build gate checks.
-- Add `npm run verify:production-image-builds:docker` to build API and Web images locally without publishing them.
-- Add `docs/deploy/production-image-builds.md`.
-- Add `docs/deploy/production-image-build.yml.example` as a build-only GitHub Actions template.
-- Connect image build checks into production readiness, deployment artifact docs, launch runbook, and `verify:production-launch`.
-- Keep the image build gate build-only: no registry login, no image push, no runtime secrets, no tenant IDs, no provider credentials, and no customer data in build commands or CI examples.
+- Add `npm run verify:production-container-smoke` for static runtime-smoke gate checks.
+- Add `npm run verify:production-container-smoke:docker` to start API and Web containers locally without publishing them.
+- Add `docs/deploy/production-container-smoke.md`.
+- Add `docs/deploy/production-container-smoke.yml.example` as a build-and-smoke GitHub Actions template.
+- Connect container smoke checks into production readiness, deployment artifact docs, image build docs, launch runbook, and `verify:production-launch`.
+- Keep the container smoke gate runtime-only: no registry login, no image push, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in smoke commands or CI examples.
 
-### Out Of Scope For PR48
+### Out Of Scope For PR49
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -59,7 +61,7 @@ PR48 adds a production image build gate. It gives release owners a static image-
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, database, vault, provider networks, or registry APIs from image-build static verification.
+- Calling production API readiness, production databases, vault, provider networks, or registry APIs from container-smoke static verification.
 - Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
@@ -125,10 +127,11 @@ PR48 adds a production image build gate. It gives release owners a static image-
 - [x] PR46 multi-merchant launch manifest.
 - [x] PR47 production deployment artifacts.
 - [x] PR48 production image build gate.
+- [x] PR49 production container runtime smoke gate.
 
 ## Verification Gate
 
-Do not claim PR48 production image build gate complete until these pass:
+Do not claim PR49 production container runtime smoke gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -162,6 +165,9 @@ Do not claim PR48 production image build gate complete until these pass:
 - `npm.cmd run verify:production-deploy-artifacts`
 - `node --check scripts/verify-production-image-builds.mjs`
 - `npm.cmd run verify:production-image-builds`
+- `node --check scripts/verify-production-container-smoke.mjs`
+- `node --test scripts/verify-production-container-smoke.test.mjs`
+- `npm.cmd run verify:production-container-smoke`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

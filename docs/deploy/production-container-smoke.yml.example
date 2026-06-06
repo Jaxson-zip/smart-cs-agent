@@ -1,0 +1,33 @@
+name: smart-cs-agent production container smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-smoke:
+    name: Build and smoke production containers
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify deployment artifact metadata
+        run: npm run verify:production-deploy-artifacts
+
+      - name: Build production images without publishing
+        run: npm run verify:production-image-builds:docker
+
+      - name: Smoke production containers without publishing
+        run: npm run verify:production-container-smoke:docker
