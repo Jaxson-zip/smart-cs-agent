@@ -10,7 +10,11 @@ const files = {
   productionReadiness: "docs/deploy/production-readiness.md",
   channelRunbook: "docs/deploy/channel-queue-runbook.md",
   productionAlerting: "docs/deploy/production-alerting.md",
+  productionDeploymentArtifacts:
+    "docs/deploy/production-deployment-artifacts.md",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
+  productionDeployArtifactsVerifier:
+    "scripts/verify-production-deploy-artifacts.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -30,6 +34,9 @@ const files = {
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
   packageJson: "package.json",
+  apiDockerfile: "apps/api/Dockerfile",
+  webDockerfile: "apps/web/Dockerfile",
+  composeProductionExample: "docker-compose.production.yml.example",
   taskPlan: "task_plan.md",
 };
 
@@ -45,6 +52,7 @@ mustContainAll("package scripts", content.packageJson, [
   "scripts/verify-production-launch.mjs",
   "verify:production-readiness",
   "verify:production-canary",
+  "verify:production-deploy-artifacts",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -91,6 +99,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "--env-file=<secure-production-env>",
   "--require-real-channel",
   "npm run verify:production-canary",
+  "npm run verify:production-deploy-artifacts",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -117,6 +126,12 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
   "SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
+]);
+
+mustContainAll("launch runbook deploy artifacts", content.launchRunbook, [
+  "docs/deploy/production-deployment-artifacts.md",
+  "npm run verify:production-deploy-artifacts",
+  "Deploy the API and Web artifacts",
 ]);
 
 mustContainAll("launch runbook rollback controls", content.launchRunbook, [
@@ -190,6 +205,13 @@ mustContainAll("production readiness references launch", content.productionReadi
   "npm run verify:production-launch",
 ]);
 
+mustContainAll("production readiness references deploy artifacts", content.productionReadiness, [
+  "PR47 Production Deployment Artifacts",
+  "docs/deploy/production-deployment-artifacts.md",
+  "docker-compose.production.yml.example",
+  "npm run verify:production-deploy-artifacts",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -209,9 +231,16 @@ mustContainAll("task plan references PR46", content.taskPlan, [
   "verify:launch-manifest:safe",
 ]);
 
+mustContainAll("task plan references PR47", content.taskPlan, [
+  "PR47 - Production Deployment Artifacts",
+  "verify:production-deploy-artifacts",
+  "docker-compose.production.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
+  "verify:production-deploy-artifacts",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -262,6 +291,26 @@ mustContainAll("launch manifest verifier source", content.launchManifestVerifier
   "smart-cs-agent.launch-manifest.v1",
   "verify-launch-manifest",
 ]);
+mustContainAll("production deploy artifacts verifier source", content.productionDeployArtifactsVerifier, [
+  "verify:production-deploy-artifacts",
+  "apps/api/Dockerfile",
+  "apps/web/Dockerfile",
+  "docker-compose.production.yml.example",
+]);
+mustContainAll("api dockerfile source", content.apiDockerfile, [
+  "NODE_ENV=production",
+  "WECOM_SANDBOX_ENABLED=false",
+  'CMD ["node", "apps/api/dist/main.js"]',
+]);
+mustContainAll("web dockerfile source", content.webDockerfile, [
+  "NODE_ENV=production",
+  'CMD ["node", "apps/web/server.js"]',
+]);
+mustContainAll("production compose source", content.composeProductionExample, [
+  "dockerfile: apps/api/Dockerfile",
+  "dockerfile: apps/web/Dockerfile",
+  "OPERATOR_IDENTITY_PROVIDER: database",
+]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",
   "/metrics",
@@ -281,7 +330,9 @@ mustContainAll("channel runbook verifier source", content.channelRunbookVerifier
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
+  productionDeploymentArtifacts: content.productionDeploymentArtifacts,
   channelRunbook: content.channelRunbook,
+  composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,
 });
 

@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR46 - Multi-Merchant Launch Manifest
+## Current Stage: PR47 - Production Deployment Artifacts
 
 Status: verified
 
-Previous Stage: PR45 - Launch Evidence Archive Safety was verified.
+Previous Stage: PR46 - Multi-Merchant Launch Manifest was verified.
+
+Manifest Stage: PR46 - Multi-Merchant Launch Manifest was verified for `smart-cs-agent.launch-manifest.v1` and must stay connected to launch evidence and production launch checks.
 
 Launch Evidence Stage: PR44 - Launch Evidence Bundle was verified and must stay connected to archive and manifest checks.
 
@@ -32,27 +34,30 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR46 adds a multi-merchant/channel launch manifest verifier. It lets release owners verify a whole launch window from one sanitized manifest that references per-tenant/channel PR44 evidence archives by fingerprint and channel, without putting raw tenant IDs or evidence paths in recorded npm command logs.
+PR47 adds checked production deployment artifacts. It gives the API and Web services explicit Docker image definitions, a production-shaped compose example, Next standalone output, and a static verifier so release owners can prove deploy files are present and still preserve production safety defaults before running a live canary.
 
-### PR46 Scope
+### PR47 Scope
 
-- Add `npm run verify:launch-manifest` and `npm run verify:launch-manifest:safe`.
-- Add `scripts/verify-launch-manifest.mjs` for `smart-cs-agent.launch-manifest.v1`.
-- Require manifest entries to use `{ tenantFingerprint, channel, evidenceFile }` with `evidenceFile` exactly equal to `<tenantFingerprint>-<channel>.json`.
-- Reject duplicate tenant/channel entries and any manifest or evidence archive fields/values that look like raw tenant IDs, credential refs, webhook secrets, operator API keys, provider tokens, provider payloads, customer data, order IDs, logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
-- Verify each referenced PR44 evidence archive is local, schema-correct, matched to the manifest entry, pass when required, and carries required real-channel/provider-readonly launch tracks when required.
-- Keep output sanitized: show release id, entry count, and channel count only; never print raw tenant IDs, env-file paths, evidence archive paths, manifest paths, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, raw logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
+- Add `apps/api/Dockerfile` and `apps/web/Dockerfile` for production image builds.
+- Add `.dockerignore` so local env files, logs, node_modules, build output, and git state do not enter image contexts.
+- Add `docker-compose.production.yml.example` for a production-shaped self-hosted stack with required secret/env interpolation instead of concrete secrets.
+- Set Web `next.config.ts` to `output: "standalone"` for a deployable Next runtime artifact.
+- Add `docs/deploy/production-deployment-artifacts.md`.
+- Add `npm run verify:production-deploy-artifacts` and connect it to production launch checks.
+- Keep production defaults safe: sandbox WeCom off, legacy demo APIs off, offline demo off, database-backed operator identity required, insecure operator headers off, no concrete secrets in deploy artifacts.
 
-### Out Of Scope For PR46
+### Out Of Scope For PR47
 
 - Multi-channel production rollout.
+- Building and publishing real container images from this branch.
+- Choosing a final cloud vendor, Kubernetes chart, Terraform stack, or managed secret store.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
 - Real secret manager or vault reads.
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, database, vault, or provider networks from the launch evidence generator, archive verifier, or manifest verifier.
+- Calling production API readiness, database, vault, or provider networks from deployment artifact verification.
 - Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
@@ -116,10 +121,11 @@ PR46 adds a multi-merchant/channel launch manifest verifier. It lets release own
 - [x] PR44 launch evidence bundle.
 - [x] PR45 launch evidence archive safety.
 - [x] PR46 multi-merchant launch manifest.
+- [x] PR47 production deployment artifacts.
 
 ## Verification Gate
 
-Do not claim PR46 multi-merchant launch manifest complete until these pass:
+Do not claim PR47 production deployment artifacts complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -149,6 +155,8 @@ Do not claim PR46 multi-merchant launch manifest complete until these pass:
 - `node --check scripts/verify-launch-manifest.mjs`
 - `node --check scripts/verify-launch-manifest.test.mjs`
 - `node --test scripts/verify-launch-manifest.test.mjs`
+- `node --check scripts/verify-production-deploy-artifacts.mjs`
+- `npm.cmd run verify:production-deploy-artifacts`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR47 Production Deployment Artifacts
+
+Production-shaped deployment artifacts are now checked by:
+
+```bash
+npm run verify:production-deploy-artifacts
+```
+
+The deploy artifact set includes `apps/api/Dockerfile`, `apps/web/Dockerfile`, `.dockerignore`, `docker-compose.production.yml.example`, and `docs/deploy/production-deployment-artifacts.md`. The API image starts `node apps/api/dist/main.js`, the Web image starts the Next standalone server, and the compose example requires secret injection instead of concrete values. These artifacts still do not enable real refunds, address changes, coupons, logistics edits, customer-visible replies, provider writes, provider payload reads, or secret-manager access.
+
 ## PR46 Multi-Merchant Launch Manifest
 
 Multi-merchant or multi-channel launch windows now have a local manifest verifier:

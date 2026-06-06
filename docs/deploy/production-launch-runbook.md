@@ -30,6 +30,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:launch-evidence-archive:safe` has verified each archived launch evidence bundle with pass, real-channel, and provider-readonly requirements enabled through secure environment variables.
 - `npm run verify:launch-manifest:safe` has verified the multi-merchant/channel launch manifest with every referenced evidence archive matching its tenant fingerprint and channel.
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
+- `npm run verify:production-deploy-artifacts` passes, and `docs/deploy/production-deployment-artifacts.md` matches the API/Web artifacts being deployed.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
 - `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
@@ -63,6 +64,7 @@ npm run verify:launch-evidence-archive:safe
 npm run verify:launch-manifest:safe
 npm run verify:launch-evidence
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
+npm run verify:production-deploy-artifacts
 npm run verify:production-alerting
 npm run verify:provider-adapters
 npm run verify:provider-readonly
@@ -82,7 +84,7 @@ Do not put operator API keys, webhook secrets, signatures, raw request bodies, c
 ## Deploy Sequence
 
 1. Deploy migrations with `npm run db:migrate:deploy`.
-2. Deploy the API and Web artifacts.
+2. Deploy the API and Web artifacts described in `docs/deploy/production-deployment-artifacts.md`.
 3. Confirm `GET /health/ready` is `ok` or intentionally `degraded` only under an accepted incident note.
 4. Confirm `GET /metrics` is scrapeable and contains aggregate service, database, real-channel, and queue gauges only.
 5. Run the production canary.
@@ -175,6 +177,8 @@ npm run verify:production-launch
 ```
 
 This checks that the launch runbook stays connected to readiness, canary, alerting, channel queue operations, rollback controls, recovery evidence, and no-secret/no-customer-action boundaries. Run `npm run verify:provider-adapters` alongside it when provider adapter contracts or action execution policy change.
+
+Run `npm run verify:production-deploy-artifacts` alongside it when Dockerfiles, production compose examples, Next standalone output, image startup commands, or deployment artifact docs change.
 
 Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAPTERS`, provider readonly config parsing, or `readCapabilities` changes.
 

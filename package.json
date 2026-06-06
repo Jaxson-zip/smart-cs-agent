@@ -23,6 +23,7 @@
     "verify:operator-bootstrap": "node scripts/verify-operator-bootstrap.mjs",
     "verify:production-alerting": "node scripts/verify-production-alerting.mjs",
     "verify:production-canary": "node scripts/verify-production-canary.mjs",
+    "verify:production-deploy-artifacts": "node scripts/verify-production-deploy-artifacts.mjs",
     "verify:production-launch": "node scripts/verify-production-launch.mjs",
     "verify:provider-adapters": "node scripts/verify-provider-adapters.mjs",
     "verify:provider-readonly": "node scripts/verify-provider-readonly.mjs",
