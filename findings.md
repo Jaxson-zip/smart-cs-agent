@@ -26,3 +26,6 @@
 - Offline demo cases must not mask real authorization or API failures. PR6 only enables fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true`; default deployable environments show an error state for non-401 sync failures.
 - PR7 introduces a fixed role-to-permission map in the Web BFF. This is useful for product behavior and tests, but persisted permission policies and audit-backed role changes still belong in a later identity/account-service slice.
 - PR8 reduces the risk of the temporary env-backed account store by requiring `passwordHash` in production and adding session invalidation knobs. It is still not a full identity provider; account lifecycle should move to a real service or database-backed admin surface later.
+- PR13's real-channel webhook route is intentionally security-only. A signed event creates a `ChannelWebhookReceipt` for replay protection and returns `mode: security_only`; it must not be treated as a Taobao/Douyin business-processing loop yet.
+- Real-channel webhook HMAC must be based on raw request bytes. If Nest raw-body capture is missing, the endpoint now fails closed instead of re-stringifying parsed JSON.
+- The PR13 v1 signature payload explicitly binds `channel` and `tenantId` in addition to timestamp, event ID, and `sha256(rawBody)`, reducing cross-channel/cross-tenant replay risk if secrets are ever misconfigured.

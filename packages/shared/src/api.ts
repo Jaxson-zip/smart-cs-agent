@@ -17,6 +17,14 @@ export const HealthReadinessResponseSchema = z.object({
       status: z.enum(["ok", "unhealthy"]),
       message: z.string().optional(),
     }),
+    channelWebhooks: z
+      .object({
+        status: z.enum(["ok", "disabled", "misconfigured"]),
+        enabled: z.boolean(),
+        configuredChannels: z.array(z.string()),
+        message: z.string().optional(),
+      })
+      .optional(),
   }),
 });
 

@@ -5,6 +5,7 @@
 ## 范围
 
 - 覆盖 V1.2 售后沙盒闭环：本地/沙盒事件进入 API，生成工单、消息、动作和审计记录，并可通过客服台查看。
+- PR13 增加真实渠道 webhook 的安全接收边界：默认关闭，启用后只做 raw-body HMAC、时间窗、租户密钥和 replay receipt 校验；不创建工单、不触发 Agent、不发送客户可见回复、不执行真实退款/改地址/补偿。
 - GitHub Actions 只验证基础质量：依赖安装、Prisma client 生成、API 单测、TypeScript、lint、build。
 - CI 不连接真实外部数据库；`DATABASE_URL` 使用 dummy Postgres URL，仅供 Prisma generate 解析 schema。
 - 真实电商渠道、真实支付/退款、真实物流回写、正式 SSO/RBAC/账号后台均不在 PR1 范围。
@@ -30,6 +31,9 @@ OPENAI_API_KEY=
 WEB_ORIGIN=http://localhost:3000
 PORT=4100
 WECOM_SANDBOX_ENABLED=true
+REAL_CHANNEL_WEBHOOKS_ENABLED=false
+REAL_CHANNEL_WEBHOOK_SECRETS=[]
+REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
 NEXT_PUBLIC_API_URL=http://localhost:4100
 NEXT_PUBLIC_WS_URL=http://localhost:4100
 NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
@@ -52,6 +56,10 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `WEB_ORIGIN`：允许访问 API/WebSocket 的前端 origin。
 - `PORT`：API 监听端口，默认 `4100`。
 - `WECOM_SANDBOX_ENABLED`：沙盒入站模拟入口开关。本地演示可以为 `true`；生产环境未显式设为 `true` 时，`/v1/wecom/events` 默认不可用。
+- `REAL_CHANNEL_WEBHOOKS_ENABLED`：真实渠道 webhook 安全接收入口开关，默认必须为 `false`。只有在完成渠道密钥配置、迁移和安全 smoke 后才可显式设为 `true`。
+- `REAL_CHANNEL_WEBHOOK_SECRETS`：真实渠道 webhook 租户密钥 JSON 数组，格式为 `[{"channel":"taobao","tenantId":"tenant_1","secret":"long-random-secret"}]`。该值只能放在服务端 secret 管理中，不得提交到 Git，不得暴露给浏览器。
+- `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`：真实渠道 webhook 时间窗，默认 `300` 秒。过期、未来偏移过大、重复 `eventId` 都应拒绝。
+- `REAL_CHANNEL_WEBHOOK_SMOKE_SECRET`：本地 `npm run demo:real-channel-smoke` 使用的测试密钥，必须与服务端 `REAL_CHANNEL_WEBHOOK_SECRETS` 中同租户/渠道 secret 一致；不要用于真实商户。
 - `API_URL`：Web 服务端 BFF 访问 API 的内部地址，默认可指向 `http://localhost:4100`。
 - `NEXT_PUBLIC_API_URL`：旧健康检查客户端的公开 API 地址；客服台主数据路径不应再依赖它直连 API。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
@@ -96,6 +104,8 @@ curl http://localhost:4100/health
 PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `/health`：
 
 - `GET /health/ready` 能确认 API 到数据库的路径是否可用；数据库不可用时应返回 HTTP 503。
+- `GET /health/ready` 的 `checks.channelWebhooks` 会展示真实渠道 webhook 的 readiness：默认 `disabled`，启用但缺少/损坏密钥时为 `misconfigured`，配置正确时为 `ok`。该响应只能出现渠道名，不得出现 secret、signature、raw body。
+- `POST /v1/channels/:channel/webhook/events` 是真实渠道安全接收入口。启用后必须携带 `x-smartcs-signature-version: v1`、`x-smartcs-tenant-id`、`x-smartcs-event-id`、`x-smartcs-timestamp` 和 `x-smartcs-signature`；签名 payload 为 `version/channel/tenantId/timestamp/eventId/sha256(rawBody)` 逐行拼接后做 HMAC-SHA256。成功只返回 `202` 和 `mode: security_only`。
 - `GET /v1/cases` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的 seed 或 smoke 后售后工单。
 - `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
 - `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
@@ -104,6 +114,7 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - `/api/operator/me` 应返回脱敏身份和权限：`admin` 可查看、确认、接管、管理规则和管理客服；`operator` 可查看、确认、接管；`viewer` 只可查看。
 - Web 侧 `/api/chat` 和 `/api/db` 默认返回 404；只有显式设置 `ENABLE_LEGACY_WEB_DEMO_API=true` 才会打开旧 demo 接口。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
+- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=<matching-secret>` 能验证真实渠道安全入口可以接受一条签名事件。运行前服务端必须显式设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true` 和匹配的 `REAL_CHANNEL_WEBHOOK_SECRETS`。该 smoke 不会触发 Agent、Action 或客户消息回传。
 
 公开路由清单见 `docs/deploy/public-api-surface.md`。新增任何 HTTP 路由时，应同步更新该清单和对应测试。
 
@@ -128,6 +139,8 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `/health` 只说明进程存活；沙盒发布前仍需执行 readiness 检查和 smoke。
 - `OPENAI_API_KEY` 为空时，任何依赖真实模型调用的能力都应视为未启用。
 - 沙盒 smoke payload 是演示数据，不可作为真实售后判责、退款或客服绩效依据。
+- 真实渠道 webhook PR13 只证明“可安全接收签名事件”，不证明已经能生产处理淘宝/抖音售后。进入自动处理前还需要 provider-specific adapter、字段归一化、沙盒回放、人工审核开关和真实小流量灰度。
+- `ChannelWebhookReceipt` 只保存 `channel`、`tenantId`、`eventId`、`bodySha256` 和时间信息；不得保存 raw body、signature 或密钥。
 - `OPERATOR_API_KEY` 和 `OPERATOR_SESSION_ACCOUNTS[*].apiKey` 属于服务端 secret，不能使用 `NEXT_PUBLIC_` 前缀，也不能暴露给浏览器。
 - `OPERATOR_SESSION_ACCOUNTS[*].password` 当前仅适用于本地沙盒登录演示；生产环境必须使用 `passwordHash`。真正上线前仍建议替换为 SSO、OIDC 或独立账号服务，并补 RBAC 管理界面。
 - `/api/chat`、`/api/db` 是历史 demo API，不属于当前售后闭环主路径；上线默认关闭。

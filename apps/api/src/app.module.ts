@@ -9,6 +9,7 @@ import { CasesModule } from "./cases/cases.module";
 import { AuditModule } from "./audit/audit.module";
 import { RulesModule } from "./rules/rules.module";
 import { AdaptersModule } from "./adapters/adapters.module";
+import { ChannelsModule } from "./channels/channels.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AdaptersModule } from "./adapters/adapters.module";
     AuditModule,
     RulesModule,
     AdaptersModule,
+    ChannelsModule,
   ],
 })
 export class AppModule {}

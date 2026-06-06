@@ -4,7 +4,7 @@ Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial
 
 ## Current Stage: PR13 - Real Channel Intake Security
 
-Status: queued
+Status: verified
 
 PR13 will add the first real-channel intake security boundary: signed webhook verification, replay protection, and channel readiness without enabling irreversible real actions.
 
@@ -43,7 +43,7 @@ PR13 will add the first real-channel intake security boundary: signed webhook ve
 - [x] PR10 operator account management endpoints and audit.
 - [x] PR11 operator account management UI.
 - [x] PR12 production identity provider boundary.
-- [ ] PR13 real channel intake security.
+- [x] PR13 real channel intake security.
 
 ## Verification Gate
 
@@ -79,3 +79,5 @@ Do not claim PR13 real channel intake security complete until these pass:
 | 2026-06-06 | Review found PR6 could be misconfigured with placeholder session secrets, default demo accounts, and fallback mock cases after real API failures | PR6 now rejects unsafe production session config and only shows fallback cases when `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=true` |
 | 2026-06-06 | The Web workbench could not ask who the current operator is after reload and had no role-derived permissions | PR7 adds `/api/operator/me`, sanitized profiles, and role permission mapping |
 | 2026-06-06 | `OPERATOR_SESSION_ACCOUNTS` still depended on plaintext passwords and had no account disable/session revocation mechanism | PR8 adds scrypt password hashes, production plaintext rejection, disabled accounts, and session version invalidation |
+| 2026-06-06 | A real-channel webhook path could accidentally be mistaken for a production business integration | PR13 creates a separate security-only intake at `/v1/channels/:channel/webhook/events`; it writes replay receipts only and never calls Agent/Action/customer-visible replies |
+| 2026-06-06 | Real-channel HMAC verification must use raw request bytes and fail closed if raw body capture or secret parsing breaks | PR13 enables Nest raw body, rejects missing raw body, converts malformed secret config to controlled auth failure, and signs `channel + tenantId + timestamp + eventId + sha256(rawBody)` |

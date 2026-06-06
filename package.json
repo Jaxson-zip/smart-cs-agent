@@ -17,7 +17,8 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "demo:smoke": "node scripts/demo/wecom-sandbox-smoke.mjs"
+    "demo:smoke": "node scripts/demo/wecom-sandbox-smoke.mjs",
+    "demo:real-channel-smoke": "node scripts/demo/real-channel-webhook-smoke.mjs"
   },
   "devDependencies": {
     "prisma": "^6.16.0",

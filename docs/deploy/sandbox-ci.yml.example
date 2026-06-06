@@ -10,6 +10,9 @@ env:
   WEB_ORIGIN: http://localhost:3000
   PORT: "4100"
   WECOM_SANDBOX_ENABLED: "true"
+  REAL_CHANNEL_WEBHOOKS_ENABLED: "false"
+  REAL_CHANNEL_WEBHOOK_SECRETS: "[]"
+  REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS: "300"
   API_URL: http://localhost:4100
   OPERATOR_API_KEY: dev_operator_key
   OPERATOR_SESSION_SECRET: ci_operator_session_secret

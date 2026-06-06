@@ -41,3 +41,8 @@
 - Started PR8 operator account hardening.
 - Added password hash login coverage, production plaintext password rejection, disabled account rejection, and session-version invalidation tests.
 - Implemented `scrypt:<salt>:<hash>` password verification, `disabled` account enforcement, and `sessionVersion` session revocation in the Web BFF session layer.
+- Started and completed PR13 real-channel intake security.
+- Added `POST /v1/channels/:channel/webhook/events` as a security-only webhook receipt endpoint for real channels.
+- Added raw-body HMAC verification, timestamp freshness checks, tenant/channel/event ID validation, replay protection through `ChannelWebhookReceipt`, and channel readiness reporting.
+- Added real-channel smoke documentation and `npm run demo:real-channel-smoke`.
+- Final PR13 verification passed: Prisma generate, API tests, Web tests, typecheck, lint, build, sandbox smoke, real-channel smoke, and demo script syntax checks.

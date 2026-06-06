@@ -1,5 +1,6 @@
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import type { HealthReadinessResponse, HealthResponse } from "@smart-cs-agent/shared";
+import { ChannelWebhookSecurityService } from "../channels/channel-webhook-security.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Controller("health")
@@ -16,7 +17,10 @@ export class HealthController {
 
 @Controller("health")
 export class HealthReadinessController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly channelWebhooks: ChannelWebhookSecurityService,
+  ) {}
 
   @Get("ready")
   async getReadiness(): Promise<HealthReadinessResponse> {
@@ -33,6 +37,7 @@ export class HealthReadinessController {
           database: {
             status: "ok",
           },
+          channelWebhooks: this.channelWebhooks.getReadiness(),
         },
       };
     } catch {
@@ -45,6 +50,7 @@ export class HealthReadinessController {
             status: "unhealthy",
             message: "Database readiness check failed",
           },
+          channelWebhooks: this.channelWebhooks.getReadiness(),
         },
       });
     }

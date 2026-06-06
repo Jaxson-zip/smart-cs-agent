@@ -1,6 +1,7 @@
 import { ServiceUnavailableException } from "@nestjs/common";
 import assert from "node:assert";
 import { describe, it } from "node:test";
+import { ChannelWebhookSecurityService } from "../channels/channel-webhook-security.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { HealthController, HealthReadinessController } from "./health.controller";
 
@@ -22,13 +23,17 @@ describe("HealthController", () => {
         return [{ "?column?": 1 }];
       },
     } as unknown as PrismaService;
-    const controller = new HealthReadinessController(prisma);
+    const controller = new HealthReadinessController(
+      prisma,
+      new ChannelWebhookSecurityService(receiptStore()),
+    );
 
     const response = await controller.getReadiness();
 
     assert.strictEqual(queryCount, 1);
     assert.strictEqual(response.status, "ok");
     assert.deepStrictEqual(response.checks.database, { status: "ok" });
+    assert.strictEqual(response.checks.channelWebhooks?.status, "disabled");
   });
 
   it("returns a 503 readiness failure when the database is unavailable", async () => {
@@ -37,7 +42,10 @@ describe("HealthController", () => {
         throw new Error("connection refused");
       },
     } as unknown as PrismaService;
-    const controller = new HealthReadinessController(prisma);
+    const controller = new HealthReadinessController(
+      prisma,
+      new ChannelWebhookSecurityService(receiptStore()),
+    );
 
     await assert.rejects(
       () => controller.getReadiness(),
@@ -65,10 +73,66 @@ describe("HealthController", () => {
               status: "unhealthy",
               message: "Database readiness check failed",
             },
+            channelWebhooks: {
+              status: "disabled",
+              enabled: false,
+              configuredChannels: [],
+              message: "Real channel webhooks are disabled",
+            },
           },
         });
         return true;
       },
     );
   });
+
+  it("reports real channel webhook readiness without leaking secrets", async () => {
+    const previousEnabled = process.env.REAL_CHANNEL_WEBHOOKS_ENABLED;
+    const previousSecrets = process.env.REAL_CHANNEL_WEBHOOK_SECRETS;
+    process.env.REAL_CHANNEL_WEBHOOKS_ENABLED = "true";
+    process.env.REAL_CHANNEL_WEBHOOK_SECRETS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        secret: "must_not_leak",
+      },
+    ]);
+    try {
+      const prisma = {
+        $queryRaw: async () => [{ "?column?": 1 }],
+      } as unknown as PrismaService;
+      const controller = new HealthReadinessController(
+        prisma,
+        new ChannelWebhookSecurityService(receiptStore()),
+      );
+
+      const response = await controller.getReadiness();
+
+      assert.deepStrictEqual(response.checks.channelWebhooks, {
+        status: "ok",
+        enabled: true,
+        configuredChannels: ["taobao"],
+      });
+      assert.ok(!JSON.stringify(response).includes("must_not_leak"));
+    } finally {
+      restoreEnv("REAL_CHANNEL_WEBHOOKS_ENABLED", previousEnabled);
+      restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", previousSecrets);
+    }
+  });
 });
+
+function receiptStore() {
+  return {
+    channelWebhookReceipt: {
+      create: async () => ({}),
+    },
+  } as unknown as PrismaService;
+}
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+}

@@ -4,7 +4,7 @@ import { loadApiConfig } from "./config/api-config";
 
 async function bootstrap() {
   const config = loadApiConfig();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableCors({
     origin: config.webOrigin,
     credentials: true,

@@ -101,6 +101,19 @@ model NormalizedChannelEvent {
   createdAt              DateTime @default(now())
 }
 
+model ChannelWebhookReceipt {
+  id         String   @id @default(cuid())
+  channel    String
+  tenantId   String
+  eventId    String
+  bodySha256 String
+  eventTime  DateTime
+  receivedAt DateTime @default(now())
+
+  @@unique([channel, tenantId, eventId])
+  @@index([receivedAt])
+}
+
 model CaseMessage {
   id         String         @id @default(cuid())
   caseId     String
