@@ -21,6 +21,7 @@
     "demo:real-channel-smoke": "node scripts/demo/real-channel-webhook-smoke.mjs",
     "verify:channel-runbook": "node scripts/verify-channel-queue-runbook.mjs",
     "verify:operator-bootstrap": "node scripts/verify-operator-bootstrap.mjs",
+    "verify:production-alerting": "node scripts/verify-production-alerting.mjs",
     "verify:production-canary": "node scripts/verify-production-canary.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"

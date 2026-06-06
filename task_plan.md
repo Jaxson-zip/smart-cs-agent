@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR32 - Production Canary Verifier
+## Current Stage: PR33 - Production Alerting Pack
 
 Status: verified
 
-PR32 adds an executable deploy/on-call canary that checks public `/health/ready` and `/metrics` after deployment, without requiring operator credentials or exposing response bodies/secrets in logs.
+PR33 adds checked production alerting assets: Prometheus alert rules, canary scheduling, and operator-safe routing guidance for public readiness/metrics signals.
 
 ### PR16 Scope
 
@@ -67,10 +67,11 @@ PR32 adds an executable deploy/on-call canary that checks public `/health/ready`
 - [x] PR30 real-channel emergency kill switch.
 - [x] PR31 public monitoring metrics.
 - [x] PR32 production canary verifier.
+- [x] PR33 production alerting pack.
 
 ## Verification Gate
 
-Do not claim PR32 production canary verifier complete until these pass:
+Do not claim PR33 production alerting pack complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -78,6 +79,8 @@ Do not claim PR32 production canary verifier complete until these pass:
 - `npm.cmd run test --workspace @smart-cs-agent/web`
 - `node --test scripts/verify-production-canary.test.mjs`
 - `node --check scripts/verify-production-canary.mjs`
+- `node --check scripts/verify-production-alerting.mjs`
+- `npm.cmd run verify:production-alerting`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
@@ -97,6 +100,8 @@ Do not claim PR32 production canary verifier complete until these pass:
 - Monitoring failure check: `GET /metrics` remains scrapeable when the database is unavailable and reports `smart_cs_agent_database_ready 0` without leaking the database error.
 - Production canary check: `npm.cmd run verify:production-canary -- --api=<healthy-local-canary> --require-real-channel` passes against healthy public readiness/metrics.
 - Production canary failure checks: degraded readiness/queue fails unless `--allow-degraded`; `--require-real-channel` fails when webhook status is not `ok` or kill switch is enabled; forbidden tenant/channel/payload/secret markers in `/metrics` fail without echoing the marker.
+- Production alerting check: Prometheus alert examples cover API down, DB down, real-channel misconfiguration, kill switch, queue degraded, stale processing claims, and oldest pending age without tenant/customer/provider/secret labels.
+- Canary schedule check: the scheduled workflow calls `npm run verify:production-canary` every five minutes using `SMART_CS_API_URL`, without operator API keys or webhook secrets.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`

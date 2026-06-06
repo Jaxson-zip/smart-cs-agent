@@ -10,6 +10,10 @@ const files = {
   publicApi: "docs/deploy/public-api-surface.md",
   productionReadiness: "docs/deploy/production-readiness.md",
   sandboxCiExample: "docs/deploy/sandbox-ci.yml.example",
+  productionAlerting: "docs/deploy/production-alerting.md",
+  productionAlerts: "docs/deploy/production-alerts.prometheus.yml.example",
+  productionCanarySchedule: "docs/deploy/production-canary-schedule.yml.example",
+  productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   packageJson: "package.json",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionCanaryTest: "scripts/verify-production-canary.test.mjs",
@@ -153,6 +157,12 @@ mustContainAll("runbook operations", content.runbook, [
   "Check monitoring metrics",
   "Check queue metrics",
   "npm run verify:production-canary",
+  "Production alerting",
+  "docs/deploy/production-alerting.md",
+  "SmartCsAgentApiDown",
+  "SmartCsAgentDatabaseDown",
+  "SmartCsAgentRealChannelMisconfigured",
+  "SmartCsAgentStaleProcessingClaims",
   "Recover stale processing claims",
   "Review recent recovery records",
   "Recheck readiness",
@@ -175,6 +185,8 @@ mustContainAll("runbook production canary safety", content.runbook, [
 
 mustContainAll(".env.example", content.envExample, envVars);
 mustContainAll("package scripts", content.packageJson, [
+  "verify:production-alerting",
+  "scripts/verify-production-alerting.mjs",
   "verify:production-canary",
   "scripts/verify-production-canary.mjs",
 ]);
@@ -198,6 +210,11 @@ mustContainAll("public API surface safety", content.publicApi, [
   "`/metrics` must not use tenant ID",
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR33 Production Alerting Pack",
+  "docs/deploy/production-alerting.md",
+  "docs/deploy/production-alerts.prometheus.yml.example",
+  "docs/deploy/production-canary-schedule.yml.example",
+  "npm run verify:production-alerting",
   "PR32 Production Canary Verifier",
   "npm run verify:production-canary",
   "--require-real-channel",
@@ -224,6 +241,56 @@ mustContainAll("production readiness intake gates", content.productionReadiness,
   "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS",
   "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD",
   "CHANNEL_QUEUE_STALE_AFTER_MINUTES",
+]);
+mustContainAll("production alerting guide", content.productionAlerting, [
+  "PR33 Production Alerting Pack",
+  "Prometheus alert rules",
+  "Canary schedule",
+  "No operator API key",
+  "Do not page on customer-visible automation from these alerts alone",
+  "must not include tenant IDs",
+  "must not include customer messages",
+  "must not include provider payloads",
+  "must not include operator API keys",
+  "must not include webhook secrets",
+  "npm run verify:production-alerting",
+]);
+mustContainAll("production prometheus alerts", content.productionAlerts, [
+  "smart-cs-agent-production",
+  "SmartCsAgentApiDown",
+  'up{job="smart-cs-agent"} == 0',
+  'absent(smart_cs_agent_api_up{job="smart-cs-agent"})',
+  "SmartCsAgentDatabaseDown",
+  "smart_cs_agent_database_ready != 1",
+  "SmartCsAgentRealChannelMisconfigured",
+  'smart_cs_agent_real_channel_webhook_status{status="misconfigured"} == 1',
+  "SmartCsAgentRealChannelKillSwitchEnabled",
+  "smart_cs_agent_real_channel_webhook_kill_switch_enabled == 1",
+  "SmartCsAgentChannelQueueDegraded",
+  "smart_cs_agent_channel_queue_degraded == 1",
+  "SmartCsAgentStaleProcessingClaims",
+  "smart_cs_agent_channel_queue_stale_processing_total > 0",
+  "SmartCsAgentOldestPendingTooOld",
+  "smart_cs_agent_channel_queue_oldest_pending_age_seconds > 900",
+]);
+mustContainAll("production canary schedule", content.productionCanarySchedule, [
+  "name: smart-cs-agent production canary",
+  "*/5 * * * *",
+  "SMART_CS_API_URL",
+  "npm run verify:production-canary",
+  "--require-real-channel",
+  "--timeout-ms=5000",
+  "--max-stale-processing=0",
+  "--max-oldest-pending-age-seconds=900",
+]);
+mustContainAll("production alerting verifier", content.productionAlertingVerifier, [
+  "docs/deploy/production-alerting.md",
+  "docs/deploy/production-alerts.prometheus.yml.example",
+  "docs/deploy/production-canary-schedule.yml.example",
+  "SmartCsAgentApiDown",
+  "SmartCsAgentDatabaseDown",
+  "SmartCsAgentRealChannelMisconfigured",
+  "SmartCsAgentStaleProcessingClaims",
 ]);
 mustContainAll("production canary verifier", content.productionCanary, [
   "/health/ready",

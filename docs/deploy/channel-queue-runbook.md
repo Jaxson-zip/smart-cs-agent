@@ -30,6 +30,17 @@ npm run verify:production-canary -- --api=https://api.example.com --require-real
 
 Use `--allow-degraded` only when queue pressure is already accepted and actively monitored. The canary reads public readiness and monitoring metrics only; it must not require operator API keys and must not print tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, raw request bodies, full metric bodies, or API URLs containing secrets.
 
+## Production alerting
+
+Use `docs/deploy/production-alerting.md` with `docs/deploy/production-alerts.prometheus.yml.example` for the first production alert pack. At minimum, route these alerts before opening real-channel intake:
+
+- `SmartCsAgentApiDown`
+- `SmartCsAgentDatabaseDown`
+- `SmartCsAgentRealChannelMisconfigured`
+- `SmartCsAgentStaleProcessingClaims`
+
+The full pack also covers the real-channel kill switch, queue degraded state, and oldest pending review age. Keep the alert labels aggregate; they must not include tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
+
 ## Queue States
 
 - `pending`: a normalized real-channel event is waiting for an operator to generate a reviewed after-sales case or ignore it.
@@ -79,7 +90,7 @@ Set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true` to emergency-disable all signed real
 
 ## Gray-Release Allowlist
 
-Signed real-channel webhook intake must also pass `REAL_CHANNEL_WEBHOOK_ALLOWLIST`. The allowlist is a JSON array of exact tenant/channel pairs, for example `[{"channel":"taobao","tenantId":"tenant_1"}]`. A webhook that is correctly signed but not allowlisted returns HTTP 403 after signature verification and before rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
+Signed real-channel webhook intake must also pass `REAL_CHANNEL_WEBHOOK_ALLOWLIST`. The allowlist is a JSON array of exact tenant/channel pairs, for example `[{"channel":"taobao","tenantId":"<tenant-slug>"}]`. A webhook that is correctly signed but not allowlisted returns HTTP 403 after signature verification and before rate limiting, replay receipt writes, normalized event writes, case creation, action execution, or customer-visible replies.
 
 Readiness may expose `allowlistedChannels` and `allowlistedPairCount`, but it must not expose tenant IDs. To roll back one merchant without closing the endpoint globally, remove that pair from `REAL_CHANNEL_WEBHOOK_ALLOWLIST` and redeploy/restart the API. To close all real-channel intake for planned configuration, set `REAL_CHANNEL_WEBHOOKS_ENABLED=false`; for emergency rollback, set `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`.
 
@@ -192,7 +203,7 @@ Expected result:
   {
     "id": "audit_1",
     "type": "stale_processing_recovered",
-    "operatorId": "admin_1",
+    "operatorId": "<operator-id>",
     "recoveredCount": 2,
     "recoveredBefore": "2026-06-06T07:15:00.000Z",
     "queueHealthyAfter": true,
@@ -244,7 +255,7 @@ Expected result:
   },
   "byOperator": [
     {
-      "operatorId": "admin_1",
+      "operatorId": "<operator-id>",
       "replayedCount": 2,
       "ignoredCount": 1,
       "recoveryRunCount": 1,

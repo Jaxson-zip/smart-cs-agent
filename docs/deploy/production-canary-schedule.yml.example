@@ -1,0 +1,31 @@
+name: smart-cs-agent production canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  production-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run production canary
+        env:
+          SMART_CS_API_URL: ${{ secrets.SMART_CS_API_URL }}
+        run: >
+          npm run verify:production-canary --
+          --api="$SMART_CS_API_URL"
+          --require-real-channel
+          --timeout-ms=5000
+          --max-stale-processing=0
+          --max-oldest-pending-age-seconds=900

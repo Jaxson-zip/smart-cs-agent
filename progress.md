@@ -142,3 +142,10 @@
 - Fixed the API workspace test script to use a small Node runner that sets `TSX_TSCONFIG=tsconfig.json` and invokes the `tsx` CLI directly, so decorator-based controller specs run reliably under the current Node/tsx toolchain.
 - Addressed independent review findings by redacting bare unknown URL-like arguments and making `/metrics` leakage detection fail on non-public label keys such as tenant/channel/secret labels.
 - Final PR32 verification passed: canary behavior tests, canary package command live check, API tests, Web tests, typecheck, lint, production build, Prisma generate/migrate deploy, runbook verifier, operator bootstrap verifier, production-readiness good/bad scenarios, and script syntax checks.
+- Started PR33 production alerting pack.
+- Added `docs/deploy/production-alerting.md`, `docs/deploy/production-alerts.prometheus.yml.example`, and `docs/deploy/production-canary-schedule.yml.example`.
+- Added `npm run verify:production-alerting` to guard alert rule coverage, scheduled canary parameters, and no-secret/no-tenant alerting boundaries.
+- Connected PR33 alerting docs into production-readiness notes and the channel queue runbook verifier.
+- Addressed independent review findings by changing the API-down Prometheus alert to use scrape health/absent metrics and broadening alerting verifier sensitive-marker checks across naming styles.
+- Addressed follow-up independent review findings by scoping the API-down `absent()` expression to `job="smart-cs-agent"`, upgrading the alerting verifier to validate enabled alert blocks, requiring the scheduled canary to use `--api="$SMART_CS_API_URL"`, and replacing concrete-looking production doc examples with placeholders.
+- Final PR33 verification passed: production-alerting verifier, channel runbook verifier, script syntax checks, production canary tests/checks, operator bootstrap verifier, Prisma generate/migrate deploy, API tests, Web tests, full typecheck, lint, production build, and independent follow-up review with no findings.

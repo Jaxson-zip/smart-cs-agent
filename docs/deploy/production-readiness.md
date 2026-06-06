@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR33 Production Alerting Pack
+
+Production monitoring now has a checked alerting pack:
+
+- `docs/deploy/production-alerting.md`: response guidance, routing severity, and safety boundaries.
+- `docs/deploy/production-alerts.prometheus.yml.example`: Prometheus alert rules for API up, database readiness, real-channel misconfiguration, kill switch, queue degradation, stale processing claims, and oldest pending age.
+- `docs/deploy/production-canary-schedule.yml.example`: GitHub Actions schedule example that runs `npm run verify:production-canary` every five minutes.
+
+Run `npm run verify:production-alerting` after changing public metrics, readiness, canary behavior, alert routing, or production deployment docs. The alerting pack must not include tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, raw request bodies, or full metric bodies.
+
 ## PR32 Production Canary Verifier
 
 Deploy and on-call checks now have an executable live canary:
@@ -35,7 +45,7 @@ Bootstrap the first admin without printing secrets:
 ```bash
 export OPERATOR_BOOTSTRAP_PASSWORD="<long temporary password>"
 export OPERATOR_BOOTSTRAP_API_KEY="<matching operator API key>"
-npm run operator:bootstrap-admin -- --username=admin --tenant=tenant_1 --operator-id=admin_1
+npm run operator:bootstrap-admin -- --username=admin --tenant=$TENANT_SLUG --operator-id=$OPERATOR_ID
 ```
 
 Use `npm run verify:operator-bootstrap` in CI to prove the bootstrap script dry-run works and does not print passwords, API keys, or password hashes.
@@ -163,11 +173,11 @@ NEXT_PUBLIC_API_URL=http://localhost:4100
 NEXT_PUBLIC_WS_URL=http://localhost:4100
 NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
 API_URL=http://localhost:4100
-OPERATOR_API_KEY=dev_operator_key
+OPERATOR_API_KEY=<operator-api-key>
 OPERATOR_SESSION_SECRET=replace_with_a_long_random_secret
 OPERATOR_IDENTITY_PROVIDER=database
 OPERATOR_ACCOUNT_SOURCE=database
-OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]
+OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin","apiKey":"<operator-api-key>","sessionVersion":1}]
 ```
 
 如果后续新增需要数据库连接的集成测试，应显式在 CI 中启动 Postgres service，并隔离为 integration/smoke job，避免让 API 单测隐式依赖外部数据库。
@@ -183,7 +193,7 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `WECOM_SANDBOX_ENABLED`：沙盒入站模拟入口开关。本地演示可以为 `true`；生产环境未显式设为 `true` 时，`/v1/wecom/events` 默认不可用。
 - `REAL_CHANNEL_WEBHOOKS_ENABLED`：真实渠道 webhook 安全接收入口开关，默认必须为 `false`。只有在完成渠道密钥配置、迁移和安全 smoke 后才可显式设为 `true`。
 - `REAL_CHANNEL_WEBHOOK_KILL_SWITCH`：真实渠道 webhook 紧急全局关闭开关。设为 `true` 时，真实渠道入口返回 HTTP 503，且不会做签名校验、限流计数、入库、Agent 决策、动作执行或客户可见回复。
-- `REAL_CHANNEL_WEBHOOK_SECRETS`：真实渠道 webhook 租户密钥 JSON 数组，格式为 `[{"channel":"taobao","tenantId":"tenant_1","secret":"long-random-secret"}]`。该值只能放在服务端 secret 管理中，不得提交到 Git，不得暴露给浏览器。
+- `REAL_CHANNEL_WEBHOOK_SECRETS`：真实渠道 webhook 租户密钥 JSON 数组，格式为 `[{"channel":"taobao","tenantId":"<tenant-slug>","secret":"long-random-secret"}]`。该值只能放在服务端 secret 管理中，不得提交到 Git，不得暴露给浏览器。
 - `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`：真实渠道 webhook 时间窗，默认 `300` 秒。过期、未来偏移过大、重复 `eventId` 都应拒绝。
 - `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`：真实渠道 webhook 应用层限流。`0` 表示关闭；生产环境若设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true`，该值必须显式设置为正整数。
 - `REAL_CHANNEL_WEBHOOK_SMOKE_SECRET`：本地 `npm run demo:real-channel-smoke` 使用的测试密钥，必须与服务端 `REAL_CHANNEL_WEBHOOK_SECRETS` 中同租户/渠道 secret 一致；不要用于真实商户。
@@ -191,16 +201,16 @@ OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<has
 - `NEXT_PUBLIC_API_URL`：旧健康检查客户端的公开 API 地址；客服台主数据路径不应再依赖它直连 API。
 - `NEXT_PUBLIC_WS_URL`：WebSocket 地址；本地可与 API 地址相同。
 - `NEXT_PUBLIC_ENABLE_OFFLINE_DEMO`：离线演示工单开关，默认必须为 `false`。生产和可部署沙盒不得用假工单掩盖 403/503/配置错误。
-- `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"dev_operator_key","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
+- `OPERATOR_API_KEYS`：PR3 沙盒客服台 API key 配置，格式为 JSON 数组，例如 `[{"key":"<operator-api-key>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin"}]`。配置后，`/v1/cases` 和 `/v1/rules` 等客服侧接口必须携带 `Authorization: Bearer <key>` 或 `x-api-key`。
 - `OPERATOR_API_KEY`：本地 smoke 脚本或直连 API 验证时使用的 operator key，应匹配 `OPERATOR_API_KEYS` 中的一项。Web 客服台 BFF 不再直接使用该变量，也不要使用 `NEXT_PUBLIC_` 前缀。
 - `OPERATOR_SESSION_SECRET`：Web 客服台签发 HttpOnly 登录 cookie 的服务端密钥。部署环境必须使用长随机值，并通过 secret 管理；生产环境会拒绝占位值和过短密钥。
-- `OPERATOR_SESSION_ACCOUNTS`：Web 客服台沙盒账号配置，格式为 JSON 数组，例如 `[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]`。登录后 BFF 会从该账号派生 `apiKey`、`tenantId` 和 `operatorId` 调用 API；生产环境会拒绝默认 demo 账号和明文 `password`。`role` 当前支持 `admin`、`operator`、`viewer`，并映射为 Web 侧权限。`disabled: true` 会禁止登录并让已有 session 失效；提升 `sessionVersion` 可撤销旧 session。
+- `OPERATOR_SESSION_ACCOUNTS`：Web 客服台沙盒账号配置，格式为 JSON 数组，例如 `[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"<tenant-slug>","operatorId":"<operator-id>","role":"admin","apiKey":"<operator-api-key>","sessionVersion":1}]`。登录后 BFF 会从该账号派生 `apiKey`、`tenantId` 和 `operatorId` 调用 API；生产环境会拒绝默认 demo 账号和明文 `password`。`role` 当前支持 `admin`、`operator`、`viewer`，并映射为 Web 侧权限。`disabled: true` 会禁止登录并让已有 session 失效；提升 `sessionVersion` 可撤销旧 session。
 - `ALLOW_INSECURE_OPERATOR_HEADERS`：只用于本地沙盒调试，默认 `false`。生产环境未配置 `OPERATOR_API_KEYS` 时，默认拒绝只靠 `x-tenant-id` 的访问；除非显式设为 `true`。
 - `ENABLE_LEGACY_WEB_DEMO_API`：早期 Web demo 的 `/api/chat` 和 `/api/db` 开关，默认应为 `false`。部署沙盒和生产环境不得打开，除非是隔离的历史演示环境。
 
 敏感值应由部署平台 secret 管理，不应提交到 Git。
 
-PR28 adds `REAL_CHANNEL_WEBHOOK_ALLOWLIST` as the real-channel gray-release gate. Use a JSON array such as `[{"channel":"taobao","tenantId":"tenant_1"}]`. Production requires this value when `REAL_CHANNEL_WEBHOOKS_ENABLED=true`; every allowlisted pair must have a matching `REAL_CHANNEL_WEBHOOK_SECRETS` record. Readiness and public docs may show allowlisted channel names and pair counts only, never tenant IDs or secrets.
+PR28 adds `REAL_CHANNEL_WEBHOOK_ALLOWLIST` as the real-channel gray-release gate. Use a JSON array such as `[{"channel":"taobao","tenantId":"<tenant-slug>"}]`. Production requires this value when `REAL_CHANNEL_WEBHOOKS_ENABLED=true`; every allowlisted pair must have a matching `REAL_CHANNEL_WEBHOOK_SECRETS` record. Readiness and public docs may show allowlisted channel names and pair counts only, never tenant IDs or secrets.
 
 生产账号应使用 `passwordHash`，当前支持 `scrypt:<salt>:<hash>` 格式。可用下面的 Node 命令生成单个账号 hash：
 
@@ -241,15 +251,15 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - `GET /v1/channel-events` 携带 `Authorization: Bearer <operator-key>` 后只能读取该 key 所属租户仍处于 `pending` 且 `source=real_channel_webhook` 的真实渠道归一化事件。
 - `POST /v1/channel-events/:id/replay` 携带 operator key 后，可将一个 pending 归一化事件转成售后工单，但必须强制进入 `human_confirm` 或 `human_takeover`，不得自动执行动作、不得真实回传、不得创建 agent 已发送消息。
 - `POST /v1/channel-events/:id/ignore` 携带 operator key 后，可将一个 pending 归一化事件标记为 `ignored`，用于重复、噪音或暂不处理的真实渠道消息。
-- `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
+- `GET /v1/rules/<tenant-slug>` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
 - `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
 - `POST /v1/wecom/webhook/send` 必须携带 operator key，且 key 所属租户必须与 body 中的 `merchantId` 一致。
 - Web 客服台应先通过 `/api/operator/login` 获取 HttpOnly session cookie，再通过同源 `/api/operator/me`、`/api/operator/cases`、`/api/operator/cases/:id` 和 `/api/operator/readiness` 访问 API；浏览器包中不得包含 operator key。
 - `/api/operator/me` 应返回脱敏身份和权限：`admin` 可查看、确认、接管、管理规则和管理客服；`operator` 可查看、确认、接管；`viewer` 只可查看。
 - Web 侧 `/api/chat` 和 `/api/db` 默认返回 404；只有显式设置 `ENABLE_LEGACY_WEB_DEMO_API=true` 才会打开旧 demo 接口。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
-- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=<matching-secret>` 能验证真实渠道安全入口可以接受一条签名事件并归一化入库。运行前服务端必须显式设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true` 和匹配的 `REAL_CHANNEL_WEBHOOK_SECRETS`。该 smoke 不会触发 Agent、Action 或客户消息回传。
-- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=<matching-secret> --replay --operator-api-key=<operator-key>` 会继续验证归一化事件可被 operator 手动回放为人工审核工单；该 smoke 仍应证明 `automationMode` 不是 `auto_execute`。
+- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=<tenant-slug> --secret=<matching-secret>` 能验证真实渠道安全入口可以接受一条签名事件并归一化入库。运行前服务端必须显式设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true` 和匹配的 `REAL_CHANNEL_WEBHOOK_SECRETS`。该 smoke 不会触发 Agent、Action 或客户消息回传。
+- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=<tenant-slug> --secret=<matching-secret> --replay --operator-api-key=<operator-key>` 会继续验证归一化事件可被 operator 手动回放为人工审核工单；该 smoke 仍应证明 `automationMode` 不是 `auto_execute`。
 
 公开路由清单见 `docs/deploy/public-api-surface.md`。新增任何 HTTP 路由时，应同步更新该清单和对应测试。
 

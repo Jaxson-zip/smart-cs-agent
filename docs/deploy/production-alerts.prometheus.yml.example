@@ -1,0 +1,72 @@
+groups:
+  - name: smart-cs-agent-production
+    rules:
+      - alert: SmartCsAgentApiDown
+        expr: up{job="smart-cs-agent"} == 0 or absent(smart_cs_agent_api_up{job="smart-cs-agent"})
+        for: 1m
+        labels:
+          severity: critical
+          service: smart-cs-agent
+        annotations:
+          summary: Smart CS Agent API metrics are not reporting healthy.
+          runbook: docs/deploy/channel-queue-runbook.md
+
+      - alert: SmartCsAgentDatabaseDown
+        expr: smart_cs_agent_database_ready != 1
+        for: 1m
+        labels:
+          severity: critical
+          service: smart-cs-agent
+        annotations:
+          summary: Smart CS Agent database readiness is failing.
+          runbook: docs/deploy/channel-queue-runbook.md
+
+      - alert: SmartCsAgentRealChannelMisconfigured
+        expr: smart_cs_agent_real_channel_webhook_status{status="misconfigured"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: smart-cs-agent
+        annotations:
+          summary: Real-channel webhook intake configuration is invalid.
+          runbook: docs/deploy/production-alerting.md
+
+      - alert: SmartCsAgentRealChannelKillSwitchEnabled
+        expr: smart_cs_agent_real_channel_webhook_kill_switch_enabled == 1
+        for: 1m
+        labels:
+          severity: warning
+          service: smart-cs-agent
+        annotations:
+          summary: Real-channel webhook emergency kill switch is enabled.
+          runbook: docs/deploy/production-alerting.md
+
+      - alert: SmartCsAgentChannelQueueDegraded
+        expr: smart_cs_agent_channel_queue_degraded == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: smart-cs-agent
+        annotations:
+          summary: Real-channel review queue is above configured thresholds.
+          runbook: docs/deploy/channel-queue-runbook.md
+
+      - alert: SmartCsAgentStaleProcessingClaims
+        expr: smart_cs_agent_channel_queue_stale_processing_total > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: smart-cs-agent
+        annotations:
+          summary: Real-channel review events may be stuck in processing.
+          runbook: docs/deploy/channel-queue-runbook.md
+
+      - alert: SmartCsAgentOldestPendingTooOld
+        expr: smart_cs_agent_channel_queue_oldest_pending_age_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+          service: smart-cs-agent
+        annotations:
+          summary: Oldest pending real-channel review event is older than 15 minutes.
+          runbook: docs/deploy/channel-queue-runbook.md
