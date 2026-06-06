@@ -31,6 +31,7 @@
     "verify:provider-read-operations": "node scripts/verify-provider-read-operations.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
+    "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"
   },

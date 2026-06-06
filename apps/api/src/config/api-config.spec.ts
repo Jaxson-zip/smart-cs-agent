@@ -24,6 +24,8 @@ describe("loadApiConfig", () => {
       realChannelWebhookMaxAgeSeconds: 300,
       realChannelWebhookRateLimitPerMinute: 0,
       providerReadonlyAdapters: [],
+      providerReadTimeoutMs: 5000,
+      providerReadMaxRetries: 0,
     });
   });
 
@@ -35,6 +37,8 @@ describe("loadApiConfig", () => {
       WECOM_SANDBOX_ENABLED: "false",
       REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
       REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "120",
+      PROVIDER_READ_TIMEOUT_MS: "2500",
+      PROVIDER_READ_MAX_RETRIES: "2",
     });
 
     assert.strictEqual(config.port, 4200);
@@ -43,6 +47,8 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.wecomSandboxEnabled, false);
     assert.strictEqual(config.realChannelWebhookKillSwitch, true);
     assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 120);
+    assert.strictEqual(config.providerReadTimeoutMs, 2500);
+    assert.strictEqual(config.providerReadMaxRetries, 2);
   });
 
   it("lets explicit environment values override local .env defaults", () => {
@@ -115,6 +121,26 @@ describe("loadApiConfig", () => {
         }),
       /REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE/,
     );
+  });
+
+  it("rejects invalid provider read harness configuration", () => {
+    const cases = [
+      { PROVIDER_READ_TIMEOUT_MS: "99" },
+      { PROVIDER_READ_TIMEOUT_MS: "30001" },
+      { PROVIDER_READ_MAX_RETRIES: "-1" },
+      { PROVIDER_READ_MAX_RETRIES: "4" },
+    ];
+
+    for (const item of cases) {
+      assert.throws(
+        () =>
+          loadApiConfig({
+            DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+            ...item,
+          }),
+        /PROVIDER_READ/,
+      );
+    }
   });
 
   it("parses provider readonly adapter references without secrets", () => {

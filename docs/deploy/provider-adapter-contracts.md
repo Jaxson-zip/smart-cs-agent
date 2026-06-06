@@ -2,6 +2,23 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR42 Provider Readonly Sandbox Harness
+
+PR42 adds the readonly client execution harness that future live provider read clients must pass through:
+
+- `ProviderReadonlyClientHarnessService`: prepares a sanitized execution plan for `get_order` and `query_logistics` after provider read policy, persistence, and credential resolution have already passed.
+- Current execution mode is sandbox-only. It keeps `networkExecution=not_implemented`, `networkAttempted=false`, `providerDataReturned=false`, `providerResponseCaptured=false`, and `attemptCount=0`.
+- `PROVIDER_READ_TIMEOUT_MS` and `PROVIDER_READ_MAX_RETRIES` define the future client timeout/retry envelope, but current code still performs no provider network request.
+- Safe audit metadata may include execution mode, credential readiness status, timeout/retry settings, and whether a provider request was prepared. It must not include raw lookup values, full credential refs, tokens, provider payloads, provider responses, or customer data.
+
+Run:
+
+```bash
+npm run verify:provider-read-harness
+```
+
+This verifier checks the harness service, config bounds, Ops audit wiring, no-network/no-provider-data behavior, docs, launch runbook, and task plan.
+
 ## PR41 Provider Credential Store Boundary
 
 PR41 adds a no-secret provider credential inventory for future readonly provider clients:

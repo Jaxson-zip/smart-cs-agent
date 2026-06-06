@@ -18,6 +18,10 @@ import {
   ProviderCredentialResolverService,
   type ProviderCredentialResolution,
 } from "../adapters/provider-credential-resolver.service";
+import {
+  ProviderReadonlyClientHarnessService,
+  type ProviderReadonlyClientHarnessResult,
+} from "../adapters/provider-readonly-client-harness.service";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -29,6 +33,8 @@ export class OpsService {
     @Optional() private readonly auditService?: AuditService,
     @Optional()
     private readonly credentialResolver?: ProviderCredentialResolverService,
+    @Optional()
+    private readonly providerReadHarness?: ProviderReadonlyClientHarnessService,
   ) {}
 
   listIntegrations(tenantId: string): IntegrationStatus[] {
@@ -295,6 +301,10 @@ export class OpsService {
       response.status === "policy_accepted"
         ? await this.resolveProviderReadCredential(request)
         : undefined;
+    const providerReadExecution =
+      response.status === "policy_accepted"
+        ? await this.planProviderReadExecution(request, credentialResolution)
+        : undefined;
     await this.auditProviderRead(
       request.caseId,
       request,
@@ -303,6 +313,7 @@ export class OpsService {
       policyReason,
       created.id,
       credentialResolution,
+      providerReadExecution,
     );
     return ProviderReadResponseSchema.parse({
       ...response,
@@ -343,6 +354,29 @@ export class OpsService {
     return toProviderReadCredentialAuditMetadata(resolution);
   }
 
+  private async planProviderReadExecution(
+    request: ProviderReadRequest,
+    credentialResolution?: ProviderReadCredentialAuditMetadata,
+  ): Promise<ProviderReadExecutionAuditMetadata | undefined> {
+    if (!this.providerReadHarness) return undefined;
+    const result = await this.providerReadHarness.planReadonlyRead({
+      request,
+      credentialResolution: credentialResolution
+        ? {
+            status: credentialResolution.credentialResolutionStatus,
+            source: credentialResolution.credentialSource,
+            credentialRefFingerprint:
+              credentialResolution.credentialRefFingerprint,
+            credentialRefConfigured: credentialResolution.credentialRefConfigured,
+            credentialMaterialLoaded: false,
+            secretValueReturned: false,
+            reason: "sanitized credential metadata for readonly harness",
+          }
+        : undefined,
+    });
+    return toProviderReadExecutionAuditMetadata(result);
+  }
+
   private async auditProviderRead(
     caseId: string | null,
     request: ProviderReadRequest,
@@ -351,10 +385,12 @@ export class OpsService {
     policyReason: string | null,
     providerReadRunId?: string,
     credentialResolution?: ProviderReadCredentialAuditMetadata,
+    providerReadExecution?: ProviderReadExecutionAuditMetadata,
   ) {
     await this.auditService?.log(caseId, `provider_read.${response.status}`, {
       ...(providerReadRunId ? { providerReadRunId } : {}),
       ...(credentialResolution ? { credentialResolution } : {}),
+      ...(providerReadExecution ? { providerReadExecution } : {}),
       tenantId: request.tenantId ?? null,
       operatorId: request.operatorId ?? null,
       channel: request.channel,
@@ -431,6 +467,8 @@ type ProviderReadCredentialAuditMetadata = {
   credentialMaterialLoaded: false;
   secretValueReturned: false;
 };
+
+type ProviderReadExecutionAuditMetadata = ProviderReadonlyClientHarnessResult;
 
 type ProviderReadRunRecord = {
   id: string;
@@ -534,6 +572,25 @@ function toProviderReadCredentialAuditMetadata(
     credentialRefConfigured: resolution.credentialRefConfigured,
     credentialMaterialLoaded: false,
     secretValueReturned: false,
+  };
+}
+
+function toProviderReadExecutionAuditMetadata(
+  result: ProviderReadonlyClientHarnessResult,
+): ProviderReadExecutionAuditMetadata {
+  return {
+    executionMode: result.executionMode,
+    credentialResolutionStatus: result.credentialResolutionStatus,
+    credentialRefConfigured: result.credentialRefConfigured,
+    providerRequestPrepared: result.providerRequestPrepared,
+    networkExecution: "not_implemented",
+    networkAttempted: false,
+    providerDataReturned: false,
+    providerResponseCaptured: false,
+    attemptCount: 0,
+    timeoutMs: result.timeoutMs,
+    maxRetries: result.maxRetries,
+    reason: result.reason,
   };
 }
 

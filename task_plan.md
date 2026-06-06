@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR41 - Provider Credential Store Boundary
+## Current Stage: PR42 - Provider Readonly Sandbox Harness
 
 Status: verified
 
-Previous Stage: PR40 - Provider Credential Resolution Boundary was verified.
+Previous Stage: PR41 - Provider Credential Store Boundary was verified.
+
+Credential Resolution Stage: PR40 - Provider Credential Resolution Boundary was verified and must stay connected to provider credential boundary checks.
 
 Provider Read Operations Stage: PR39 - Provider Read Operations Visibility was verified and must stay connected to provider read operations checks.
 
@@ -22,17 +24,17 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR41 adds a provider credential store boundary for future real provider readonly clients. It allows the resolver to detect whether a `credentialRef` is intentionally listed in deploy configuration, while still keeping secret values out of env inventory records, resolver responses, audits, provider read responses, `ProviderReadRun`, browser APIs, and provider network execution.
+PR42 adds a provider readonly sandbox harness for future real provider read clients. It introduces the execution-planning interface that future Taobao/Douyin readonly clients must pass through, while the current implementation remains a no-network sandbox that returns no provider data and only writes sanitized audit metadata.
 
-### PR41 Scope
+### PR42 Scope
 
-- Add `PROVIDER_CREDENTIALS` parsing as a local/deploy ref presence inventory that accepts only `{ credentialRef }` records and rejects inline token material, API keys, client secrets, duplicates, and malformed JSON.
-- Add `ProviderCredentialStoreService` so the resolver can distinguish `configured`, `missing`, `invalid`, and `not_implemented` states without loading or returning secret values.
-- Keep provider read responses and network execution unchanged: `networkExecution=not_implemented`, `providerDataReturned=false`, and no real provider calls.
-- Audit only sanitized resolver metadata such as `credentialRefFingerprint`, resolution status, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`; never audit full refs, secret manager paths, tokens, or provider responses.
-- Add verifier coverage so provider credential store drift fails before launch.
+- Add a `ProviderReadonlyClientHarnessService` with a typed execution plan/result for `get_order` and `query_logistics`.
+- Keep the current implementation no-network: `networkAttempted=false`, `providerDataReturned=false`, `networkExecution=not_implemented`, and no real Taobao/Douyin/provider calls.
+- Add bounded harness config for timeout and retry shape so future real clients have an explicit interface before implementation.
+- Audit only sanitized execution metadata such as execution mode, timeout/retry settings, credential readiness, and provider-request-prepared booleans; never audit lookup values, provider payloads, provider responses, tokens, or full credential refs.
+- Add verifier coverage so provider readonly harness drift fails before launch.
 
-### Out Of Scope For PR41
+### Out Of Scope For PR42
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -40,6 +42,7 @@ PR41 adds a provider credential store boundary for future real provider readonly
 - Real secret manager or vault reads.
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
+- Returning real provider data to API or Web clients.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -97,10 +100,11 @@ PR41 adds a provider credential store boundary for future real provider readonly
 - [x] PR39 provider read operations visibility.
 - [x] PR40 provider credential resolution boundary.
 - [x] PR41 provider credential store boundary.
+- [x] PR42 provider readonly sandbox harness.
 
 ## Verification Gate
 
-Do not claim PR41 provider credential store boundary complete until these pass:
+Do not claim PR42 provider readonly sandbox harness complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -117,6 +121,7 @@ Do not claim PR41 provider credential store boundary complete until these pass:
 - `node --check scripts/verify-provider-read-operations.mjs`
 - `node --check scripts/verify-provider-credential-boundary.mjs`
 - `node --check scripts/verify-provider-credential-store.mjs`
+- `node --check scripts/verify-provider-read-harness.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -124,6 +129,7 @@ Do not claim PR41 provider credential store boundary complete until these pass:
 - `npm.cmd run verify:provider-read-operations`
 - `npm.cmd run verify:provider-credential-boundary`
 - `npm.cmd run verify:provider-credential-store`
+- `npm.cmd run verify:provider-read-harness`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

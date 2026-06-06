@@ -14,6 +14,8 @@ Provider credential resolution is still a no-secret, no-network boundary in this
 
 Provider credential store configuration is ref-only. `PROVIDER_CREDENTIALS` may list `{ credentialRef }` records for future readonly clients, but it must not contain inline token material, API keys, client secrets, provider payloads, or customer data. The provider credential store does not load credential material, call a vault, or call provider APIs.
 
+The provider readonly sandbox harness is still no-network in this launch track. `ProviderReadonlyClientHarnessService` may prepare sanitized execution metadata for future readonly clients, but launch evidence must keep `networkAttempted=false`, `providerDataReturned=false`, and `providerResponseCaptured=false`. Do not include raw lookup values, provider request payloads, provider responses, full credential references, access tokens, client secrets, provider tokens, or customer data in launch tickets or audit exports.
+
 ## Launch Decision
 
 Use this runbook before every production launch or gray release that changes real-channel intake, queue handling, identity, readiness, metrics, alerting, or operator review behavior.
@@ -32,6 +34,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-read-operations` passes when provider read operations visibility, BFF mapping, or sanitized response behavior changes.
 - `npm run verify:provider-credential-boundary` passes when provider credential resolution, `credentialRef` handling, or future readonly connector setup changes.
 - `npm run verify:provider-credential-store` passes when `PROVIDER_CREDENTIALS`, provider credential store behavior, or credential inventory docs change.
+- `npm run verify:provider-read-harness` passes when provider readonly execution planning, timeout/retry config, or sanitized harness audit metadata changes.
 - Alert routes for API down, database down, real-channel misconfiguration, queue degradation, stale processing, and oldest pending age are enabled.
 - Alert routes for `SmartCsAgentApiDown`, `SmartCsAgentDatabaseDown`, `SmartCsAgentRealChannelMisconfigured`, `SmartCsAgentRealChannelKillSwitchEnabled`, `SmartCsAgentChannelQueueDegraded`, `SmartCsAgentStaleProcessingClaims`, and `SmartCsAgentOldestPendingTooOld` are enabled and have owners.
 - The first launch allowlist is intentionally small and every allowlisted pair has a matching webhook secret.
@@ -59,6 +62,7 @@ npm run verify:provider-read-audit
 npm run verify:provider-read-operations
 npm run verify:provider-credential-boundary
 npm run verify:provider-credential-store
+npm run verify:provider-read-harness
 npm run verify:channel-runbook
 ```
 
@@ -169,3 +173,5 @@ Run `npm run verify:provider-read-operations` alongside it when provider read op
 Run `npm run verify:provider-credential-boundary` alongside it when provider credential resolution, credential reference handling, or future readonly connector setup changes.
 
 Run `npm run verify:provider-credential-store` alongside it when `PROVIDER_CREDENTIALS`, provider credential store behavior, or credential inventory docs change.
+
+Run `npm run verify:provider-read-harness` alongside it when provider readonly sandbox harness execution planning, timeout/retry config, or sanitized execution audit metadata changes.

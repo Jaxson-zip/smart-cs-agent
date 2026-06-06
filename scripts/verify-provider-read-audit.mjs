@@ -96,7 +96,9 @@ mustNotContainAny("ops service raw provider read persistence", content.opsServic
   "logisticsId: request.lookup.logisticsId",
   "providerPayload",
   "rawProvider",
-  "providerResponse",
+  "providerResponse:",
+  "providerResponse =",
+  "providerResponse,",
   "providerDataReturned: true",
 ]);
 

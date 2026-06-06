@@ -120,6 +120,18 @@ const apiConfigSchema = z.object({
     .int()
     .min(0)
     .default(0),
+  PROVIDER_READ_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(30000)
+    .default(5000),
+  PROVIDER_READ_MAX_RETRIES: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3)
+    .default(0),
   PROVIDER_READONLY_ADAPTERS: providerReadonlyAdaptersEnvSchema,
 });
 
@@ -137,6 +149,8 @@ export type ApiConfig = {
   realChannelWebhookMaxAgeSeconds: number;
   realChannelWebhookRateLimitPerMinute: number;
   providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
+  providerReadTimeoutMs: number;
+  providerReadMaxRetries: number;
 };
 
 export type ProviderReadonlyAdapterConfig = {
@@ -147,6 +161,11 @@ export type ProviderReadonlyAdapterConfig = {
 
 export type ProviderCredentialRefRecord = {
   credentialRef: string;
+};
+
+export type ProviderReadonlyHarnessConfig = {
+  timeoutMs: number;
+  maxRetries: number;
 };
 
 export type ProviderCredentialRefLoadResult =
@@ -201,6 +220,8 @@ export function loadApiConfig(
     realChannelWebhookRateLimitPerMinute:
       parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
     providerReadonlyAdapters: parsed.data.PROVIDER_READONLY_ADAPTERS,
+    providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
+    providerReadMaxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
 }
 
@@ -251,6 +272,26 @@ export function loadProviderCredentialRefs(
   return {
     status: "configured",
     records: credentialRefs.map((credentialRef) => ({ credentialRef })),
+  };
+}
+
+export function loadProviderReadonlyHarnessConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderReadonlyHarnessConfig {
+  const parsed = apiConfigSchema.pick({
+    PROVIDER_READ_TIMEOUT_MS: true,
+    PROVIDER_READ_MAX_RETRIES: true,
+  }).safeParse(env);
+
+  if (!parsed.success) {
+    throw new Error(
+      "Invalid API configuration: PROVIDER_READ_TIMEOUT_MS must be between 100 and 30000 and PROVIDER_READ_MAX_RETRIES must be between 0 and 3",
+    );
+  }
+
+  return {
+    timeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
+    maxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
 }
 

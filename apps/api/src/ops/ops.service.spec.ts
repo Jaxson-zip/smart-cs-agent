@@ -13,6 +13,7 @@ import type { ProviderAdapterContract } from "../adapters/adapters.interface";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 import { ProviderCredentialResolverService } from "../adapters/provider-credential-resolver.service";
 import { ProviderCredentialStoreService } from "../adapters/provider-credential-store.service";
+import { ProviderReadonlyClientHarnessService } from "../adapters/provider-readonly-client-harness.service";
 import { MockTaobaoAdapter } from "../adapters/mock-taobao.adapter";
 import type { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../prisma/prisma.service";
@@ -601,6 +602,83 @@ describe("OpsService provider adapter contract", () => {
     );
     assert.strictEqual(serializedEvidence.includes("secret://"), false);
     assert.strictEqual(serializedEvidence.includes("order_credential_store"), false);
+  });
+
+  it("audits readonly sandbox harness execution without network or provider data", async () => {
+    const credentialRef =
+      "secret://smartcs/taobao/tenant_1/credential_ref_must_not_leak";
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef,
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const credentialResolver = new ProviderCredentialResolverService(
+      new ProviderCredentialStoreService({
+        PROVIDER_CREDENTIALS: JSON.stringify([{ credentialRef }]),
+      }),
+    );
+    const harness = new ProviderReadonlyClientHarnessService({
+      PROVIDER_READ_TIMEOUT_MS: "2500",
+      PROVIDER_READ_MAX_RETRIES: "2",
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      credentialResolver,
+      harness,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "query_logistics",
+      lookup: { orderId: "order_harness_must_not_leak" },
+      idempotencyKey: "read_harness_audit",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(response.networkExecution, "not_implemented");
+    assert.strictEqual(response.providerDataReturned, false);
+    const auditDetails = persistence.auditEntries[0].details as {
+      providerReadExecution?: {
+        executionMode?: string;
+        providerRequestPrepared?: boolean;
+        networkAttempted?: boolean;
+        providerDataReturned?: boolean;
+        timeoutMs?: number;
+        maxRetries?: number;
+      };
+    };
+    assert.deepStrictEqual(auditDetails.providerReadExecution, {
+      executionMode: "sandbox_noop",
+      credentialResolutionStatus: "configured",
+      credentialRefConfigured: true,
+      providerRequestPrepared: true,
+      networkExecution: "not_implemented",
+      networkAttempted: false,
+      providerDataReturned: false,
+      providerResponseCaptured: false,
+      attemptCount: 0,
+      timeoutMs: 2500,
+      maxRetries: 2,
+      reason:
+        "Readonly provider request prepared for sandbox harness; provider network execution is not implemented in this build.",
+    });
+    const serializedEvidence = JSON.stringify({
+      response,
+      runs: persistence.runs,
+      auditEntries: persistence.auditEntries,
+    });
+    assert.strictEqual(serializedEvidence.includes("order_harness_must_not_leak"), false);
+    assert.strictEqual(serializedEvidence.includes("credential_ref_must_not_leak"), false);
+    assert.strictEqual(serializedEvidence.includes("secret://"), false);
+    assert.strictEqual(serializedEvidence.includes("providerPayload"), false);
   });
 
   it("does not resolve credentials for blocked provider reads", async () => {

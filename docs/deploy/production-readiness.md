@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR42 Provider Readonly Sandbox Harness
+
+Provider readonly execution now has a checked sandbox harness for future live read clients:
+
+- `ProviderReadonlyClientHarnessService`: prepares the future readonly client execution envelope only after provider read policy, run persistence, and credential resolution have already passed.
+- Current execution remains sandbox-only. It keeps `networkExecution=not_implemented`, `networkAttempted=false`, `providerDataReturned=false`, `providerResponseCaptured=false`, and `attemptCount=0`.
+- `PROVIDER_READ_TIMEOUT_MS`: bounded future client timeout setting, default `5000`, accepted range `100..30000`.
+- `PROVIDER_READ_MAX_RETRIES`: bounded future retry setting, default `0`, accepted range `0..3`.
+- Audit metadata may include execution mode, credential readiness status, timeout/retry settings, and `providerRequestPrepared`, but it must not include lookup values, provider payloads, provider responses, full credential refs, tokens, API keys, client secrets, or customer data.
+- `npm run verify:provider-read-harness`: checks the harness service, config bounds, Ops audit wiring, no-network/no-provider-data behavior, docs, launch runbook, and task plan.
+
+This is still not a live provider connector. It only proves the server has a safe execution boundary where future Taobao/Douyin readonly clients can be attached after separate provider-specific implementation, sandbox evidence, and production review.
+
 ## PR41 Provider Credential Store Boundary
 
 Provider readonly credentials now have a checked no-secret ref inventory:
