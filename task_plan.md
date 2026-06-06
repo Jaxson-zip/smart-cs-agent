@@ -1,24 +1,27 @@
-# Production Readiness Plan
+﻿# Production Readiness Plan
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR35 - Provider Adapter Contract Package
+## Current Stage: PR36 - Real Provider Readonly Foundation
 
 Status: verified
 
-Previous Stage: PR34 - Production Launch And Rollback Runbook was verified.
+Previous Stage: PR35 - Provider Adapter Contract Package was verified.
 
-PR35 adds a checked Provider Adapter Contract Package so future Taobao, Douyin, Shopify, WeChat, and email integrations cannot accidentally enable real provider network calls, real commerce writes, or customer-visible actions through the current sandbox path.
+Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-### PR16 Scope
+PR36 adds a checked real-provider readonly foundation so Taobao, Douyin, Shopify, WeChat, and email adapters can expose non-mutating read capability metadata through `PROVIDER_READONLY_ADAPTERS` without enabling real commerce writes or customer-visible actions.
 
-- Add Web BFF routes for pending channel events, replay, and ignore.
-- Keep browser access same-origin through `/api/operator/*`; never expose operator API keys.
-- Add BFF role protection so viewer sessions cannot replay or ignore pending channel events.
-- Add customer-facing workbench UI for "待接入消息" with "生成工单" and "不处理" actions.
-- Keep UI copy free of webhook, normalized event, source, replay, API key, and payload terminology.
+### PR36 Scope
 
-### Out Of Scope For PR16
+- Add strict `PROVIDER_READONLY_ADAPTERS` parsing for tenant-scoped provider credential references.
+- Keep provider credentials as secret manager references only, never inline tokens or passwords.
+- Expose real-provider readonly state through integration metadata without enabling real commerce writes.
+- Add shared `readCapabilities` metadata while keeping executable provider `capabilities` limited to `handoff`.
+- Keep `/v2/actions/execute` tenant-scoped from request context, not body-supplied tenant IDs.
+- Add verifier coverage so readonly provider drift fails before launch.
+
+### Out Of Scope For PR36
 
 - Multi-channel production rollout.
 - Real payment/refund/coupon execution.
@@ -72,10 +75,11 @@ PR35 adds a checked Provider Adapter Contract Package so future Taobao, Douyin, 
 - [x] PR33 production alerting pack.
 - [x] PR34 production launch and rollback runbook.
 - [x] PR35 provider adapter contract package.
+- [x] PR36 real provider readonly foundation.
 
 ## Verification Gate
 
-Do not claim PR35 provider adapter contract package complete until these pass:
+Do not claim PR36 real provider readonly foundation complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -86,7 +90,9 @@ Do not claim PR35 provider adapter contract package complete until these pass:
 - `node --check scripts/verify-production-alerting.mjs`
 - `node --check scripts/verify-production-launch.mjs`
 - `node --check scripts/verify-provider-adapters.mjs`
+- `node --check scripts/verify-provider-readonly.mjs`
 - `npm.cmd run verify:provider-adapters`
+- `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

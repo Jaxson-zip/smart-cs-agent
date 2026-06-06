@@ -14,8 +14,8 @@ import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.s
 export class OpsService {
   constructor(private readonly providerAdapters: ProviderAdapterRegistry) {}
 
-  listIntegrations(): IntegrationStatus[] {
-    return this.providerAdapters.listIntegrations();
+  listIntegrations(tenantId: string): IntegrationStatus[] {
+    return this.providerAdapters.listIntegrations(tenantId);
   }
 
   ingestMessage(): AgentCaseDecision {

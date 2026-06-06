@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR36 Real Provider Readonly Foundation
+
+Real provider adapters now have a checked readonly configuration boundary:
+
+- `PROVIDER_READONLY_ADAPTERS`: JSON array of `{channel, tenantId, credentialRef}` records. `credentialRef` must use `secret://` or `vault://`, points to deployment secret storage, and must not inline provider tokens, client secrets, API keys, payloads, or customer data.
+- `GET /v2/integrations`: configured tenant/channel pairs may report `adapterMode=real_readonly`, `writePolicy=read_only`, `capabilities=["handoff"]`, and `readCapabilities=["get_order","query_logistics"]` only to that tenant's operators.
+- `npm run verify:provider-readonly`: checks that readonly provider configuration, shared contracts, registry projection, docs, and tests preserve the no-real-write boundary.
+
+This foundation does not enable real refunds, address changes, coupons, logistics edits, invoices, customer-visible replies, or provider write APIs.
+
 ## PR35 Provider Adapter Contract Package
 
 Provider adapter contracts now define the boundary between channel intake and real commerce execution:

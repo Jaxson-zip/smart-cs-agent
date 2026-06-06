@@ -58,11 +58,13 @@ describe("OpsController", () => {
   });
 
   it("allows integration reads when operator context is present", () => {
+    let capturedTenantId: string | undefined;
     const integrations: IntegrationStatus[] = [
       {
         channel: "taobao",
         connected: true,
         capabilities: ["issue_coupon"],
+        readCapabilities: ["get_order"],
         health: "normal",
         adapterMode: "sandbox_mock",
         writePolicy: "sandbox_only",
@@ -73,12 +75,16 @@ describe("OpsController", () => {
       },
     ];
     const controller = new OpsController({
-      listIntegrations: () => integrations,
+      listIntegrations: (tenantId: string) => {
+        capturedTenantId = tenantId;
+        return integrations;
+      },
     } as unknown as OpsService);
 
     assert.deepStrictEqual(
       controller.listIntegrations({ "x-tenant-id": "demo_tenant" }),
       integrations,
     );
+    assert.strictEqual(capturedTenantId, "demo_tenant");
   });
 });

@@ -21,8 +21,8 @@ export class OpsController {
 
   @Get("integrations")
   listIntegrations(@Headers() headers: RequestHeaders) {
-    requireRequestContext(headers);
-    return this.opsService.listIntegrations();
+    const context = requireRequestContext(headers);
+    return this.opsService.listIntegrations(context.tenantId);
   }
 
   @Post("channel-events")
@@ -44,6 +44,7 @@ export class OpsController {
     const request = ExecuteActionRequestSchema.parse(body);
     return this.opsService.executeAction({
       ...request,
+      tenantId: context.tenantId,
       operatorId: context.operatorId,
     });
   }

@@ -4,7 +4,9 @@ import type {
   CommerceChannel,
   ExecuteActionRequest,
   IntegrationStatus,
+  ProviderReadCapability,
 } from "@smart-cs-agent/shared";
+import { loadProviderReadonlyAdapterConfigs } from "../config/api-config";
 import type { ProviderAdapterContract } from "./adapters.interface";
 import { MockDouyinAdapter } from "./mock-douyin.adapter";
 import { MockTaobaoAdapter } from "./mock-taobao.adapter";
@@ -23,15 +25,25 @@ const COMMERCE_WRITE_ACTIONS = new Set<CommerceAction>([
 ]);
 
 const CONTRACT_VERSION = "provider-adapter-contract-v1";
+const READ_CAPABILITIES: ProviderReadCapability[] = [
+  "get_order",
+  "query_logistics",
+];
 
 @Injectable()
 export class ProviderAdapterRegistry {
   private readonly contracts: ProviderAdapterContract[];
+  private readonly readonlyContractKeys: Set<string>;
 
   constructor(
     taobaoAdapter: MockTaobaoAdapter = new MockTaobaoAdapter(),
     douyinAdapter: MockDouyinAdapter = new MockDouyinAdapter(),
   ) {
+    this.readonlyContractKeys = new Set(
+      loadProviderReadonlyAdapterConfigs().map((item) =>
+        contractKey(item.tenantId, item.channel),
+      ),
+    );
     this.contracts = [
       taobaoAdapter,
       douyinAdapter,
@@ -41,12 +53,18 @@ export class ProviderAdapterRegistry {
     ];
   }
 
-  listIntegrations(): IntegrationStatus[] {
-    return this.contracts.map(toIntegrationStatus);
+  listIntegrations(tenantId: string): IntegrationStatus[] {
+    return this.contracts
+      .map((contract) => this.contractForTenant(tenantId, contract))
+      .map(toIntegrationStatus);
   }
 
-  getContract(channel: CommerceChannel): ProviderAdapterContract | undefined {
-    return this.contracts.find((contract) => contract.channel === channel);
+  getContract(
+    channel: CommerceChannel,
+    tenantId: string,
+  ): ProviderAdapterContract | undefined {
+    const contract = this.contracts.find((item) => item.channel === channel);
+    return contract ? this.contractForTenant(tenantId, contract) : undefined;
   }
 
   evaluateActionPolicy(request: ExecuteActionRequest): ActionPolicyResult {
@@ -54,19 +72,12 @@ export class ProviderAdapterRegistry {
       return { allowed: true };
     }
 
-    const contract = this.getContract(request.channel);
+    const tenantId = request.tenantId ?? "";
+    const contract = this.getContract(request.channel, tenantId);
     if (!contract) {
       return {
         allowed: false,
         reason: "No provider adapter contract is registered for this channel.",
-        retryable: false,
-      };
-    }
-
-    if (!contract.capabilities.includes(request.action)) {
-      return {
-        allowed: false,
-        reason: "Provider adapter contract does not expose this capability.",
         retryable: false,
       };
     }
@@ -82,6 +93,14 @@ export class ProviderAdapterRegistry {
       }
     }
 
+    if (!contract.capabilities.includes(request.action)) {
+      return {
+        allowed: false,
+        reason: "Provider adapter contract does not expose this capability.",
+        retryable: false,
+      };
+    }
+
     if (!contract.customerVisibleActionsEnabled) {
       return {
         allowed: false,
@@ -93,6 +112,15 @@ export class ProviderAdapterRegistry {
 
     return { allowed: true };
   }
+
+  private contractForTenant(
+    tenantId: string,
+    contract: ProviderAdapterContract,
+  ): ProviderAdapterContract {
+    return this.readonlyContractKeys.has(contractKey(tenantId, contract.channel))
+      ? readOnlyContract(contract.channel)
+      : contract;
+  }
 }
 
 function toIntegrationStatus(contract: ProviderAdapterContract): IntegrationStatus {
@@ -100,6 +128,7 @@ function toIntegrationStatus(contract: ProviderAdapterContract): IntegrationStat
     channel: contract.channel,
     connected: contract.connected,
     capabilities: contract.capabilities,
+    readCapabilities: contract.readCapabilities,
     health: contract.health,
     adapterMode: contract.mode,
     writePolicy: contract.writePolicy,
@@ -121,6 +150,7 @@ function disabledContract(
     connected: false,
     health: "auth_required",
     capabilities,
+    readCapabilities: [],
     customerVisibleActionsEnabled: false,
     realCommerceActionsEnabled: false,
     contractVersion: CONTRACT_VERSION,
@@ -129,4 +159,28 @@ function disabledContract(
       "Real customer-visible writes are disabled.",
     ],
   };
+}
+
+function readOnlyContract(channel: CommerceChannel): ProviderAdapterContract {
+  return {
+    channel,
+    mode: "real_readonly",
+    writePolicy: "read_only",
+    connected: true,
+    health: "normal",
+    capabilities: ["handoff"],
+    readCapabilities: READ_CAPABILITIES,
+    customerVisibleActionsEnabled: false,
+    realCommerceActionsEnabled: false,
+    contractVersion: CONTRACT_VERSION,
+    safetyNotes: [
+      "Real provider readonly credential reference is configured.",
+      "Only non-mutating order and logistics reads are allowed.",
+      "Real commerce writes and customer-visible actions are disabled.",
+    ],
+  };
+}
+
+function contractKey(tenantId: string, channel: CommerceChannel) {
+  return JSON.stringify([tenantId, channel]);
 }

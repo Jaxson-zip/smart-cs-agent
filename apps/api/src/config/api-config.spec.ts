@@ -19,6 +19,7 @@ describe("loadApiConfig", () => {
       realChannelWebhookKillSwitch: false,
       realChannelWebhookMaxAgeSeconds: 300,
       realChannelWebhookRateLimitPerMinute: 0,
+      providerReadonlyAdapters: [],
     });
   });
 
@@ -110,6 +111,54 @@ describe("loadApiConfig", () => {
         }),
       /REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE/,
     );
+  });
+
+  it("parses provider readonly adapter references without secrets", () => {
+    const config = loadApiConfig({
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+      PROVIDER_READONLY_ADAPTERS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+          credentialRef: "secret://smartcs/taobao/tenant_1",
+        },
+      ]),
+    });
+
+    assert.deepStrictEqual(config.providerReadonlyAdapters, [
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+  });
+
+  it("rejects provider readonly adapter configs that inline secret material", () => {
+    const cases = [
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+        accessToken: "must_not_inline",
+      },
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "actual_token_value",
+      },
+    ];
+
+    for (const item of cases) {
+      assert.throws(
+        () =>
+          loadApiConfig({
+            DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+            PROVIDER_READONLY_ADAPTERS: JSON.stringify([item]),
+          }),
+        /PROVIDER_READONLY_ADAPTERS/,
+      );
+    }
   });
 
   it("does not parse real-channel secrets when the production intake is disabled", () => {

@@ -3,6 +3,7 @@ import type {
   CommerceChannel,
   IntegrationStatus,
   ProviderAdapterMode,
+  ProviderReadCapability,
   ProviderWritePolicy,
 } from "@smart-cs-agent/shared";
 
@@ -19,6 +20,7 @@ export interface ProviderAdapterContract {
   connected: boolean;
   health: IntegrationStatus["health"];
   capabilities: CommerceAction[];
+  readCapabilities: ProviderReadCapability[];
   customerVisibleActionsEnabled: boolean;
   realCommerceActionsEnabled: boolean;
   contractVersion: string;

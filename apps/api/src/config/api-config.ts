@@ -1,5 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+  CommerceChannelSchema,
+  type CommerceChannel,
+} from "@smart-cs-agent/shared";
 import { z } from "zod";
 
 const operatorApiKeyConfigSchema = z.object({
@@ -34,6 +38,38 @@ const channelWebhookAllowlistItemSchema = z.object({
   channel: z.string().min(1),
   tenantId: z.string().min(1),
 });
+
+const providerReadonlyAdapterConfigSchema = z
+  .object({
+    channel: CommerceChannelSchema,
+    tenantId: z.string().min(1),
+    credentialRef: z
+      .string()
+      .regex(
+        /^(secret|vault):\/\/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/,
+        "credentialRef must be a secret:// or vault:// reference",
+      ),
+  })
+  .strict();
+
+const providerReadonlyAdaptersEnvSchema = z
+  .string()
+  .optional()
+  .default("[]")
+  .transform((value, context) => {
+    try {
+      return z
+        .array(providerReadonlyAdapterConfigSchema)
+        .parse(JSON.parse(value));
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message:
+          "PROVIDER_READONLY_ADAPTERS must be a JSON array of readonly adapter references without inline secrets",
+      });
+      return z.NEVER;
+    }
+  });
 
 const apiConfigSchema = z.object({
   NODE_ENV: z.string().optional(),
@@ -71,6 +107,7 @@ const apiConfigSchema = z.object({
     .int()
     .min(0)
     .default(0),
+  PROVIDER_READONLY_ADAPTERS: providerReadonlyAdaptersEnvSchema,
 });
 
 const webOriginSchema = z.string().url().default("http://localhost:3000");
@@ -86,6 +123,13 @@ export type ApiConfig = {
   realChannelWebhookKillSwitch: boolean;
   realChannelWebhookMaxAgeSeconds: number;
   realChannelWebhookRateLimitPerMinute: number;
+  providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
+};
+
+export type ProviderReadonlyAdapterConfig = {
+  channel: CommerceChannel;
+  tenantId: string;
+  credentialRef: string;
 };
 
 type LoadConfigOptions = {
@@ -134,7 +178,24 @@ export function loadApiConfig(
       parsed.data.REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS,
     realChannelWebhookRateLimitPerMinute:
       parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
+    providerReadonlyAdapters: parsed.data.PROVIDER_READONLY_ADAPTERS,
   };
+}
+
+export function loadProviderReadonlyAdapterConfigs(
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderReadonlyAdapterConfig[] {
+  const parsed = providerReadonlyAdaptersEnvSchema.safeParse(
+    env.PROVIDER_READONLY_ADAPTERS,
+  );
+
+  if (!parsed.success) {
+    throw new Error(
+      "Invalid API configuration: PROVIDER_READONLY_ADAPTERS must be a JSON array of readonly adapter references without inline secrets",
+    );
+  }
+
+  return parsed.data;
 }
 
 export function loadWebOrigin(env: NodeJS.ProcessEnv = process.env): string {

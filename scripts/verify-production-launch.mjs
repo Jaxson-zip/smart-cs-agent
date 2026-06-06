@@ -12,6 +12,7 @@ const files = {
   productionAlerting: "docs/deploy/production-alerting.md",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
+  providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -33,6 +34,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-canary",
   "verify:production-alerting",
   "verify:provider-adapters",
+  "verify:provider-readonly",
   "verify:channel-runbook",
 ]);
 
@@ -65,6 +67,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
   "npm run verify:provider-adapters",
+  "npm run verify:provider-readonly",
   "npm run verify:channel-runbook",
 ]);
 
@@ -108,6 +111,7 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "must not execute real refunds",
   "Provider adapter contract",
   "real provider network calls",
+  "PROVIDER_READONLY_ADAPTERS",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -148,6 +152,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-canary",
   "verify:production-alerting",
   "verify:provider-adapters",
+  "verify:provider-readonly",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
@@ -155,6 +160,9 @@ mustContainAll("production launch verifier source", content.productionAlertingVe
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
+]);
+mustContainAll("provider readonly verifier source", content.providerReadonlyVerifier, [
+  "verify:provider-readonly",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

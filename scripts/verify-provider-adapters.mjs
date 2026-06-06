@@ -132,7 +132,7 @@ mustContainAll("mock douyin adapter", content.douyinAdapter, [
 
 mustContainAll("ops service policy use", content.opsService, [
   "ProviderAdapterRegistry",
-  "this.providerAdapters.listIntegrations()",
+  "this.providerAdapters.listIntegrations(tenantId)",
   "this.providerAdapters.evaluateActionPolicy(request)",
   'status: "blocked"',
   "policy.reason",

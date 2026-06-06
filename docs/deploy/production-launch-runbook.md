@@ -16,6 +16,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
+- `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
 - Alert routes for API down, database down, real-channel misconfiguration, queue degradation, stale processing, and oldest pending age are enabled.
 - Alert routes for `SmartCsAgentApiDown`, `SmartCsAgentDatabaseDown`, `SmartCsAgentRealChannelMisconfigured`, `SmartCsAgentRealChannelKillSwitchEnabled`, `SmartCsAgentChannelQueueDegraded`, `SmartCsAgentStaleProcessingClaims`, and `SmartCsAgentOldestPendingTooOld` are enabled and have owners.
 - The first launch allowlist is intentionally small and every allowlisted pair has a matching webhook secret.
@@ -37,6 +38,7 @@ npm run verify:production-readiness -- --env-file=<secure-production-env> --requ
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-alerting
 npm run verify:provider-adapters
+npm run verify:provider-readonly
 npm run verify:channel-runbook
 ```
 
@@ -135,3 +137,5 @@ npm run verify:production-launch
 ```
 
 This checks that the launch runbook stays connected to readiness, canary, alerting, channel queue operations, rollback controls, recovery evidence, and no-secret/no-customer-action boundaries. Run `npm run verify:provider-adapters` alongside it when provider adapter contracts or action execution policy change.
+
+Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAPTERS`, provider readonly config parsing, or `readCapabilities` changes.

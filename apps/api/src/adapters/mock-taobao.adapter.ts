@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CommerceAction } from "@smart-cs-agent/shared";
+import type {
+  CommerceAction,
+  ProviderReadCapability,
+} from "@smart-cs-agent/shared";
 import { CommerceAdapter, OrderInfo } from './adapters.interface';
 
 @Injectable()
@@ -15,6 +18,10 @@ export class MockTaobaoAdapter implements CommerceAdapter {
     'issue_coupon',
     'urge_logistics',
     'handoff',
+  ];
+  readonly readCapabilities: ProviderReadCapability[] = [
+    'get_order',
+    'query_logistics',
   ];
   readonly customerVisibleActionsEnabled = false;
   readonly realCommerceActionsEnabled = false;

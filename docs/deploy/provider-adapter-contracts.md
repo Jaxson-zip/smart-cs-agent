@@ -1,6 +1,37 @@
-# PR35 Provider Adapter Contract Package
+# Provider Adapter Contracts
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
+
+## PR36 Real Provider Readonly Foundation
+
+PR36 adds a narrow readonly foundation for future real provider integrations. Configure it with `PROVIDER_READONLY_ADAPTERS`:
+
+```bash
+PROVIDER_READONLY_ADAPTERS='[{"channel":"taobao","tenantId":"<tenant-slug>","credentialRef":"secret://smartcs/taobao/<tenant-slug>"}]'
+```
+
+The config must contain a `credentialRef` only. The accepted reference schemes are `secret://...` and `vault://...`. It must not contain access tokens, refresh tokens, client secrets, API keys, provider payloads, customer messages, or raw credential material. `credentialRef` is a pointer to deployment secret storage, not a secret value.
+
+When a tenant/channel pair appears in `PROVIDER_READONLY_ADAPTERS`, `GET /v2/integrations` may report the readonly projection only for operators from that tenant:
+
+- `adapterMode=real_readonly`
+- `writePolicy=read_only` (`read_only` means no provider write is allowed)
+- `capabilities=["handoff"]`
+- `readCapabilities=["get_order","query_logistics"]`
+- `customerVisibleActionsEnabled=false`
+- `realCommerceActionsEnabled=false`
+
+`readCapabilities` are not executable write actions. They describe future non-mutating reads such as `get_order` and `query_logistics`. This foundation does not enable real refunds, address changes, coupons, logistics edits, invoices, or customer-visible replies.
+
+Run:
+
+```bash
+npm run verify:provider-readonly
+```
+
+This verifier checks the config parser, shared contract, registry projection, docs, environment example, and tests for the readonly/no-write boundary.
+
+## PR35 Provider Adapter Contract Package
 
 ## Current Adapter Status
 

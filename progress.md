@@ -162,3 +162,9 @@
 - Added `docs/deploy/provider-adapter-contracts.md` and `npm run verify:provider-adapters` to guard the no-real-write boundary.
 - Addressed PR35 review feedback by changing old sandbox `ActionService.executeMockAction` provider operations from `success` to `simulated`, adding ActionService regression tests, and extending provider verification to guard that mock path.
 - Final PR35 verification passed: provider adapter verifier, production launch verifier, production alerting verifier, channel runbook verifier, operator bootstrap verifier, production canary tests, Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, build, and script syntax checks.
+- Started PR36 real provider readonly foundation.
+- Added `PROVIDER_READONLY_ADAPTERS` parsing with strict `{channel, tenantId, credentialRef}` records so provider credentials are referenced through deployment secret storage instead of inlined in env JSON.
+- Added shared `readCapabilities` support and projected configured channels as `real_readonly` / `read_only` with only `handoff` as an executable action.
+- Added `npm run verify:provider-readonly` and connected PR36 into production readiness, public API surface, launch runbook, `.env.example`, and the task plan.
+- Addressed PR36 independent review findings by constraining `credentialRef` to `secret://` or `vault://`, making readonly projection tenant-and-channel scoped, and deriving action tenant IDs from request context rather than request bodies.
+- Final PR36 verification passed: Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, build, provider readonly/adapters verifiers, launch/alerting/channel/operator verifiers, production canary tests, script syntax checks, production readiness good-env and dangerous-env checks, `git diff --check`, and independent review with no Critical/Important/Minor findings.
