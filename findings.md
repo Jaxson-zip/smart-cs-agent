@@ -29,3 +29,6 @@
 - PR13's real-channel webhook route is intentionally security-only. A signed event creates a `ChannelWebhookReceipt` for replay protection and returns `mode: security_only`; it must not be treated as a Taobao/Douyin business-processing loop yet.
 - Real-channel webhook HMAC must be based on raw request bytes. If Nest raw-body capture is missing, the endpoint now fails closed instead of re-stringifying parsed JSON.
 - The PR13 v1 signature payload explicitly binds `channel` and `tenantId` in addition to timestamp, event ID, and `sha256(rawBody)`, reducing cross-channel/cross-tenant replay risk if secrets are ever misconfigured.
+- PR14 changes the real-channel response from `security_only` to `normalized_only`. This means the event is stored as `NormalizedChannelEvent`, but it is still not an after-sales case and must not appear in the operator queue until a separate sandbox replay/review stage exists.
+- Real-channel body merchant identifiers are consistency checks only. The signed header context remains authoritative for `tenantId` and route `channel`.
+- PR14 writes replay receipts and normalized events in the same transaction after normalization succeeds. A malformed provider payload should not consume the replay key, so the channel can retry after fixing the payload mapping.

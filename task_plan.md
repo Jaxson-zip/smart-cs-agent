@@ -2,26 +2,28 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR13 - Real Channel Intake Security
+## Current Stage: PR14 - Real Channel Payload Normalization
 
 Status: verified
 
-PR13 will add the first real-channel intake security boundary: signed webhook verification, replay protection, and channel readiness without enabling irreversible real actions.
+PR14 builds on PR13 by normalizing signed real-channel payloads into `NormalizedChannelEvent` records while still preventing any automated after-sales processing.
 
-### PR13 Scope
+### PR14 Scope
 
-- Define a real-channel webhook intake boundary with signature and timestamp validation.
-- Keep real-channel endpoints disabled unless explicitly configured.
-- Reject unsigned, expired, replayed, or tenant-mismatched events before normalization.
-- Add channel readiness signals for missing credentials/configuration.
-- Preserve the current WeCom sandbox route and smoke fixtures.
+- Reuse the PR13 signed webhook boundary and replay receipt.
+- Normalize Taobao-shaped and Douyin-shaped sandbox payloads into the shared channel event shape.
+- Persist normalized events for later sandbox replay and inspection.
+- Keep the real-channel path out of AgentService, ActionService, customer replies, and case creation.
+- Update smoke/docs so teammates understand the endpoint is `normalized_only`, not business automation.
 
-### Out Of Scope For PR13
+### Out Of Scope For PR14
 
 - Multi-channel production rollout.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
+- Routing normalized events into the operator workbench or automated after-sales case queue.
+- Provider-specific production API callbacks beyond sandbox-shaped payloads.
 
 ## Phases
 
@@ -44,10 +46,11 @@ PR13 will add the first real-channel intake security boundary: signed webhook ve
 - [x] PR11 operator account management UI.
 - [x] PR12 production identity provider boundary.
 - [x] PR13 real channel intake security.
+- [x] PR14 real channel payload normalization.
 
 ## Verification Gate
 
-Do not claim PR13 real channel intake security complete until these pass:
+Do not claim PR14 real channel payload normalization complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -56,6 +59,8 @@ Do not claim PR13 real channel intake security complete until these pass:
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
+- `node --check scripts/demo/real-channel-webhook-smoke.mjs`
+- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
 - Browser checks if UI files changed.
 
 ## Errors Encountered
@@ -81,3 +86,4 @@ Do not claim PR13 real channel intake security complete until these pass:
 | 2026-06-06 | `OPERATOR_SESSION_ACCOUNTS` still depended on plaintext passwords and had no account disable/session revocation mechanism | PR8 adds scrypt password hashes, production plaintext rejection, disabled accounts, and session version invalidation |
 | 2026-06-06 | A real-channel webhook path could accidentally be mistaken for a production business integration | PR13 creates a separate security-only intake at `/v1/channels/:channel/webhook/events`; it writes replay receipts only and never calls Agent/Action/customer-visible replies |
 | 2026-06-06 | Real-channel HMAC verification must use raw request bytes and fail closed if raw body capture or secret parsing breaks | PR13 enables Nest raw body, rejects missing raw body, converts malformed secret config to controlled auth failure, and signs `channel + tenantId + timestamp + eventId + sha256(rawBody)` |
+| 2026-06-06 | Real-channel normalization can collapse the trust boundary if body tenant/channel overrides signed context | PR14 derives tenant/channel from the signed context, only checks body merchant identity for consistency, and keeps normalized events out of Agent/Action/case processing |

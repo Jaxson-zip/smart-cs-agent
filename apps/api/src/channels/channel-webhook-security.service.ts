@@ -59,6 +59,14 @@ export type AcceptedChannelWebhook = {
   mode: "security_only";
 };
 
+export type VerifiedChannelWebhook = Omit<
+  AcceptedChannelWebhook,
+  "status" | "mode"
+> & {
+  bodySha256: string;
+  eventTime: Date;
+};
+
 export type ChannelWebhookReadiness = {
   status: "ok" | "disabled" | "misconfigured";
   enabled: boolean;
@@ -73,6 +81,28 @@ export class ChannelWebhookSecurityService {
   async acceptIncomingWebhook(
     input: AcceptIncomingWebhookInput,
   ): Promise<AcceptedChannelWebhook> {
+    const verified = this.verifyIncomingWebhook(input);
+
+    await this.writeReceipt({
+      channel: verified.channel,
+      tenantId: verified.tenantId,
+      eventId: verified.eventId,
+      bodySha256: verified.bodySha256,
+      eventTime: verified.eventTime,
+      receivedAt: new Date(verified.receivedAt),
+    });
+
+    return {
+      status: "accepted",
+      channel: verified.channel,
+      tenantId: verified.tenantId,
+      eventId: verified.eventId,
+      receivedAt: verified.receivedAt,
+      mode: "security_only",
+    };
+  }
+
+  verifyIncomingWebhook(input: AcceptIncomingWebhookInput): VerifiedChannelWebhook {
     const env = input.env ?? process.env;
     if (env.REAL_CHANNEL_WEBHOOKS_ENABLED !== "true") {
       throw new ForbiddenException("Real channel webhook intake is disabled");
@@ -114,22 +144,13 @@ export class ChannelWebhookSecurityService {
       throw new UnauthorizedException("Real channel webhook signature is invalid");
     }
 
-    await this.writeReceipt({
-      channel,
-      tenantId,
-      eventId,
-      bodySha256,
-      eventTime,
-      receivedAt: now,
-    });
-
     return {
-      status: "accepted",
       channel,
       tenantId,
       eventId,
       receivedAt: now.toISOString(),
-      mode: "security_only",
+      bodySha256,
+      eventTime,
     };
   }
 

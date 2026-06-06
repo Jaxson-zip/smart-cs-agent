@@ -20,12 +20,7 @@ const eventId = String(
 );
 const timeoutMs = Number(args.get("--timeout-ms") ?? 5000);
 
-const body = JSON.stringify({
-  externalOrderId: "sandbox_order_1",
-  externalMessageId: eventId,
-  sender: "customer",
-  text: "When will my order ship?",
-});
+const body = JSON.stringify(buildPayload({ channel, tenantId, eventId }));
 const rawBody = Buffer.from(body);
 const timestamp = Math.floor(Date.now() / 1000).toString();
 const bodySha256 = sha256Hex(rawBody);
@@ -82,16 +77,17 @@ async function postSignedWebhook() {
       throw new Error(`Expected HTTP 202 from ${url}, got ${response.status}: ${text}`);
     }
     if (
-      payload?.status !== "accepted" ||
-      payload?.mode !== "security_only" ||
+      payload?.status !== "sandbox_queued" ||
+      payload?.mode !== "normalized_only" ||
       payload?.channel !== channel ||
       payload?.tenantId !== tenantId ||
-      payload?.eventId !== eventId
+      payload?.eventId !== eventId ||
+      typeof payload?.normalizedEventId !== "string"
     ) {
       throw new Error(`Unexpected webhook response: ${JSON.stringify(payload, null, 2)}`);
     }
 
-    console.log("Real channel webhook smoke accepted.");
+    console.log("Real channel webhook smoke normalized.");
     console.log(
       JSON.stringify(
         {
@@ -99,6 +95,7 @@ async function postSignedWebhook() {
           channel,
           tenantId,
           eventId,
+          normalizedEventId: payload.normalizedEventId,
           mode: payload.mode,
           receivedAt: payload.receivedAt,
         },
@@ -121,6 +118,32 @@ async function postSignedWebhook() {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function buildPayload({ channel, tenantId, eventId }) {
+  if (channel === "douyin") {
+    return {
+      event: "im.message.receive",
+      shop_id: tenantId,
+      order_id: "dy_sandbox_order_1",
+      conversation_id: `dy_conv_${eventId}`,
+      message_id: eventId,
+      user_nickname: "Sandbox Customer",
+      text: "Please check my logistics.",
+      create_time: Math.floor(Date.now() / 1000),
+    };
+  }
+
+  return {
+    topic: "taobao.im.message.received",
+    seller_id: tenantId,
+    tid: "tb_sandbox_order_1",
+    conversation_id: `tb_conv_${eventId}`,
+    message_id: eventId,
+    buyer_nick: "Sandbox Customer",
+    content: "When will my order ship?",
+    send_time: new Date().toISOString(),
+  };
 }
 
 postSignedWebhook();

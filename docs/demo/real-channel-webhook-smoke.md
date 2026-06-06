@@ -1,6 +1,6 @@
-# Real-Channel Webhook Security Smoke
+# Real-Channel Webhook Normalization Smoke
 
-This smoke verifies the PR13 real-channel intake security boundary only. It proves the API can accept one signed webhook receipt and reject replay/invalid requests through the tested service path. It does not create after-sales cases, call AgentService, send customer-visible replies, or execute real commerce actions.
+This smoke verifies the PR14 real-channel intake and normalization boundary. It proves the API can accept one signed webhook, write the replay receipt, normalize a Taobao/Douyin-shaped sandbox payload into `NormalizedChannelEvent`, and stop before customer-visible business processing. It does not create after-sales cases, call AgentService, send replies, or execute real commerce actions.
 
 ## Server Environment
 
@@ -12,7 +12,7 @@ REAL_CHANNEL_WEBHOOK_SECRETS='[{"channel":"taobao","tenantId":"tenant_1","secret
 REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS=300
 ```
 
-The API must also have the PR13 migration applied because replay protection writes `ChannelWebhookReceipt`.
+The API must also have migrations applied because replay protection writes `ChannelWebhookReceipt` and normalization writes `NormalizedChannelEvent`.
 
 ```bash
 npm run db:migrate:deploy
@@ -28,9 +28,10 @@ npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao 
 Expected result:
 
 - HTTP `202 Accepted`.
-- Response `status` is `accepted`.
-- Response `mode` is `security_only`.
-- Response does not include secrets, signatures, or raw request body.
+- Response `status` is `sandbox_queued`.
+- Response `mode` is `normalized_only`.
+- Response includes `normalizedEventId`.
+- Response does not include secrets, signatures, raw request body, or customer message text.
 
 ## Signature Contract
 
@@ -57,4 +58,4 @@ The raw request body bytes are mandatory. If raw-body capture is unavailable, th
 
 ## Production Boundary
 
-PR13 is not a real Taobao/Douyin business integration. The next stage must add provider-specific adapters, schema normalization, sandbox replay, allowlisted tenants, human-review gates, and rollback controls before any event can reach automated after-sales actions.
+PR14 is still not a real Taobao/Douyin business integration. The next stage must add sandbox replay controls, allowlisted tenants, human-review gates, provider-specific error handling, and rollback controls before any normalized event can reach automated after-sales actions.

@@ -46,3 +46,6 @@
 - Added raw-body HMAC verification, timestamp freshness checks, tenant/channel/event ID validation, replay protection through `ChannelWebhookReceipt`, and channel readiness reporting.
 - Added real-channel smoke documentation and `npm run demo:real-channel-smoke`.
 - Final PR13 verification passed: Prisma generate, API tests, Web tests, typecheck, lint, build, sandbox smoke, real-channel smoke, and demo script syntax checks.
+- Started PR14 real-channel payload normalization.
+- Added Taobao/Douyin-shaped payload normalizer tests and implementation.
+- Updated the real-channel controller to return `sandbox_queued` / `normalized_only` after writing `NormalizedChannelEvent`, while still avoiding AgentService, ActionService, case creation, messages, and customer-visible replies.
