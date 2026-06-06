@@ -1,0 +1,30 @@
+name: smart-cs-agent production image build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-build:
+    name: Build production API and Web images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify deployment artifact metadata
+        run: npm run verify:production-deploy-artifacts
+
+      - name: Build production images without publishing
+        run: npm run verify:production-image-builds:docker

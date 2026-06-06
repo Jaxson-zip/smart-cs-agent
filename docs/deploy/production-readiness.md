@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR48 Production Image Build Gate
+
+Production image builds are now checked by:
+
+```bash
+npm run verify:production-image-builds
+npm run verify:production-image-builds:docker
+```
+
+The default command validates the build gate, docs, workflow example, and launch references. The `:docker` command builds the API and Web images locally without pushing them. Use `docs/deploy/production-image-build.yml.example` as the first CI template for build-only image verification. This gate still does not publish images, choose a registry, sign artifacts, deploy traffic, enable real provider writes, return provider payloads, or send customer-visible replies.
+
 ## PR47 Production Deployment Artifacts
 
 Production-shaped deployment artifacts are now checked by:

@@ -2,6 +2,10 @@
 
 This stage adds checked deployment artifacts for a controlled self-hosted or platform-managed production rollout. It does not enable real refunds, address changes, coupons, logistics edits, provider writes, provider payload reads, or customer-visible replies.
 
+## PR48 Production Image Build Gate
+
+The Dockerfiles introduced here are now covered by `npm run verify:production-image-builds`. CI environments with Docker daemon access should run `npm run verify:production-image-builds:docker` from `docs/deploy/production-image-build.yml.example` to build the API and Web images without publishing them.
+
 ## Artifacts
 
 - `apps/api/Dockerfile`: builds the Nest API from the workspace, generates the Prisma client, runs as the non-root `node` user, exposes port `4100`, disables sandbox/demo defaults, and health-checks `GET /health`.

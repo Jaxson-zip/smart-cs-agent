@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR47 - Production Deployment Artifacts
+## Current Stage: PR48 - Production Image Build Gate
 
 Status: verified
 
-Previous Stage: PR46 - Multi-Merchant Launch Manifest was verified.
+Previous Stage: PR47 - Production Deployment Artifacts was verified.
+
+Deployment Artifact Stage: PR47 - Production Deployment Artifacts was verified with `docker-compose.production.yml.example` and must stay connected to production launch and image build checks.
 
 Manifest Stage: PR46 - Multi-Merchant Launch Manifest was verified for `smart-cs-agent.launch-manifest.v1` and must stay connected to launch evidence and production launch checks.
 
@@ -34,22 +36,22 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR47 adds checked production deployment artifacts. It gives the API and Web services explicit Docker image definitions, a production-shaped compose example, Next standalone output, and a static verifier so release owners can prove deploy files are present and still preserve production safety defaults before running a live canary.
+PR48 adds a production image build gate. It gives release owners a static image-build verifier, a Docker-backed build command for API/Web images, and a GitHub Actions example that builds images without publishing them.
 
-### PR47 Scope
+### PR48 Scope
 
-- Add `apps/api/Dockerfile` and `apps/web/Dockerfile` for production image builds.
-- Add `.dockerignore` so local env files, logs, node_modules, build output, and git state do not enter image contexts.
-- Add `docker-compose.production.yml.example` for a production-shaped self-hosted stack with required secret/env interpolation instead of concrete secrets.
-- Set Web `next.config.ts` to `output: "standalone"` for a deployable Next runtime artifact.
-- Add `docs/deploy/production-deployment-artifacts.md`.
-- Add `npm run verify:production-deploy-artifacts` and connect it to production launch checks.
-- Keep production defaults safe: sandbox WeCom off, legacy demo APIs off, offline demo off, database-backed operator identity required, insecure operator headers off, no concrete secrets in deploy artifacts.
+- Add `npm run verify:production-image-builds` for static image-build gate checks.
+- Add `npm run verify:production-image-builds:docker` to build API and Web images locally without publishing them.
+- Add `docs/deploy/production-image-builds.md`.
+- Add `docs/deploy/production-image-build.yml.example` as a build-only GitHub Actions template.
+- Connect image build checks into production readiness, deployment artifact docs, launch runbook, and `verify:production-launch`.
+- Keep the image build gate build-only: no registry login, no image push, no runtime secrets, no tenant IDs, no provider credentials, and no customer data in build commands or CI examples.
 
-### Out Of Scope For PR47
+### Out Of Scope For PR48
 
 - Multi-channel production rollout.
-- Building and publishing real container images from this branch.
+- Publishing images to a registry.
+- Signing images, SBOM/provenance generation, vulnerability scanning, or promotion rules.
 - Choosing a final cloud vendor, Kubernetes chart, Terraform stack, or managed secret store.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
@@ -57,7 +59,7 @@ PR47 adds checked production deployment artifacts. It gives the API and Web serv
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, database, vault, or provider networks from deployment artifact verification.
+- Calling production API readiness, database, vault, provider networks, or registry APIs from image-build static verification.
 - Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
@@ -122,10 +124,11 @@ PR47 adds checked production deployment artifacts. It gives the API and Web serv
 - [x] PR45 launch evidence archive safety.
 - [x] PR46 multi-merchant launch manifest.
 - [x] PR47 production deployment artifacts.
+- [x] PR48 production image build gate.
 
 ## Verification Gate
 
-Do not claim PR47 production deployment artifacts complete until these pass:
+Do not claim PR48 production image build gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -157,6 +160,8 @@ Do not claim PR47 production deployment artifacts complete until these pass:
 - `node --test scripts/verify-launch-manifest.test.mjs`
 - `node --check scripts/verify-production-deploy-artifacts.mjs`
 - `npm.cmd run verify:production-deploy-artifacts`
+- `node --check scripts/verify-production-image-builds.mjs`
+- `npm.cmd run verify:production-image-builds`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

@@ -12,9 +12,14 @@ const files = {
   productionAlerting: "docs/deploy/production-alerting.md",
   productionDeploymentArtifacts:
     "docs/deploy/production-deployment-artifacts.md",
+  productionImageBuilds: "docs/deploy/production-image-builds.md",
+  productionImageBuildWorkflow:
+    "docs/deploy/production-image-build.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
+  productionImageBuildsVerifier:
+    "scripts/verify-production-image-builds.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -53,6 +58,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-deploy-artifacts",
+  "verify:production-image-builds",
+  "verify:production-image-builds:docker",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -100,6 +107,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "--require-real-channel",
   "npm run verify:production-canary",
   "npm run verify:production-deploy-artifacts",
+  "npm run verify:production-image-builds",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -132,6 +140,13 @@ mustContainAll("launch runbook deploy artifacts", content.launchRunbook, [
   "docs/deploy/production-deployment-artifacts.md",
   "npm run verify:production-deploy-artifacts",
   "Deploy the API and Web artifacts",
+]);
+
+mustContainAll("launch runbook image builds", content.launchRunbook, [
+  "docs/deploy/production-image-builds.md",
+  "docs/deploy/production-image-build.yml.example",
+  "npm run verify:production-image-builds",
+  "npm run verify:production-image-builds:docker",
 ]);
 
 mustContainAll("launch runbook rollback controls", content.launchRunbook, [
@@ -212,6 +227,13 @@ mustContainAll("production readiness references deploy artifacts", content.produ
   "npm run verify:production-deploy-artifacts",
 ]);
 
+mustContainAll("production readiness references image builds", content.productionReadiness, [
+  "PR48 Production Image Build Gate",
+  "docs/deploy/production-image-build.yml.example",
+  "npm run verify:production-image-builds",
+  "npm run verify:production-image-builds:docker",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -237,10 +259,17 @@ mustContainAll("task plan references PR47", content.taskPlan, [
   "docker-compose.production.yml.example",
 ]);
 
+mustContainAll("task plan references PR48", content.taskPlan, [
+  "PR48 - Production Image Build Gate",
+  "verify:production-image-builds",
+  "production-image-build.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-deploy-artifacts",
+  "verify:production-image-builds",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -297,6 +326,24 @@ mustContainAll("production deploy artifacts verifier source", content.production
   "apps/web/Dockerfile",
   "docker-compose.production.yml.example",
 ]);
+mustContainAll("production image builds verifier source", content.productionImageBuildsVerifier, [
+  "verify:production-image-builds",
+  "verify:production-image-builds:docker",
+  "apps/api/Dockerfile",
+  "apps/web/Dockerfile",
+  "docker build",
+]);
+mustContainAll("production image build docs", content.productionImageBuilds, [
+  "PR48 Production Image Build Gate",
+  "npm run verify:production-image-builds",
+  "npm run verify:production-image-builds:docker",
+  "does not publish images",
+]);
+mustContainAll("production image build workflow", content.productionImageBuildWorkflow, [
+  "permissions:",
+  "contents: read",
+  "npm run verify:production-image-builds:docker",
+]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
   "WECOM_SANDBOX_ENABLED=false",
@@ -331,6 +378,8 @@ mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
   productionDeploymentArtifacts: content.productionDeploymentArtifacts,
+  productionImageBuilds: content.productionImageBuilds,
+  productionImageBuildWorkflow: content.productionImageBuildWorkflow,
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,
