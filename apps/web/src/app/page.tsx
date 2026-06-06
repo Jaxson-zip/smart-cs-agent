@@ -31,6 +31,8 @@ import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
 import {
   ApiError,
   fetchChannelEvents,
+  fetchApiReadiness,
+  fetchChannelEventMetrics,
   createOperatorAccount,
   fetchCases,
   fetchCurrentOperator,
@@ -39,7 +41,10 @@ import {
   loginOperator,
   logoutOperator,
   replayChannelEvent,
+  recoverStaleChannelEvents,
   updateOperatorAccount,
+  type ApiReadiness,
+  type ChannelEventQueueMetrics,
   type ChannelEventSummary,
   type OperatorAccountSummary,
   type OperatorProfile,
@@ -53,6 +58,14 @@ type NewOperatorForm = {
   password: string;
   operatorId: string;
   role: OperatorProfile["role"];
+};
+type QueueOperationsSummary = {
+  tone: "ok" | "warn" | "danger" | "muted";
+  title: string;
+  description: string;
+  pendingCount: number;
+  staleProcessingCount: number;
+  oldestPendingAgeSeconds: number | null;
 };
 
 type ChannelMeta = {
@@ -172,6 +185,12 @@ export default function OperatorWorkbench() {
   const [channelEvents, setChannelEvents] = useState<ChannelEventSummary[]>([]);
   const [channelEventsLoading, setChannelEventsLoading] = useState(false);
   const [channelEventError, setChannelEventError] = useState("");
+  const [queueReadiness, setQueueReadiness] = useState<ApiReadiness>();
+  const [queueMetrics, setQueueMetrics] = useState<ChannelEventQueueMetrics>();
+  const [queueOpsLoading, setQueueOpsLoading] = useState(false);
+  const [queueOpsError, setQueueOpsError] = useState("");
+  const [queueRecoveryMessage, setQueueRecoveryMessage] = useState("");
+  const [queueRecoveryLoading, setQueueRecoveryLoading] = useState(false);
   const [selectedChannelEventId, setSelectedChannelEventId] = useState<string>();
   const [channelEventActionId, setChannelEventActionId] = useState("");
   const [channelEventActionError, setChannelEventActionError] = useState("");
@@ -188,19 +207,33 @@ export default function OperatorWorkbench() {
     fetchCurrentOperator()
       .then(async (session) => {
         setChannelEventsLoading(true);
-        const [data, eventResult] = await Promise.all([
+        setQueueOpsLoading(true);
+        const [data, eventResult, readinessResult, metricsResult] = await Promise.all([
           fetchCases(),
           fetchChannelEvents()
             .then((events) => ({ ok: true as const, events }))
             .catch((error: unknown) => ({ ok: false as const, error })),
+          fetchApiReadiness()
+            .then((readiness) => ({ ok: true as const, readiness }))
+            .catch((error: unknown) => ({ ok: false as const, error })),
+          fetchChannelEventMetrics()
+            .then((metrics) => ({ ok: true as const, metrics }))
+            .catch((error: unknown) => ({ ok: false as const, error })),
         ]);
-        return { data, eventResult, operator: session.operator };
+        return {
+          data,
+          eventResult,
+          readinessResult,
+          metricsResult,
+          operator: session.operator,
+        };
       })
       .then((data) => {
         if (ignore) return;
 
         setOperator(data.operator);
         setChannelEventsLoading(false);
+        setQueueOpsLoading(false);
         if (data.eventResult.ok) {
           setChannelEvents(data.eventResult.events);
           setChannelEventError("");
@@ -210,6 +243,27 @@ export default function OperatorWorkbench() {
             data.eventResult.error instanceof Error
               ? data.eventResult.error.message
               : "待接入消息暂时无法同步",
+          );
+        }
+
+        if (data.readinessResult.ok) {
+          setQueueReadiness(data.readinessResult.readiness);
+        } else {
+          setQueueReadiness({
+            status: "unavailable",
+            checkedAt: new Date().toISOString(),
+          });
+        }
+
+        if (data.metricsResult.ok) {
+          setQueueMetrics(data.metricsResult.metrics);
+          setQueueOpsError("");
+        } else {
+          setQueueMetrics(undefined);
+          setQueueOpsError(
+            data.metricsResult.error instanceof Error
+              ? data.metricsResult.error.message
+              : "队列状态暂时无法同步",
           );
         }
 
@@ -225,11 +279,14 @@ export default function OperatorWorkbench() {
       .catch((error: unknown) => {
         if (ignore) return;
         setChannelEventsLoading(false);
+        setQueueOpsLoading(false);
 
         if (error instanceof ApiError && error.status === 401) {
           setCases([]);
           setChannelEvents([]);
           setOperator(undefined);
+          setQueueReadiness(undefined);
+          setQueueMetrics(undefined);
           setDataState("login");
           return;
         }
@@ -242,6 +299,8 @@ export default function OperatorWorkbench() {
 
         setCases([]);
         setChannelEvents([]);
+        setQueueReadiness(undefined);
+        setQueueMetrics(undefined);
         setSyncError(
           error instanceof Error
             ? error.message
@@ -316,6 +375,19 @@ export default function OperatorWorkbench() {
       filteredAll[0],
     [filteredAll, filteredNeedAction, selectedId],
   );
+
+  const queueOperations = useMemo(
+    () =>
+      buildQueueOperationsSummary({
+        readiness: queueReadiness,
+        metrics: queueMetrics,
+        loading: queueOpsLoading,
+        error: queueOpsError,
+      }),
+    [queueMetrics, queueOpsError, queueOpsLoading, queueReadiness],
+  );
+  const canRecoverQueue =
+    operator?.role === "admin" && (queueMetrics?.staleProcessingCount ?? 0) > 0;
 
   if (dataState === "loading") {
     return (
@@ -522,6 +594,10 @@ export default function OperatorWorkbench() {
     setOperator(undefined);
     setCases([]);
     setChannelEvents([]);
+    setQueueReadiness(undefined);
+    setQueueMetrics(undefined);
+    setQueueOpsError("");
+    setQueueRecoveryMessage("");
     setSelectedId(undefined);
     setSelectedChannelEventId(undefined);
     setOperatorPanelOpen(false);
@@ -566,6 +642,29 @@ export default function OperatorWorkbench() {
       );
     } finally {
       setChannelEventActionId("");
+    }
+  }
+
+  async function handleRecoverQueue() {
+    if (!canRecoverQueue || queueRecoveryLoading) return;
+
+    setQueueRecoveryLoading(true);
+    setQueueRecoveryMessage("");
+    setQueueOpsError("");
+
+    try {
+      const result = await recoverStaleChannelEvents({
+        olderThanMinutes: queueMetrics?.staleAfterMinutes ?? 15,
+        limit: 50,
+      });
+      setQueueRecoveryMessage(`已恢复 ${result.recoveredCount} 条卡住消息`);
+      loadCases();
+    } catch (error) {
+      setQueueOpsError(
+        error instanceof Error ? error.message : "卡住的消息暂时无法恢复",
+      );
+    } finally {
+      setQueueRecoveryLoading(false);
     }
   }
 
@@ -761,10 +860,14 @@ export default function OperatorWorkbench() {
           </div>
 
           <section className="shrink-0 border-t border-slate-200 px-4 py-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">已自动处理</span>
-              <span className="font-semibold text-emerald-700">{autoResolvedCases.length}</span>
-            </div>
+            <QueueOperationsPanel
+              summary={queueOperations}
+              autoResolvedCount={autoResolvedCases.length}
+              recoveryMessage={queueRecoveryMessage}
+              canRecover={canRecoverQueue}
+              recovering={queueRecoveryLoading}
+              onRecover={handleRecoverQueue}
+            />
           </section>
         </aside>
 
@@ -1134,6 +1237,106 @@ export default function OperatorWorkbench() {
         />
       ) : null}
     </main>
+  );
+}
+
+function QueueOperationsPanel({
+  summary,
+  autoResolvedCount,
+  recoveryMessage,
+  canRecover,
+  recovering,
+  onRecover,
+}: {
+  summary: QueueOperationsSummary;
+  autoResolvedCount: number;
+  recoveryMessage: string;
+  canRecover: boolean;
+  recovering: boolean;
+  onRecover: () => void;
+}) {
+  const toneClass = {
+    ok: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    warn: "bg-amber-50 text-amber-800 ring-amber-100",
+    danger: "bg-rose-50 text-rose-700 ring-rose-100",
+    muted: "bg-slate-50 text-slate-600 ring-slate-200",
+  }[summary.tone];
+  const Icon =
+    summary.tone === "danger"
+      ? AlertTriangle
+      : summary.tone === "warn"
+        ? Clock3
+        : PackageCheck;
+
+  return (
+    <div className="space-y-2">
+      <div className={`rounded-lg px-3 py-2 ring-1 ${toneClass}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Icon size={15} className="shrink-0" />
+            <span className="truncate text-sm font-semibold">{summary.title}</span>
+          </div>
+          <span className="shrink-0 text-xs font-semibold">
+            {summary.pendingCount} 待接入
+          </span>
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 opacity-85">
+          {summary.description}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <MiniQueueMetric label="已处理" value={String(autoResolvedCount)} />
+        <MiniQueueMetric
+          label="卡住"
+          value={String(summary.staleProcessingCount)}
+          tone={summary.staleProcessingCount > 0 ? "danger" : "normal"}
+        />
+        <MiniQueueMetric
+          label="最久等待"
+          value={formatDuration(summary.oldestPendingAgeSeconds)}
+        />
+      </div>
+
+      {canRecover ? (
+        <button
+          type="button"
+          onClick={onRecover}
+          disabled={recovering}
+          className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-300"
+        >
+          <RefreshCw size={13} className={recovering ? "animate-spin" : ""} />
+          {recovering ? "正在恢复" : "恢复卡住消息"}
+        </button>
+      ) : null}
+
+      {recoveryMessage ? (
+        <p className="text-xs leading-5 text-emerald-700">{recoveryMessage}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function MiniQueueMetric({
+  label,
+  value,
+  tone = "normal",
+}: {
+  label: string;
+  value: string;
+  tone?: "normal" | "danger";
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="truncate text-slate-400">{label}</div>
+      <div
+        className={`mt-0.5 truncate font-semibold ${
+          tone === "danger" ? "text-rose-700" : "text-slate-800"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -1542,6 +1745,78 @@ function Metric({
   );
 }
 
+function buildQueueOperationsSummary({
+  readiness,
+  metrics,
+  loading,
+  error,
+}: {
+  readiness?: ApiReadiness;
+  metrics?: ChannelEventQueueMetrics;
+  loading: boolean;
+  error: string;
+}): QueueOperationsSummary {
+  const queue = readiness?.channelQueue;
+  const pendingCount = metrics?.pendingCount ?? queue?.pendingCount ?? 0;
+  const staleProcessingCount =
+    metrics?.staleProcessingCount ?? queue?.staleProcessingCount ?? 0;
+  const oldestPendingAgeSeconds =
+    metrics?.oldestPendingAgeSeconds ?? queue?.oldestPendingAgeSeconds ?? null;
+
+  if (loading) {
+    return {
+      tone: "muted",
+      title: "队列同步中",
+      description: "正在刷新接入消息和处理状态。",
+      pendingCount,
+      staleProcessingCount,
+      oldestPendingAgeSeconds,
+    };
+  }
+
+  if (error || readiness?.status === "unavailable" || readiness?.status === "unhealthy") {
+    return {
+      tone: "danger",
+      title: "队列状态不可用",
+      description: error || "暂时无法确认接入消息是否积压，请稍后刷新。",
+      pendingCount,
+      staleProcessingCount,
+      oldestPendingAgeSeconds,
+    };
+  }
+
+  if (staleProcessingCount > 0) {
+    return {
+      tone: "danger",
+      title: "有消息卡住",
+      description: "有接入消息停留在处理中，管理员可先恢复后再处理。",
+      pendingCount,
+      staleProcessingCount,
+      oldestPendingAgeSeconds,
+    };
+  }
+
+  if (readiness?.status === "degraded" || queue?.status === "degraded") {
+    return {
+      tone: "warn",
+      title: "接入消息积压",
+      description: "待接入消息等待时间或数量偏高，请优先处理新消息。",
+      pendingCount,
+      staleProcessingCount,
+      oldestPendingAgeSeconds,
+    };
+  }
+
+  return {
+    tone: "ok",
+    title: "接入正常",
+    description: "消息接入和处理节奏正常。",
+    pendingCount,
+    staleProcessingCount,
+    oldestPendingAgeSeconds,
+  };
+}
+
 function normalizeChannel(channel: string): ChannelId {
   const normalized = channel.toLowerCase();
 
@@ -1569,4 +1844,16 @@ function formatShortTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatDuration(seconds: number | null) {
+  if (seconds === null) return "-";
+  if (seconds < 60) return `${seconds} 秒`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}小时${remainingMinutes}分` : `${hours}小时`;
 }

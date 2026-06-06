@@ -81,3 +81,7 @@
 - Added `docs/deploy/channel-queue-runbook.md` to document readiness states, queue metrics, stale recovery steps, degraded reason codes, and safety boundaries.
 - Added `scripts/verify-channel-queue-runbook.mjs` plus `npm run verify:channel-runbook` so the runbook, env example, public API surface, and source routes are checked together.
 - Final PR21 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.
+- Started PR22 operator queue operations status.
+- Extended the Web API client to preserve degraded readiness queue details, fetch sanitized channel queue metrics, and call admin stale recovery through the BFF.
+- Added a compact operator workbench queue status panel showing pending intake, stuck processing claims, oldest wait time, and admin recovery for stuck messages.
+- Final PR22 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, browser checks at 1366x768 and 390x844 with no page-level overflow or internal terms, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.

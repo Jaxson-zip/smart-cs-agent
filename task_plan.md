@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR21 - Channel Queue Operations Runbook
+## Current Stage: PR22 - Operator Queue Operations Status
 
 Status: verified
 
-PR21 turns the PR18-PR20 queue safety work into an operational runbook with an executable verifier. The goal is to make readiness degradation, metrics triage, stale recovery, and data-leak boundaries discoverable and hard to regress.
+PR22 brings the PR18-PR21 queue operations loop into the operator workbench. The goal is to show backlog/stuck-message status in product language, keep the API/BFF boundary sanitized, and let admin operators recover stale processing claims without leaving the workbench.
 
 ### PR16 Scope
 
@@ -56,10 +56,11 @@ PR21 turns the PR18-PR20 queue safety work into an operational runbook with an e
 - [x] PR19 channel event queue metrics.
 - [x] PR20 channel queue readiness thresholds.
 - [x] PR21 channel queue operations runbook and verifier.
+- [x] PR22 operator queue operations status.
 
 ## Verification Gate
 
-Do not claim PR21 channel queue operations runbook complete until these pass:
+Do not claim PR22 operator queue operations status complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`

@@ -4,6 +4,7 @@
 
 - PR20 keeps readiness operationally useful: queue pressure should degrade readiness without pretending the process is down, while DB failure remains unhealthy/503. Queue readiness must stay aggregate and tenant-free.
 - PR21 makes queue operations auditable as documentation: the runbook must cover readiness, metrics, stale recovery, degraded reason codes, and data-leak boundaries, and the verifier should fail if those operational facts drift out of the docs or source.
+- PR22 closes the operator visibility gap for queue pressure: degraded readiness and queue metrics should be visible in the workbench as product-language status, while stale recovery remains admin-only through the BFF.
 - PR19 adds safe queue observability: operators need counts and age metrics to notice backlog/stuck real-channel reviews, but browser metrics must not leak tenant IDs, source names, payloads, external IDs, or customer messages.
 - PR18 treats `processing` as a recoverable internal claim. Admin-only stale recovery must stay tenant/source scoped, write audit logs, and avoid AgentService/case/action/customer-reply side effects.
 - PR17 closes a real commercial race: replaying a real-channel event must be claimed atomically with `pending -> processing` before AgentService or case creation runs. If another operator already reviewed the event, the API should return 409 Conflict and must not call AgentService.

@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR22 Operator Queue Operations Status
+
+The operator workbench now reads API readiness and real-channel queue metrics through the same-origin BFF. Operators see a compact product-language queue status for normal intake, backlog, unavailable queue status, and stale processing claims. Admin operators can recover stale processing claims from the workbench without exposing operator API keys or raw channel-event internals to the browser.
+
+The Web API client keeps queue metrics sanitized to counts, timestamps, and age values. It must not surface tenant IDs, source names, provider payloads, external conversation IDs, external message IDs, operator API keys, or secrets.
+
 ## PR21 Channel Queue Operations Runbook
 
 Channel queue operations are now documented in `docs/deploy/channel-queue-runbook.md`. The runbook covers `/health/ready`, `GET /v1/channel-events/metrics`, `POST /v1/channel-events/recover-stale`, the Web BFF equivalents, threshold env vars, degraded reason codes, triage steps, and safety boundaries.

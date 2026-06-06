@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import {
   ApiError,
+  fetchApiReadiness,
   fetchChannelEvents,
+  fetchChannelEventMetrics,
   fetchOperatorAccounts,
   ignoreChannelEvent,
   replayChannelEvent,
+  recoverStaleChannelEvents,
 } from "./api";
 
 const originalFetch = globalThis.fetch;
@@ -59,6 +62,122 @@ describe("operator account API client", () => {
 });
 
 describe("channel event API client", () => {
+  it("keeps degraded readiness queue details for operator operations", async () => {
+    mockJsonResponse({
+      status: 200,
+      body: {
+        status: "degraded",
+        service: "smart-cs-agent-api",
+        timestamp: "2026-06-06T08:00:00.000Z",
+        checks: {
+          channelQueue: {
+            status: "degraded",
+            pendingCount: 12,
+            processingCount: 2,
+            staleProcessingCount: 1,
+            oldestPendingAgeSeconds: 1800,
+            thresholds: {
+              pendingWarnThreshold: 10,
+              oldestPendingWarnSeconds: 900,
+              staleProcessingWarnThreshold: 0,
+              staleAfterMinutes: 15,
+            },
+            reasons: [
+              "pending_count_above_threshold",
+              "oldest_pending_age_above_threshold",
+              "stale_processing_above_threshold",
+            ],
+          },
+        },
+      },
+    });
+
+    const readiness = await fetchApiReadiness();
+
+    assert.equal(readiness.status, "degraded");
+    assert.deepEqual(readiness.channelQueue, {
+      status: "degraded",
+      pendingCount: 12,
+      processingCount: 2,
+      staleProcessingCount: 1,
+      oldestPendingAgeSeconds: 1800,
+      reasons: [
+        "pending_count_above_threshold",
+        "oldest_pending_age_above_threshold",
+        "stale_processing_above_threshold",
+      ],
+    });
+  });
+
+  it("maps channel event queue metrics without leaking internal fields", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    mockJsonResponse({
+      status: 200,
+      body: {
+        pendingCount: 3,
+        processingCount: 2,
+        staleProcessingCount: 1,
+        replayedCount: 8,
+        ignoredCount: 5,
+        oldestPendingReceivedAt: "2026-06-06T07:00:00.000Z",
+        oldestPendingAgeSeconds: 1800,
+        staleAfterMinutes: 15,
+        measuredAt: "2026-06-06T07:30:00.000Z",
+        tenantId: "must_not_leak",
+        source: "must_not_leak",
+        externalMessageId: "must_not_leak",
+      },
+      requests,
+    });
+
+    const metrics = await fetchChannelEventMetrics();
+
+    assert.equal(requests[0]?.url, "/api/operator/channel-events/metrics");
+    assert.deepEqual(metrics, {
+      pendingCount: 3,
+      processingCount: 2,
+      staleProcessingCount: 1,
+      replayedCount: 8,
+      ignoredCount: 5,
+      oldestPendingReceivedAt: "2026-06-06T07:00:00.000Z",
+      oldestPendingAgeSeconds: 1800,
+      staleAfterMinutes: 15,
+      measuredAt: "2026-06-06T07:30:00.000Z",
+    });
+  });
+
+  it("recovers stale channel event claims through the operator BFF", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    mockJsonResponse({
+      status: 200,
+      body: {
+        status: "recovered",
+        recoveredCount: 2,
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        eventIds: ["event_1", "event_2"],
+      },
+      requests,
+    });
+
+    const result = await recoverStaleChannelEvents({
+      olderThanMinutes: 20,
+      limit: 25,
+    });
+
+    assert.equal(requests[0]?.url, "/api/operator/channel-events/recover-stale");
+    assert.equal(requests[0]?.init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), {
+      olderThanMinutes: 20,
+      limit: 25,
+    });
+    assert.deepEqual(result, {
+      status: "recovered",
+      recoveredCount: 2,
+      recoveredBefore: "2026-06-06T07:15:00.000Z",
+      eventIds: ["event_1", "event_2"],
+    });
+  });
+
   it("rejects malformed channel event list responses", async () => {
     mockJsonResponse({ status: 200, body: { events: [] } });
 

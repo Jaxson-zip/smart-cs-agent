@@ -5,8 +5,37 @@ const OPERATOR_BFF_URL = "/api/operator";
 const REQUEST_TIMEOUT_MS = 2500;
 
 export type ApiReadiness = {
-  status: "ready" | "unavailable";
+  status: "ok" | "degraded" | "unhealthy" | "unavailable";
   checkedAt: string;
+  channelQueue?: ChannelQueueReadiness;
+};
+
+export type ChannelQueueReadiness = {
+  status: "ok" | "degraded";
+  pendingCount: number;
+  processingCount: number;
+  staleProcessingCount: number;
+  oldestPendingAgeSeconds: number | null;
+  reasons: string[];
+};
+
+export type ChannelEventQueueMetrics = {
+  pendingCount: number;
+  processingCount: number;
+  staleProcessingCount: number;
+  replayedCount: number;
+  ignoredCount: number;
+  oldestPendingReceivedAt: string | null;
+  oldestPendingAgeSeconds: number | null;
+  staleAfterMinutes: number;
+  measuredAt: string;
+};
+
+export type ChannelEventRecoveryResult = {
+  status: "recovered";
+  recoveredCount: number;
+  recoveredBefore: string;
+  eventIds: string[];
 };
 
 export type OperatorLoginResult = {
@@ -132,11 +161,16 @@ export async function fetchApiReadiness(): Promise<ApiReadiness> {
 
   try {
     const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/readiness`);
+    if (!res.ok) {
+      return {
+        status: "unavailable",
+        checkedAt,
+      };
+    }
 
-    return {
-      status: res.ok ? "ready" : "unavailable",
-      checkedAt,
-    };
+    const body: unknown = await res.json();
+
+    return toApiReadiness(body, checkedAt);
   } catch {
     return {
       status: "unavailable",
@@ -173,6 +207,36 @@ export async function fetchChannelEvents(): Promise<ChannelEventSummary[]> {
   }
 
   return body.map(toChannelEventSummary);
+}
+
+export async function fetchChannelEventMetrics(): Promise<ChannelEventQueueMetrics> {
+  const res = await fetchWithTimeout(`${OPERATOR_BFF_URL}/channel-events/metrics`);
+
+  if (!res.ok) {
+    throw new ApiError("队列状态暂时无法同步", res.status);
+  }
+
+  return toChannelEventQueueMetrics(await res.json());
+}
+
+export async function recoverStaleChannelEvents(input: {
+  olderThanMinutes?: number;
+  limit?: number;
+} = {}): Promise<ChannelEventRecoveryResult> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/channel-events/recover-stale`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!res.ok) {
+    throw new ApiError("卡住的消息暂时无法恢复", res.status);
+  }
+
+  return toChannelEventRecoveryResult(await res.json());
 }
 
 export async function replayChannelEvent(
@@ -271,6 +335,88 @@ function toChannelEventSummary(value: unknown): ChannelEventSummary {
   };
 }
 
+function toApiReadiness(value: unknown, checkedAt: string): ApiReadiness {
+  if (!isRecord(value)) {
+    return {
+      status: "unavailable",
+      checkedAt,
+    };
+  }
+
+  const status =
+    value.status === "ok" ||
+    value.status === "degraded" ||
+    value.status === "unhealthy"
+      ? value.status
+      : value.status === "ready"
+        ? "ok"
+        : "unavailable";
+  const checks = isRecord(value.checks) ? value.checks : undefined;
+  const channelQueue = checks?.channelQueue;
+
+  return {
+    status,
+    checkedAt,
+    channelQueue: isRecord(channelQueue)
+      ? toChannelQueueReadiness(channelQueue)
+      : undefined,
+  };
+}
+
+function toChannelQueueReadiness(value: Record<string, unknown>): ChannelQueueReadiness {
+  const status = value.status === "degraded" ? "degraded" : "ok";
+
+  return {
+    status,
+    pendingCount: readFiniteNumber(value, "pendingCount"),
+    processingCount: readFiniteNumber(value, "processingCount"),
+    staleProcessingCount: readFiniteNumber(value, "staleProcessingCount"),
+    oldestPendingAgeSeconds: readNullableFiniteNumber(
+      value,
+      "oldestPendingAgeSeconds",
+    ),
+    reasons: Array.isArray(value.reasons)
+      ? value.reasons.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+}
+
+function toChannelEventQueueMetrics(value: unknown): ChannelEventQueueMetrics {
+  if (!isRecord(value)) {
+    throw new ApiError("队列状态数据格式异常", 502);
+  }
+
+  return {
+    pendingCount: readFiniteNumber(value, "pendingCount"),
+    processingCount: readFiniteNumber(value, "processingCount"),
+    staleProcessingCount: readFiniteNumber(value, "staleProcessingCount"),
+    replayedCount: readFiniteNumber(value, "replayedCount"),
+    ignoredCount: readFiniteNumber(value, "ignoredCount"),
+    oldestPendingReceivedAt: readNullableString(value, "oldestPendingReceivedAt"),
+    oldestPendingAgeSeconds: readNullableFiniteNumber(
+      value,
+      "oldestPendingAgeSeconds",
+    ),
+    staleAfterMinutes: readFiniteNumber(value, "staleAfterMinutes"),
+    measuredAt: readString(value, "measuredAt"),
+  };
+}
+
+function toChannelEventRecoveryResult(value: unknown): ChannelEventRecoveryResult {
+  if (!isRecord(value)) {
+    throw new ApiError("卡住消息恢复结果格式异常", 502);
+  }
+
+  return {
+    status: readLiteral(value.status, "recovered", "卡住消息恢复结果格式异常"),
+    recoveredCount: readFiniteNumber(value, "recoveredCount"),
+    recoveredBefore: readString(value, "recoveredBefore"),
+    eventIds: Array.isArray(value.eventIds)
+      ? value.eventIds.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+}
+
 function toChannelEventReplayResult(value: unknown): ChannelEventReplayResult {
   if (!isRecord(value)) {
     throw new ApiError("待接入消息生成结果格式异常", 502);
@@ -335,6 +481,28 @@ function readString(value: Record<string, unknown>, key: string) {
     throw new ApiError("客服账号数据格式异常", 502);
   }
   return field;
+}
+
+function readNullableString(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (field === null || field === undefined) return null;
+  if (typeof field === "string") return field;
+  throw new ApiError("队列状态数据格式异常", 502);
+}
+
+function readFiniteNumber(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (typeof field !== "number" || !Number.isFinite(field)) {
+    throw new ApiError("队列状态数据格式异常", 502);
+  }
+  return field;
+}
+
+function readNullableFiniteNumber(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  if (field === null || field === undefined) return null;
+  if (typeof field === "number" && Number.isFinite(field)) return field;
+  throw new ApiError("队列状态数据格式异常", 502);
 }
 
 function readOperatorRole(value: unknown): OperatorProfile["role"] {
