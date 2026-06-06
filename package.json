@@ -24,6 +24,7 @@
     "verify:production-alerting": "node scripts/verify-production-alerting.mjs",
     "verify:production-canary": "node scripts/verify-production-canary.mjs",
     "verify:production-launch": "node scripts/verify-production-launch.mjs",
+    "verify:provider-adapters": "node scripts/verify-provider-adapters.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"
   },

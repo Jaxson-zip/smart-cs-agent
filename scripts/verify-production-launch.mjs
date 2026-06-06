@@ -11,6 +11,7 @@ const files = {
   channelRunbook: "docs/deploy/channel-queue-runbook.md",
   productionAlerting: "docs/deploy/production-alerting.md",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
+  providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -31,6 +32,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-alerting",
+  "verify:provider-adapters",
   "verify:channel-runbook",
 ]);
 
@@ -62,6 +64,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
+  "npm run verify:provider-adapters",
   "npm run verify:channel-runbook",
 ]);
 
@@ -103,6 +106,8 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "logistics edits",
   "customer-visible replies",
   "must not execute real refunds",
+  "Provider adapter contract",
+  "real provider network calls",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -142,10 +147,14 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-alerting",
+  "verify:provider-adapters",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
   "verify:production-alerting",
+]);
+mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
+  "verify:provider-adapters",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

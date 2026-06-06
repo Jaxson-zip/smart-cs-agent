@@ -385,6 +385,7 @@ function actionStatusLabel(status?: string): string {
     success: "已完成",
     failed: "未完成",
     pending: "待处理",
+    simulated: "模拟完成",
   };
 
   return status ? labels[status] ?? "待处理" : "待处理";

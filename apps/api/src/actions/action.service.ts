@@ -25,15 +25,15 @@ export class ActionService {
     switch (action.type) {
       case "change_address":
         await adapter.changeAddress(orderId, action.newAddress || "N/A");
-        resultAction = { ...action, status: "success" };
+        resultAction = { ...action, status: "simulated" };
         break;
       case "query_logistics":
         await adapter.queryLogistics(orderId);
-        resultAction = { ...action, status: "success" };
+        resultAction = { ...action, status: "simulated" };
         break;
       case "issue_coupon":
         await adapter.issueCoupon(orderId, action.amount || 0);
-        resultAction = { ...action, status: "success" };
+        resultAction = { ...action, status: "simulated" };
         break;
       case "create_handoff":
         resultAction = { ...action, status: "pending" };
@@ -43,7 +43,7 @@ export class ActionService {
         break;
       case "send_channel_reply":
         await adapter.sendMessage(orderId, action.replyText || "");
-        resultAction = { ...action, status: "success" };
+        resultAction = { ...action, status: "simulated" };
         break;
     }
 

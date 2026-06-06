@@ -64,6 +64,12 @@ describe("OpsController", () => {
         connected: true,
         capabilities: ["issue_coupon"],
         health: "normal",
+        adapterMode: "sandbox_mock",
+        writePolicy: "sandbox_only",
+        customerVisibleActionsEnabled: false,
+        realCommerceActionsEnabled: false,
+        contractVersion: "provider-adapter-contract-v1",
+        safetyNotes: ["test contract"],
       },
     ];
     const controller = new OpsController({

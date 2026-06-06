@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR34 - Production Launch And Rollback Runbook
+## Current Stage: PR35 - Provider Adapter Contract Package
 
 Status: verified
 
-PR34 adds a checked production launch rehearsal: preflight commands, deploy sequence, rollback triggers, rollback actions, stale-claim recovery evidence, post-launch evidence, and no-secret/no-customer-action boundaries.
+Previous Stage: PR34 - Production Launch And Rollback Runbook was verified.
+
+PR35 adds a checked Provider Adapter Contract Package so future Taobao, Douyin, Shopify, WeChat, and email integrations cannot accidentally enable real provider network calls, real commerce writes, or customer-visible actions through the current sandbox path.
 
 ### PR16 Scope
 
@@ -69,10 +71,11 @@ PR34 adds a checked production launch rehearsal: preflight commands, deploy sequ
 - [x] PR32 production canary verifier.
 - [x] PR33 production alerting pack.
 - [x] PR34 production launch and rollback runbook.
+- [x] PR35 provider adapter contract package.
 
 ## Verification Gate
 
-Do not claim PR34 production launch and rollback runbook complete until these pass:
+Do not claim PR35 provider adapter contract package complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -82,6 +85,8 @@ Do not claim PR34 production launch and rollback runbook complete until these pa
 - `node --check scripts/verify-production-canary.mjs`
 - `node --check scripts/verify-production-alerting.mjs`
 - `node --check scripts/verify-production-launch.mjs`
+- `node --check scripts/verify-provider-adapters.mjs`
+- `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

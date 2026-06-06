@@ -8,52 +8,14 @@ import type {
   HandoffRequest,
   IntegrationStatus,
 } from "@smart-cs-agent/shared";
+import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 
 @Injectable()
 export class OpsService {
+  constructor(private readonly providerAdapters: ProviderAdapterRegistry) {}
+
   listIntegrations(): IntegrationStatus[] {
-    return [
-      {
-        channel: "taobao",
-        connected: true,
-        capabilities: [
-          "modify_address",
-          "issue_coupon",
-          "escalate_coupon",
-          "urge_logistics",
-          "refund",
-          "handoff",
-        ],
-        health: "normal",
-        lastEventAt: new Date().toISOString(),
-      },
-      {
-        channel: "douyin",
-        connected: true,
-        capabilities: ["modify_address", "urge_logistics", "refund", "handoff"],
-        health: "normal",
-        lastEventAt: new Date().toISOString(),
-      },
-      {
-        channel: "shopify",
-        connected: false,
-        capabilities: ["refund", "handoff"],
-        health: "degraded",
-      },
-      {
-        channel: "wechat",
-        connected: true,
-        capabilities: ["urge_logistics", "issue_coupon", "handoff"],
-        health: "normal",
-        lastEventAt: new Date().toISOString(),
-      },
-      {
-        channel: "email",
-        connected: false,
-        capabilities: ["update_invoice", "handoff"],
-        health: "auth_required",
-      },
-    ];
+    return this.providerAdapters.listIntegrations();
   }
 
   ingestMessage(): AgentCaseDecision {
@@ -71,16 +33,24 @@ export class OpsService {
   }
 
   executeAction(request: ExecuteActionRequest): ExecuteActionResponse {
-    const blocked = request.action === "refund" && !request.operatorId;
+    const policy = this.providerAdapters.evaluateActionPolicy(request);
+
+    if (!policy.allowed) {
+      return {
+        actionRunId: `run_${Date.now()}`,
+        status: "blocked",
+        customerVisibleResult: policy.reason,
+        requiresHuman: true,
+        retryable: policy.retryable,
+      };
+    }
 
     return {
       actionRunId: `run_${Date.now()}`,
-      status: blocked ? "blocked" : "queued",
-      customerVisibleResult: blocked
-        ? "该操作需要主管或坐席确认。"
-        : "系统已接收操作，后续会回传到客户原会话。",
-      requiresHuman: blocked,
-      retryable: !blocked,
+      status: "queued",
+      customerVisibleResult: "Action queued for internal operator handling.",
+      requiresHuman: false,
+      retryable: true,
     };
   }
 

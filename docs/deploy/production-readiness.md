@@ -1,5 +1,14 @@
 # Production-Readiness Baseline
 
+## PR35 Provider Adapter Contract Package
+
+Provider adapter contracts now define the boundary between channel intake and real commerce execution:
+
+- `docs/deploy/provider-adapter-contracts.md`: current adapter modes, write policies, supported capabilities, action policy, future real-adapter entry criteria, and safety boundaries.
+- `npm run verify:provider-adapters`: checks shared contracts, adapter registry, mock adapters, operation service policy use, public docs, and launch runbook references.
+
+Taobao and Douyin remain `sandbox_mock` adapters with `writePolicy=sandbox_only`. `customerVisibleActionsEnabled=false` and `realCommerceActionsEnabled=false` must remain true for the current launch track. This package does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
+
 ## PR34 Production Launch And Rollback Runbook
 
 Production release operations now have a checked launch rehearsal:

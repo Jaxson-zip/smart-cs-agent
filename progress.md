@@ -154,3 +154,11 @@
 - Added `npm run verify:production-launch` to guard the launch runbook against drifting away from readiness, canary, alerting, queue operations, rollback controls, recovery evidence, and no-secret/no-customer-action boundaries.
 - Addressed independent review findings by replacing concrete-looking smoke examples in `task_plan.md`, expanding launch verification to scan PR34-touched docs and the task plan, and explicitly tying PR34 rollback triggers to the PR33 alert names.
 - Final PR34 verification passed: production-launch verifier, production-alerting verifier, channel runbook verifier, operator bootstrap verifier, production canary tests, script syntax checks, Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, production build, and independent follow-up review with no Critical/Important findings.
+- Started PR35 provider adapter contract package.
+- Added shared provider adapter mode/write-policy fields to the operator integration contract.
+- Added `ProviderAdapterRegistry` so integration status and action policy come from adapter contracts instead of static operation-service data.
+- Updated current Taobao and Douyin adapters to declare `sandbox_mock`, `sandbox_only`, no customer-visible actions, and no real commerce actions.
+- Updated `OpsService` so `GET /v2/integrations` reads provider contracts and `POST /v2/actions/execute` blocks commerce writes through provider write policy while keeping internal `handoff` queueable.
+- Added `docs/deploy/provider-adapter-contracts.md` and `npm run verify:provider-adapters` to guard the no-real-write boundary.
+- Addressed PR35 review feedback by changing old sandbox `ActionService.executeMockAction` provider operations from `success` to `simulated`, adding ActionService regression tests, and extending provider verification to guard that mock path.
+- Final PR35 verification passed: provider adapter verifier, production launch verifier, production alerting verifier, channel runbook verifier, operator bootstrap verifier, production canary tests, Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, build, and script syntax checks.

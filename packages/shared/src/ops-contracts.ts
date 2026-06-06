@@ -28,6 +28,20 @@ export const CommerceActionSchema = z.enum([
   "handoff",
 ]);
 
+export const ProviderAdapterModeSchema = z.enum([
+  "sandbox_mock",
+  "real_readonly",
+  "real_actions_disabled",
+  "not_configured",
+]);
+
+export const ProviderWritePolicySchema = z.enum([
+  "sandbox_only",
+  "read_only",
+  "human_review_required",
+  "disabled",
+]);
+
 export const ChannelMessageIngestSchema = z.object({
   externalMessageId: z.string().min(1),
   channel: CommerceChannelSchema,
@@ -118,11 +132,19 @@ export const IntegrationStatusSchema = z.object({
   capabilities: z.array(CommerceActionSchema),
   health: z.enum(["normal", "degraded", "auth_required"]),
   lastEventAt: z.string().optional(),
+  adapterMode: ProviderAdapterModeSchema,
+  writePolicy: ProviderWritePolicySchema,
+  customerVisibleActionsEnabled: z.boolean(),
+  realCommerceActionsEnabled: z.boolean(),
+  contractVersion: z.string().min(1),
+  safetyNotes: z.array(z.string().min(1)),
 });
 
 export type CommerceChannel = z.infer<typeof CommerceChannelSchema>;
 export type CaseStatus = z.infer<typeof CaseStatusSchema>;
 export type CommerceAction = z.infer<typeof CommerceActionSchema>;
+export type ProviderAdapterMode = z.infer<typeof ProviderAdapterModeSchema>;
+export type ProviderWritePolicy = z.infer<typeof ProviderWritePolicySchema>;
 export type ChannelMessageIngest = z.infer<typeof ChannelMessageIngestSchema>;
 export type AgentCaseDecision = z.infer<typeof AgentCaseDecisionSchema>;
 export type ExecuteActionRequest = z.infer<typeof ExecuteActionRequestSchema>;
