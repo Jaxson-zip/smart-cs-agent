@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR40 - Provider Credential Resolution Boundary
+## Current Stage: PR41 - Provider Credential Store Boundary
 
 Status: verified
 
-Previous Stage: PR39 - Provider Read Operations Visibility was verified.
+Previous Stage: PR40 - Provider Credential Resolution Boundary was verified.
+
+Provider Read Operations Stage: PR39 - Provider Read Operations Visibility was verified and must stay connected to provider read operations checks.
 
 Provider Read Audit Stage: PR38 - Provider Read Audit And Idempotency was verified and must stay connected to provider read audit checks.
 
@@ -20,23 +22,24 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR40 adds a no-secret credential resolution boundary for future real provider readonly clients. It lets the backend pass configured `credentialRef` values to a resolver only after case ownership, idempotency, and readonly policy checks, while keeping real secret loading, provider network execution, and provider data return disabled.
+PR41 adds a provider credential store boundary for future real provider readonly clients. It allows the resolver to detect whether a `credentialRef` is intentionally listed in deploy configuration, while still keeping secret values out of env inventory records, resolver responses, audits, provider read responses, `ProviderReadRun`, browser APIs, and provider network execution.
 
-### PR40 Scope
+### PR41 Scope
 
-- Add `ProviderCredentialResolverService` as the single provider credential resolution boundary.
-- Keep the default resolver no-secret and no-network: `status=not_implemented`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
-- Add exact tenant/channel lookup for readonly `credentialRef` without exposing it in `GET /v2/integrations`, provider read responses, `ProviderReadRun`, Web BFF responses, or public APIs.
-- Audit only sanitized resolver metadata such as `credentialRefFingerprint`; never audit full refs, secret manager paths, tokens, or provider responses.
-- Add verifier coverage so provider credential boundary drift fails before launch.
+- Add `PROVIDER_CREDENTIALS` parsing as a local/deploy ref presence inventory that accepts only `{ credentialRef }` records and rejects inline token material, API keys, client secrets, duplicates, and malformed JSON.
+- Add `ProviderCredentialStoreService` so the resolver can distinguish `configured`, `missing`, `invalid`, and `not_implemented` states without loading or returning secret values.
+- Keep provider read responses and network execution unchanged: `networkExecution=not_implemented`, `providerDataReturned=false`, and no real provider calls.
+- Audit only sanitized resolver metadata such as `credentialRefFingerprint`, resolution status, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`; never audit full refs, secret manager paths, tokens, or provider responses.
+- Add verifier coverage so provider credential store drift fails before launch.
 
-### Out Of Scope For PR40
+### Out Of Scope For PR41
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
 - Real secret manager or vault reads.
 - Persisting or returning full `credentialRef` values.
+- Returning credential material or provider tokens to provider clients.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -93,10 +96,11 @@ PR40 adds a no-secret credential resolution boundary for future real provider re
 - [x] PR38 provider read audit and idempotency.
 - [x] PR39 provider read operations visibility.
 - [x] PR40 provider credential resolution boundary.
+- [x] PR41 provider credential store boundary.
 
 ## Verification Gate
 
-Do not claim PR40 provider credential resolution boundary complete until these pass:
+Do not claim PR41 provider credential store boundary complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -112,12 +116,14 @@ Do not claim PR40 provider credential resolution boundary complete until these p
 - `node --check scripts/verify-provider-read-audit.mjs`
 - `node --check scripts/verify-provider-read-operations.mjs`
 - `node --check scripts/verify-provider-credential-boundary.mjs`
+- `node --check scripts/verify-provider-credential-store.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
 - `npm.cmd run verify:provider-read-audit`
 - `npm.cmd run verify:provider-read-operations`
 - `npm.cmd run verify:provider-credential-boundary`
+- `npm.cmd run verify:provider-credential-store`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
@@ -177,3 +183,4 @@ Do not claim PR40 provider credential resolution boundary complete until these p
 | 2026-06-06 | PR15 review pool queries could mix non-real-channel normalized events if they only filter tenant and pending status | Added `source=real_channel_webhook` filters, status enum migration, source-aware index, and regression tests |
 | 2026-06-06 | API workspace tests could miss `experimentalDecorators` under the current Node/tsx worker path | Added `apps/api/scripts/run-tests.mjs` to set `TSX_TSCONFIG=tsconfig.json` and invoke the `tsx` CLI directly |
 | 2026-06-06 | Initial production canary redacted only `--key=value` unknown args and looked for a narrow set of leaked metric values | Added tests for bare URL argument redaction and generic public metric label leakage, then restricted public metric labels to `status` and `reason` |
+| 2026-06-07 | API tests failed only when run in a broad parallel tool batch from the sandbox cwd, losing tsx decorator config | Reran `npm.cmd run test --workspace @smart-cs-agent/api` alone from the repo cwd; 153/153 passed |

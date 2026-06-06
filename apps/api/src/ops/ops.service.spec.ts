@@ -11,7 +11,8 @@ import {
 } from "@smart-cs-agent/shared";
 import type { ProviderAdapterContract } from "../adapters/adapters.interface";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
-import type { ProviderCredentialResolverService } from "../adapters/provider-credential-resolver.service";
+import { ProviderCredentialResolverService } from "../adapters/provider-credential-resolver.service";
+import { ProviderCredentialStoreService } from "../adapters/provider-credential-store.service";
 import { MockTaobaoAdapter } from "../adapters/mock-taobao.adapter";
 import type { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../prisma/prisma.service";
@@ -525,6 +526,81 @@ describe("OpsService provider adapter contract", () => {
       serializedEvidence.includes("credential_ref_fingerprint_123"),
       true,
     );
+  });
+
+  it("audits configured credential refs without leaking tokens or full refs", async () => {
+    const credentialRef =
+      "secret://smartcs/taobao/tenant_1/credential_ref_must_not_leak";
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef,
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const credentialResolver = new ProviderCredentialResolverService(
+      new ProviderCredentialStoreService({
+        PROVIDER_CREDENTIALS: JSON.stringify([
+          {
+            credentialRef,
+          },
+        ]),
+      }),
+    );
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      credentialResolver,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_credential_store" },
+      idempotencyKey: "read_credential_store_configured",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(response.networkExecution, "not_implemented");
+    assert.strictEqual(response.providerDataReturned, false);
+    assert.strictEqual(persistence.runs.length, 1);
+    const auditDetails = persistence.auditEntries[0].details as {
+      credentialResolution?: {
+        credentialResolutionStatus?: string;
+        credentialRefConfigured?: boolean;
+        credentialMaterialLoaded?: boolean;
+        secretValueReturned?: boolean;
+        credentialRefFingerprint?: string;
+      };
+    };
+    assert.deepStrictEqual(auditDetails.credentialResolution, {
+      credentialResolutionStatus: "configured",
+      credentialSource: "secret",
+      credentialRefFingerprint: testSha256(credentialRef).slice(0, 12),
+      credentialRefConfigured: true,
+      credentialMaterialLoaded: false,
+      secretValueReturned: false,
+    });
+    const serializedEvidence = JSON.stringify({
+      response,
+      runs: persistence.runs,
+      auditEntries: persistence.auditEntries,
+    });
+    assert.strictEqual(
+      serializedEvidence.includes("actual_provider_token_must_not_leak"),
+      false,
+    );
+    assert.strictEqual(
+      serializedEvidence.includes("credential_ref_must_not_leak"),
+      false,
+    );
+    assert.strictEqual(serializedEvidence.includes("secret://"), false);
+    assert.strictEqual(serializedEvidence.includes("order_credential_store"), false);
   });
 
   it("does not resolve credentials for blocked provider reads", async () => {
@@ -1261,6 +1337,7 @@ class RecordingCredentialResolver {
       status: "not_implemented",
       source: "secret",
       credentialRefFingerprint: "credential_ref_fingerprint_123",
+      credentialRefConfigured: false,
       credentialMaterialLoaded: false,
       secretValueReturned: false,
       reason: "test credential resolver does not return secret material",

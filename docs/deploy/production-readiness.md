@@ -1,11 +1,23 @@
 # Production-Readiness Baseline
 
+## PR41 Provider Credential Store Boundary
+
+Provider readonly credentials now have a checked no-secret ref inventory:
+
+- `PROVIDER_CREDENTIALS`: optional JSON array of `{ credentialRef }` records only. It must not contain inline `material`, access tokens, API keys, client secrets, provider payloads, or customer data.
+- `ProviderCredentialStoreService`: reports `configured`, `missing`, `invalid`, or `not_implemented` for a requested ref without loading credential material, reading a vault, or calling provider APIs.
+- `ProviderCredentialResolverService`: may audit `credentialRefFingerprint`, `credentialResolutionStatus`, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- It does not change `networkExecution=not_implemented` or `providerDataReturned=false`.
+- `npm run verify:provider-credential-store`: checks the ref-only inventory, no-inline-secret behavior, store/resolver tests, docs, and launch guidance.
+
+This is still not a live provider connector. It only proves a deployment has intentionally listed refs that future secret-manager-backed clients may use after a separate implementation review.
+
 ## PR40 Provider Credential Resolution Boundary
 
 Provider readonly credentials now have a checked no-secret resolution boundary:
 
 - `ProviderCredentialResolverService`: receives `{ tenantId, channel, credentialRef }` only after case ownership, idempotency, and readonly policy checks pass.
-- Current implementation returns `status=not_implemented`, `credentialRefFingerprint`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Current implementation may return `status=not_implemented`, `configured`, `missing`, or `invalid`, plus `credentialRefFingerprint`, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
 - It does not read a real secret manager, does not return credential material, does not call Taobao/Douyin/other provider APIs, and does not change `networkExecution=not_implemented` or `providerDataReturned=false`.
 - `npm run verify:provider-credential-boundary`: checks that resolver metadata, tests, docs, and launch guidance preserve the no-secret/no-provider-network boundary.
 

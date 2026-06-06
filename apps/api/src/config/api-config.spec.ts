@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { loadApiConfig, loadWebOrigin } from "./api-config";
+import {
+  loadApiConfig,
+  loadProviderCredentialRefs,
+  loadWebOrigin,
+} from "./api-config";
 
 describe("loadApiConfig", () => {
   it("loads validated API configuration with safe defaults", () => {
@@ -159,6 +163,88 @@ describe("loadApiConfig", () => {
         /PROVIDER_READONLY_ADAPTERS/,
       );
     }
+  });
+
+  it("parses provider credential presence records without returning secret material", () => {
+    const result = loadProviderCredentialRefs({
+      PROVIDER_CREDENTIALS: JSON.stringify([
+        {
+          credentialRef: "secret://smartcs/taobao/tenant_1",
+        },
+      ]),
+    });
+
+    assert.strictEqual(result.status, "configured");
+    assert.deepStrictEqual(result.records, [
+      { credentialRef: "secret://smartcs/taobao/tenant_1" },
+    ]);
+    assert.strictEqual(
+      JSON.stringify(result).includes("actual_provider_token_must_not_leak"),
+      false,
+    );
+  });
+
+  it("rejects provider credential records that inline secret material", () => {
+    const cases = [
+      { material: "actual_provider_token_must_not_leak" },
+      { accessToken: "actual_provider_token_must_not_leak" },
+      { token: "actual_provider_token_must_not_leak" },
+      { apiKey: "actual_provider_token_must_not_leak" },
+      { clientSecret: "actual_provider_token_must_not_leak" },
+    ];
+
+    for (const item of cases) {
+      const result = loadProviderCredentialRefs({
+        PROVIDER_CREDENTIALS: JSON.stringify([
+          {
+            credentialRef: "secret://smartcs/taobao/tenant_1",
+            ...item,
+          },
+        ]),
+      });
+
+      assert.strictEqual(result.status, "invalid");
+      assert.deepStrictEqual(result.records, []);
+      assert.strictEqual(
+        JSON.stringify(result).includes("actual_provider_token_must_not_leak"),
+        false,
+      );
+      assert.strictEqual(JSON.stringify(result).includes("secret://"), false);
+    }
+  });
+
+  it("rejects duplicate provider credential refs without leaking material", () => {
+    const result = loadProviderCredentialRefs({
+      PROVIDER_CREDENTIALS: JSON.stringify([
+        {
+          credentialRef: "secret://smartcs/taobao/tenant_1",
+        },
+        {
+          credentialRef: "secret://smartcs/taobao/tenant_1",
+        },
+      ]),
+    });
+
+    assert.strictEqual(result.status, "invalid");
+    assert.deepStrictEqual(result.records, []);
+    assert.strictEqual(
+      JSON.stringify(result).includes("actual_provider_token_must_not_leak"),
+      false,
+    );
+    assert.strictEqual(JSON.stringify(result).includes("secret://"), false);
+  });
+
+  it("does not propagate provider credential material through loadApiConfig", () => {
+    const config = loadApiConfig(
+      {
+        DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+        PROVIDER_CREDENTIALS: "not-json",
+      },
+      { includeDotEnv: false },
+    );
+
+    assert.strictEqual("providerCredentials" in config, false);
+    assert.strictEqual(JSON.stringify(config).includes("not-json"), false);
   });
 
   it("does not parse real-channel secrets when the production intake is disabled", () => {

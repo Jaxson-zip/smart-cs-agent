@@ -2,13 +2,31 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR41 Provider Credential Store Boundary
+
+PR41 adds a no-secret provider credential inventory for future readonly provider clients:
+
+- `PROVIDER_CREDENTIALS`: optional JSON array of `{ credentialRef }` records only. It is a ref presence inventory, not a token store.
+- The inventory rejects inline `material`, access tokens, API keys, client secrets, duplicate refs, malformed refs, and malformed JSON.
+- `ProviderCredentialStoreService`: distinguishes `configured`, `missing`, `invalid`, and `not_implemented` without loading credential material or calling a secret manager.
+- Safe audit metadata may include `credentialRefFingerprint`, `credentialResolutionStatus`, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Responses, `ProviderReadRun`, public API responses, Web BFF responses, and audit logs must not include full refs, provider tokens, secret manager paths, provider payloads, provider responses, customer data, or raw lookup values.
+
+Run:
+
+```bash
+npm run verify:provider-credential-store
+```
+
+This verifier checks the ref-only inventory, store/resolver audit metadata, no inline secrets, no network/provider calls, docs, launch runbook, and task plan.
+
 ## PR40 Provider Credential Resolution Boundary
 
 PR40 adds a no-secret credential resolution boundary for future real readonly provider clients:
 
 - `ProviderCredentialResolverService`: accepts `{ tenantId, channel, credentialRef }` only after provider read policy is accepted.
-- Current resolver status is `not_implemented`; it does not call a secret manager, does not load credential material, and does not call provider APIs.
-- Safe audit metadata may include `credentialRefFingerprint`, `credentialResolutionStatus`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Current resolver status may be `not_implemented`, `configured`, `missing`, or `invalid`, but it still does not call a secret manager, does not load credential material, and does not call provider APIs.
+- Safe audit metadata may include `credentialRefFingerprint`, `credentialResolutionStatus`, `credentialRefConfigured`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
 - Responses, `ProviderReadRun` records, public API responses, and Web BFF responses must not include full `credentialRef`, secret manager paths, access tokens, client secrets, provider payloads, provider responses, customer data, or raw lookup values.
 
 Run:

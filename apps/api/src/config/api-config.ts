@@ -52,6 +52,19 @@ const providerReadonlyAdapterConfigSchema = z
   })
   .strict();
 
+const providerCredentialRefSchema = z
+  .string()
+  .regex(
+    /^(secret|vault):\/\/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/,
+    "credentialRef must be a secret:// or vault:// reference",
+  );
+
+const providerCredentialRecordSchema = z
+  .object({
+    credentialRef: providerCredentialRefSchema,
+  })
+  .strict();
+
 const providerReadonlyAdaptersEnvSchema = z
   .string()
   .optional()
@@ -132,6 +145,15 @@ export type ProviderReadonlyAdapterConfig = {
   credentialRef: string;
 };
 
+export type ProviderCredentialRefRecord = {
+  credentialRef: string;
+};
+
+export type ProviderCredentialRefLoadResult =
+  | { status: "not_configured"; records: [] }
+  | { status: "configured"; records: ProviderCredentialRefRecord[] }
+  | { status: "invalid"; records: []; message: string };
+
 type LoadConfigOptions = {
   includeDotEnv?: boolean;
 };
@@ -198,6 +220,40 @@ export function loadProviderReadonlyAdapterConfigs(
   return parsed.data;
 }
 
+export function loadProviderCredentialRefs(
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderCredentialRefLoadResult {
+  const rawProviderCredentials = env.PROVIDER_CREDENTIALS?.trim();
+  if (!rawProviderCredentials) {
+    return { status: "not_configured", records: [] };
+  }
+
+  let providerCredentialRecords: unknown;
+  try {
+    providerCredentialRecords = JSON.parse(rawProviderCredentials);
+  } catch {
+    return invalidProviderCredentialRefs();
+  }
+
+  const parsed = z
+    .array(providerCredentialRecordSchema)
+    .safeParse(providerCredentialRecords);
+
+  if (!parsed.success) {
+    return invalidProviderCredentialRefs();
+  }
+
+  const credentialRefs = parsed.data.map((item) => item.credentialRef);
+  if (new Set(credentialRefs).size !== credentialRefs.length) {
+    return invalidProviderCredentialRefs();
+  }
+
+  return {
+    status: "configured",
+    records: credentialRefs.map((credentialRef) => ({ credentialRef })),
+  };
+}
+
 export function loadWebOrigin(env: NodeJS.ProcessEnv = process.env): string {
   const parsed = webOriginSchema.safeParse(env.WEB_ORIGIN);
 
@@ -230,6 +286,15 @@ function loadDotEnv(startDir = process.cwd()): Record<string, string> {
         return [key, rawValue.replace(/^["']|["']$/g, "")];
       }),
   );
+}
+
+function invalidProviderCredentialRefs(): ProviderCredentialRefLoadResult {
+  return {
+    status: "invalid",
+    records: [],
+    message:
+      "PROVIDER_CREDENTIALS must be a unique JSON array of credentialRef records without inline secrets",
+  };
 }
 
 function productionRealChannelIntakeIssues(

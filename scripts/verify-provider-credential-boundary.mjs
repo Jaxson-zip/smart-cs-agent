@@ -11,6 +11,7 @@ const files = {
   adapterRegistry: "apps/api/src/adapters/provider-adapter-registry.service.ts",
   credentialResolver:
     "apps/api/src/adapters/provider-credential-resolver.service.ts",
+  credentialStore: "apps/api/src/adapters/provider-credential-store.service.ts",
   credentialResolverSpec:
     "apps/api/src/adapters/provider-credential-resolver.service.spec.ts",
   opsService: "apps/api/src/ops/ops.service.ts",
@@ -51,8 +52,9 @@ mustContainAll("credential resolver", content.credentialResolver, [
   "ProviderCredentialResolverService",
   "ProviderCredentialResolutionRequest",
   "ProviderCredentialResolution",
-  'status: "not_implemented"',
+  '"not_implemented"',
   "credentialRefFingerprint",
+  "credentialRefConfigured",
   "credentialMaterialLoaded: false",
   "secretValueReturned: false",
   "fingerprintCredentialRef",
@@ -66,11 +68,29 @@ mustNotContainAny("credential resolver forbidden behavior", content.credentialRe
   "providerDataReturned: true",
 ]);
 
+mustContainAll("credential store", content.credentialStore, [
+  "ProviderCredentialStoreService",
+  "credentialRefConfigured",
+  "credentialMaterialLoaded: false",
+  'status: "configured"',
+  'status: "missing"',
+  'status: "invalid"',
+]);
+mustNotContainAny("credential store forbidden behavior", content.credentialStore, [
+  "credentialMaterialLoaded: true",
+  "fetch(",
+  "axios",
+  "http.request",
+  "https.request",
+  "providerDataReturned: true",
+]);
+
 mustContainAll("credential resolver tests", content.credentialResolverSpec, [
   "returns only sanitized credential resolution metadata",
   "credential_ref_must_not_leak",
   "actual_provider_token",
   "secretValueReturned",
+  "credentialRefConfigured",
   "credentialMaterialLoaded",
 ]);
 
@@ -81,6 +101,7 @@ mustContainAll("ops service credential boundary", content.opsService, [
   "toProviderReadCredentialAuditMetadata",
   "credentialResolutionStatus",
   "credentialRefFingerprint",
+  "credentialRefConfigured",
   "secretValueReturned: false",
   "credentialMaterialLoaded: false",
 ]);

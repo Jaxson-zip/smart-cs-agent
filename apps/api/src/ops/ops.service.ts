@@ -427,6 +427,7 @@ type ProviderReadCredentialAuditMetadata = {
   credentialResolutionStatus: ProviderCredentialResolution["status"];
   credentialSource: ProviderCredentialResolution["source"];
   credentialRefFingerprint: string;
+  credentialRefConfigured: boolean;
   credentialMaterialLoaded: false;
   secretValueReturned: false;
 };
@@ -530,6 +531,7 @@ function toProviderReadCredentialAuditMetadata(
     credentialResolutionStatus: resolution.status,
     credentialSource: resolution.source,
     credentialRefFingerprint: resolution.credentialRefFingerprint,
+    credentialRefConfigured: resolution.credentialRefConfigured,
     credentialMaterialLoaded: false,
     secretValueReturned: false,
   };
