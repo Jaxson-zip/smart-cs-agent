@@ -46,9 +46,17 @@ const FORBIDDEN_FIELD_NAMES = new Set([
   "credentialref",
   "customerdata",
   "customermessage",
+  "envfile",
+  "envfilepath",
+  "envpath",
+  "evidencearchivepath",
+  "evidencepath",
   "externalconversationid",
   "externalmessageid",
   "logisticsid",
+  "manifestpath",
+  "metricbody",
+  "metricsbody",
   "merchantid",
   "operatorapikey",
   "orderid",
@@ -56,6 +64,7 @@ const FORBIDDEN_FIELD_NAMES = new Set([
   "providerresponse",
   "providertoken",
   "rawbody",
+  "responsebody",
   "secret",
   "signature",
   "tenantid",
@@ -73,6 +82,55 @@ const FORBIDDEN_VALUE_PATTERNS = [
   /plain_secret_token_must_not_leak/i,
   /user:secret/i,
 ];
+const EVIDENCE_ARCHIVE_KEYS = new Set([
+  "schemaVersion",
+  "generatedAt",
+  "summary",
+  "target",
+  "launchTrack",
+  "checks",
+  "warnings",
+]);
+const EVIDENCE_SUMMARY_KEYS = new Set(["status", "failureCount", "warningCount"]);
+const EVIDENCE_TARGET_KEYS = new Set(["tenantFingerprint", "channel"]);
+const EVIDENCE_LAUNCH_TRACK_KEYS = new Set([
+  "realChannelRequired",
+  "providerReadonlyRequired",
+  "liveCanaryIncluded",
+]);
+const EVIDENCE_CHECK_KEYS = new Set(["name", "status", "evidence", "references"]);
+const BOOLEAN_EVIDENCE_KEYS = new Set([
+  "adminOperatorConfigured",
+  "customerVisibleActionsEnabled",
+  "insecureHeadersDisabled",
+  "launchChecklistLinked",
+  "legacyDemoDisabled",
+  "liveCanaryIncluded",
+  "networkAttempted",
+  "nodeEnvProduction",
+  "operatorIdentityDatabase",
+  "providerCredentialConfigured",
+  "providerDataReturned",
+  "providerReadonlyAdapterConfigured",
+  "providerReadonlyRequired",
+  "providerResponseCaptured",
+  "queueThresholdsConfigured",
+  "realChannelFreshnessWindowConfigured",
+  "realChannelKillSwitchOff",
+  "realChannelRateLimitConfigured",
+  "realChannelRequired",
+  "realChannelWebhooksEnabled",
+  "realCommerceActionsEnabled",
+  "rollbackRunbookLinked",
+  "sandboxDisabled",
+  "webhookAllowlisted",
+  "webhookSecretConfigured",
+]);
+const FINGERPRINT_EVIDENCE_KEYS = new Set([
+  "credentialRefFingerprint",
+  "tenantFingerprint",
+]);
+const NETWORK_EXECUTION_VALUES = new Set(["not_implemented"]);
 
 const failures = [];
 const args = applySafeEnvDefaults(parseArgs(process.argv.slice(2)), process.env);
@@ -117,11 +175,15 @@ function readBundle(file) {
   }
 
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(stripBom(readFileSync(file, "utf8")));
   } catch {
     failures.push("Evidence archive file must be valid JSON");
     return undefined;
   }
+}
+
+function stripBom(value) {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
 function validateBundle(bundle, options) {
@@ -129,6 +191,7 @@ function validateBundle(bundle, options) {
     failures.push("Evidence archive root must be an object");
     return;
   }
+  validateAllowedKeys(bundle, EVIDENCE_ARCHIVE_KEYS, "archive contains unsupported field");
 
   if (bundle.schemaVersion !== "smart-cs-agent.launch-evidence.v1") {
     failures.push("schemaVersion must be smart-cs-agent.launch-evidence.v1");
@@ -139,7 +202,7 @@ function validateBundle(bundle, options) {
   validateSummary(bundle.summary, options);
   validateTarget(bundle.target);
   validateLaunchTrack(bundle.launchTrack, options);
-  validateChecks(bundle.checks);
+  validateChecks(bundle.checks, options);
   if (!Array.isArray(bundle.warnings)) {
     failures.push("warnings must be an array");
   }
@@ -151,6 +214,7 @@ function validateSummary(summary, options) {
     failures.push("summary must be an object");
     return;
   }
+  validateAllowedKeys(summary, EVIDENCE_SUMMARY_KEYS, "summary contains unsupported field");
   if (!["pass", "fail"].includes(summary.status)) {
     failures.push("summary.status must be pass or fail");
   }
@@ -163,6 +227,9 @@ function validateSummary(summary, options) {
   if (options.requirePass && summary.status !== "pass") {
     failures.push("summary.status must be pass");
   }
+  if (options.requirePass && summary.failureCount !== 0) {
+    failures.push("summary.failureCount must be 0");
+  }
 }
 
 function validateTarget(target) {
@@ -170,6 +237,7 @@ function validateTarget(target) {
     failures.push("target must be an object");
     return;
   }
+  validateAllowedKeys(target, EVIDENCE_TARGET_KEYS, "target contains unsupported field");
   if (
     typeof target.tenantFingerprint !== "string" ||
     !/^[a-f0-9]{12}$/.test(target.tenantFingerprint)
@@ -186,6 +254,7 @@ function validateLaunchTrack(launchTrack, options) {
     failures.push("launchTrack must be an object");
     return;
   }
+  validateAllowedKeys(launchTrack, EVIDENCE_LAUNCH_TRACK_KEYS, "launchTrack contains unsupported field");
   for (const key of [
     "realChannelRequired",
     "providerReadonlyRequired",
@@ -206,7 +275,7 @@ function validateLaunchTrack(launchTrack, options) {
   }
 }
 
-function validateChecks(checks) {
+function validateChecks(checks, options) {
   if (!Array.isArray(checks)) {
     failures.push("checks must be an array");
     return;
@@ -218,6 +287,7 @@ function validateChecks(checks) {
       failures.push("each check must be an object");
       continue;
     }
+    validateAllowedKeys(check, EVIDENCE_CHECK_KEYS, "check contains unsupported field");
     if (!REQUIRED_CHECKS.has(check.name)) {
       failures.push("check.name must be a known launch evidence check");
     } else {
@@ -225,6 +295,8 @@ function validateChecks(checks) {
     }
     if (!["pass", "fail"].includes(check.status)) {
       failures.push("check.status must be pass or fail");
+    } else if (options.requirePass && check.status !== "pass") {
+      failures.push("check.status must be pass");
     }
     if (!Array.isArray(check.evidence)) {
       failures.push("check.evidence must be an array");
@@ -255,8 +327,48 @@ function validateEvidenceStrings(evidence) {
       continue;
     }
     const key = item.slice(0, separatorIndex);
+    const rawValue = item.slice(separatorIndex + 1);
     if (!ALLOWED_EVIDENCE_KEYS.has(key)) {
       failures.push("forbidden sensitive archive value");
+      continue;
+    }
+    validateEvidenceValue(key, rawValue);
+  }
+}
+
+function validateEvidenceValue(key, rawValue) {
+  if (BOOLEAN_EVIDENCE_KEYS.has(key)) {
+    if (!["true", "false"].includes(rawValue)) {
+      failures.push("check.evidence boolean entries must be true or false");
+    }
+    return;
+  }
+  if (FINGERPRINT_EVIDENCE_KEYS.has(key)) {
+    if (!/^[a-f0-9]{12}$/.test(rawValue)) {
+      failures.push("check.evidence fingerprint entries must be 12-character fingerprints");
+    }
+    return;
+  }
+  if (key === "channel") {
+    if (!VALID_CHANNELS.has(rawValue)) {
+      failures.push("check.evidence channel entries must be supported commerce channels");
+    }
+    return;
+  }
+  if (key === "networkExecution") {
+    if (!NETWORK_EXECUTION_VALUES.has(rawValue)) {
+      failures.push("check.evidence networkExecution entries must use a supported value");
+    }
+    return;
+  }
+
+  failures.push("forbidden sensitive archive value");
+}
+
+function validateAllowedKeys(value, allowedKeys, message) {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      failures.push(message);
     }
   }
 }

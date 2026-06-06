@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR45 - Launch Evidence Archive Safety
+## Current Stage: PR46 - Multi-Merchant Launch Manifest
 
 Status: verified
 
-Previous Stage: PR44 - Launch Evidence Bundle was verified.
+Previous Stage: PR45 - Launch Evidence Archive Safety was verified.
+
+Launch Evidence Stage: PR44 - Launch Evidence Bundle was verified and must stay connected to archive and manifest checks.
 
 Merchant Launch Stage: PR43 - Merchant Launch Preflight was verified and must stay connected to safe launch preflight checks.
 
@@ -30,17 +32,18 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR45 adds safe launch command entry points and archive verification for launch evidence. It keeps PR43/PR44 behavior available while giving CI and launch operators `--from-env` npm scripts that avoid echoing raw tenant IDs, env-file paths, evidence output paths, or archive paths in recorded npm command logs.
+PR46 adds a multi-merchant/channel launch manifest verifier. It lets release owners verify a whole launch window from one sanitized manifest that references per-tenant/channel PR44 evidence archives by fingerprint and channel, without putting raw tenant IDs or evidence paths in recorded npm command logs.
 
-### PR45 Scope
+### PR46 Scope
 
-- Add `npm run verify:merchant-launch-preflight:safe`, `npm run generate:launch-evidence:safe`, and `npm run verify:launch-evidence-archive:safe` as safe launch-log entry points backed by secure environment variables.
-- Add `scripts/verify-launch-evidence-archive.mjs` to validate archived launch evidence JSON for schema, pass status when required, real-channel/provider-readonly launch track flags, required check names, and sensitive-field/value absence.
-- Keep the archive verifier local-only: no API calls, database connections, vault/secret-manager reads, provider network calls, provider writes, or customer-visible actions.
-- Update production readiness docs and launch runbook so launch operators use the safe commands in recorded launch logs.
-- Keep output sanitized: show tenant fingerprints, channel, status, check counts, booleans, and document/script references only; never print raw tenant IDs, env-file paths, evidence archive paths, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, raw logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
+- Add `npm run verify:launch-manifest` and `npm run verify:launch-manifest:safe`.
+- Add `scripts/verify-launch-manifest.mjs` for `smart-cs-agent.launch-manifest.v1`.
+- Require manifest entries to use `{ tenantFingerprint, channel, evidenceFile }` with `evidenceFile` exactly equal to `<tenantFingerprint>-<channel>.json`.
+- Reject duplicate tenant/channel entries and any manifest or evidence archive fields/values that look like raw tenant IDs, credential refs, webhook secrets, operator API keys, provider tokens, provider payloads, customer data, order IDs, logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
+- Verify each referenced PR44 evidence archive is local, schema-correct, matched to the manifest entry, pass when required, and carries required real-channel/provider-readonly launch tracks when required.
+- Keep output sanitized: show release id, entry count, and channel count only; never print raw tenant IDs, env-file paths, evidence archive paths, manifest paths, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, raw logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
 
-### Out Of Scope For PR45
+### Out Of Scope For PR46
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -49,7 +52,7 @@ PR45 adds safe launch command entry points and archive verification for launch e
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, database, vault, or provider networks from the launch evidence generator or archive verifier.
+- Calling production API readiness, database, vault, or provider networks from the launch evidence generator, archive verifier, or manifest verifier.
 - Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
@@ -112,10 +115,11 @@ PR45 adds safe launch command entry points and archive verification for launch e
 - [x] PR43 merchant launch preflight.
 - [x] PR44 launch evidence bundle.
 - [x] PR45 launch evidence archive safety.
+- [x] PR46 multi-merchant launch manifest.
 
 ## Verification Gate
 
-Do not claim PR45 launch evidence archive safety complete until these pass:
+Do not claim PR46 multi-merchant launch manifest complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -142,6 +146,9 @@ Do not claim PR45 launch evidence archive safety complete until these pass:
 - `node --check scripts/verify-launch-evidence-archive.mjs`
 - `node --check scripts/verify-launch-evidence-archive.test.mjs`
 - `node --test scripts/verify-launch-evidence-archive.test.mjs`
+- `node --check scripts/verify-launch-manifest.mjs`
+- `node --check scripts/verify-launch-manifest.test.mjs`
+- `node --test scripts/verify-launch-manifest.test.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -153,6 +160,8 @@ Do not claim PR45 launch evidence archive safety complete until these pass:
 - `npm.cmd run verify:merchant-launch-preflight:safe`
 - `npm.cmd run generate:launch-evidence:safe`
 - `npm.cmd run verify:launch-evidence-archive:safe`
+- `npm.cmd run verify:launch-manifest:safe`
+- `npm.cmd run verify:launch-manifest -- --manifest=<launch-manifest-json> --evidence-dir=<launch-evidence-dir> --require-pass --require-real-channel --require-provider-readonly`
 - `npm.cmd run verify:launch-evidence-archive -- --file=<launch-evidence-json> --require-pass --require-real-channel --require-provider-readonly`
 - `npm.cmd run verify:launch-evidence`
 - `npm.cmd run verify:production-alerting`

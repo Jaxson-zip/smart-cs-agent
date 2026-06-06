@@ -38,6 +38,8 @@
     "generate:launch-evidence:safe": "node scripts/generate-launch-evidence.mjs --from-env",
     "verify:launch-evidence-archive": "node scripts/verify-launch-evidence-archive.mjs",
     "verify:launch-evidence-archive:safe": "node scripts/verify-launch-evidence-archive.mjs --from-env",
+    "verify:launch-manifest": "node scripts/verify-launch-manifest.mjs",
+    "verify:launch-manifest:safe": "node scripts/verify-launch-manifest.mjs --from-env",
     "verify:launch-evidence": "node scripts/verify-launch-evidence.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"

@@ -1,5 +1,17 @@
 # Production-Readiness Baseline
 
+## PR46 Multi-Merchant Launch Manifest
+
+Multi-merchant or multi-channel launch windows now have a local manifest verifier:
+
+```bash
+npm run verify:launch-manifest:safe
+```
+
+The manifest schema is `smart-cs-agent.launch-manifest.v1`. A launch manifest contains a safe `releaseId`, launch `requirements`, and entries shaped as `{ "tenantFingerprint": "<12-hex>", "channel": "<channel>", "evidenceFile": "<tenantFingerprint>-<channel>.json" }`. It must not contain raw tenant IDs, merchant IDs, env-file paths, credential refs, webhook secrets, operator API keys, provider tokens, provider payloads, customer data, order IDs, logistics IDs, response bodies, metric bodies, signatures, or raw bodies.
+
+Set `SMARTCS_LAUNCH_MANIFEST_FILE`, `SMARTCS_LAUNCH_EVIDENCE_DIR`, `SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, and `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true` for the launch gate. The verifier reads each referenced PR44 evidence archive, checks the manifest entry matches the evidence target, rejects duplicate tenant/channel pairs, enforces required launch tracks, and prints only release id, entry count, and channel count.
+
 ## PR45 Launch Evidence Archive Safety
 
 Launch preflight and evidence generation now have safe env-mode commands for CI and launch terminals:

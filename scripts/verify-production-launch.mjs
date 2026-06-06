@@ -24,6 +24,8 @@ const files = {
     "scripts/verify-provider-read-harness.mjs",
   launchEvidenceVerifier:
     "scripts/verify-launch-evidence.mjs",
+  launchManifestVerifier:
+    "scripts/verify-launch-manifest.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -58,6 +60,8 @@ mustContainAll("package scripts", content.packageJson, [
   "generate:launch-evidence:safe",
   "verify:launch-evidence-archive",
   "verify:launch-evidence-archive:safe",
+  "verify:launch-manifest",
+  "verify:launch-manifest:safe",
   "verify:launch-evidence",
   "verify:channel-runbook",
 ]);
@@ -101,13 +105,17 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:merchant-launch-preflight:safe",
   "npm run generate:launch-evidence:safe",
   "npm run verify:launch-evidence-archive:safe",
+  "npm run verify:launch-manifest:safe",
   "SMARTCS_LAUNCH_TENANT",
   "SMARTCS_LAUNCH_CHANNEL",
   "SMARTCS_LAUNCH_EVIDENCE_OUT",
   "SMARTCS_LAUNCH_EVIDENCE_FILE",
+  "SMARTCS_LAUNCH_MANIFEST_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_DIR",
   "SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true",
   "SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true",
   "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
+  "SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -194,6 +202,13 @@ mustContainAll("task plan references PR34", content.taskPlan, [
   "verify:production-launch",
 ]);
 
+mustContainAll("task plan references PR46", content.taskPlan, [
+  "PR46 - Multi-Merchant Launch Manifest",
+  "PR46 multi-merchant launch manifest",
+  "smart-cs-agent.launch-manifest.v1",
+  "verify:launch-manifest:safe",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -209,6 +224,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:merchant-launch-preflight:safe",
   "generate:launch-evidence:safe",
   "verify:launch-evidence-archive:safe",
+  "verify:launch-manifest:safe",
   "verify:launch-evidence",
   "verify:channel-runbook",
 ]);
@@ -241,6 +257,10 @@ mustContainAll("provider read harness verifier source", content.providerReadHarn
 ]);
 mustContainAll("launch evidence verifier source", content.launchEvidenceVerifier, [
   "verify:launch-evidence",
+]);
+mustContainAll("launch manifest verifier source", content.launchManifestVerifier, [
+  "smart-cs-agent.launch-manifest.v1",
+  "verify-launch-manifest",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

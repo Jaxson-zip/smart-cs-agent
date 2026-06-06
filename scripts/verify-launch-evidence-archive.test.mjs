@@ -155,6 +155,32 @@ test("launch evidence archive verifier rejects bundles with raw sensitive fields
   }
 });
 
+test("launch evidence archive verifier rejects path and body fields", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "smartcs-archive-"));
+  const file = join(dir, "path-body-fields.json");
+  await writeFile(
+    file,
+    JSON.stringify(
+      validBundle({
+        envPath: "production.env",
+        metricBody: "up",
+        responseBody: "ok",
+      }),
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  try {
+    const failed = await execArchiveFailure([`--file=${file}`, "--require-pass"]);
+    assert.match(failed.stderr, /forbidden sensitive archive field/);
+    assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("launch evidence archive verifier rejects sensitive evidence key strings", async () => {
   const dir = await mkdtemp(join(tmpdir(), "smartcs-archive-"));
   const file = join(dir, "unsafe-evidence-keys.json");
@@ -182,6 +208,77 @@ test("launch evidence archive verifier rejects sensitive evidence key strings", 
   try {
     const failed = await execArchiveFailure([`--file=${file}`, "--require-pass"]);
     assert.match(failed.stderr, /forbidden sensitive archive value/);
+    assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("launch evidence archive verifier rejects unsafe values for allowed evidence keys", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "smartcs-archive-"));
+  const file = join(dir, "unsafe-allowed-evidence-values.json");
+  await writeFile(
+    file,
+    JSON.stringify(
+      validBundle({
+        checks: [
+          check("productionReadinessStatic", ["nodeEnvProduction=yes"]),
+          check("merchantLaunchPreflight", [
+            "tenantFingerprint=prod-tenant-1",
+            "channel=amazon",
+          ]),
+          check("providerReadonlyPreflight", [
+            "providerReadonlyAdapterConfigured=true",
+            "credentialRefFingerprint=op://vault/credential",
+          ]),
+          check("providerSafetyBoundary", [
+            "networkExecution=not_implemented",
+            "providerResponseCaptured={\"body\":\"ok\"}",
+          ]),
+          check("launchRunbookEvidence", ["liveCanaryIncluded=false"]),
+        ],
+      }),
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  try {
+    const failed = await execArchiveFailure([`--file=${file}`, "--require-pass"]);
+    assert.match(failed.stderr, /check.evidence fingerprint entries must be 12-character fingerprints/);
+    assert.match(failed.stderr, /check.evidence boolean entries must be true or false/);
+    assert.match(failed.stderr, /check.evidence channel entries must be supported commerce channels/);
+    assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("launch evidence archive verifier rejects failed checks when pass is required", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "smartcs-archive-"));
+  const file = join(dir, "failed-check-with-pass-summary.json");
+  await writeFile(
+    file,
+    JSON.stringify(
+      validBundle({
+        checks: [
+          check("productionReadinessStatic"),
+          check("merchantLaunchPreflight"),
+          { ...check("providerReadonlyPreflight"), status: "fail" },
+          check("providerSafetyBoundary"),
+          check("launchRunbookEvidence"),
+        ],
+      }),
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  try {
+    const failed = await execArchiveFailure([`--file=${file}`, "--require-pass"]);
+    assert.match(failed.stderr, /check.status must be pass/);
     assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
   } finally {
     await rm(dir, { recursive: true, force: true });

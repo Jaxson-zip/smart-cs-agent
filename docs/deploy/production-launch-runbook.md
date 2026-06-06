@@ -28,6 +28,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.
 - `npm run generate:launch-evidence:safe` has produced a sanitized launch evidence bundle for every tenant/channel pair in scope.
 - `npm run verify:launch-evidence-archive:safe` has verified each archived launch evidence bundle with pass, real-channel, and provider-readonly requirements enabled through secure environment variables.
+- `npm run verify:launch-manifest:safe` has verified the multi-merchant/channel launch manifest with every referenced evidence archive matching its tenant fingerprint and channel.
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
@@ -59,6 +60,7 @@ npm run verify:production-readiness -- --env-file=<secure-production-env> --requ
 npm run verify:merchant-launch-preflight:safe
 npm run generate:launch-evidence:safe
 npm run verify:launch-evidence-archive:safe
+npm run verify:launch-manifest:safe
 npm run verify:launch-evidence
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-alerting
@@ -73,7 +75,7 @@ npm run verify:provider-read-harness
 npm run verify:channel-runbook
 ```
 
-Inject `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true`, and `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true` through the CI secret/environment layer before running the safe commands. Use `SMARTCS_LAUNCH_EVIDENCE_OUT` for generation and `SMARTCS_LAUNCH_EVIDENCE_FILE` for archive verification. Do not pass raw tenant IDs, env-file paths, evidence output paths, or evidence archive paths as npm command arguments in recorded launch logs.
+Inject `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_MANIFEST_FILE`, `SMARTCS_LAUNCH_EVIDENCE_DIR`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true`, `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true`, and `SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true` through the CI secret/environment layer before running the safe commands. Use `SMARTCS_LAUNCH_EVIDENCE_OUT` for generation, `SMARTCS_LAUNCH_EVIDENCE_FILE` for single archive verification, and `SMARTCS_LAUNCH_MANIFEST_FILE` plus `SMARTCS_LAUNCH_EVIDENCE_DIR` for multi-merchant manifest verification. Do not pass raw tenant IDs, env-file paths, evidence output paths, evidence archive paths, manifest paths, or evidence directories as npm command arguments in recorded launch logs.
 
 Do not put operator API keys, webhook secrets, signatures, raw request bodies, customer messages, provider payloads, tenant IDs, or API URLs with query-string secrets into the deploy ticket, CI logs, Prometheus labels, alert annotations, or this repository.
 

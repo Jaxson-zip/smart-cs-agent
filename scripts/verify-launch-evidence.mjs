@@ -13,6 +13,8 @@ const files = {
   preflightTest: "scripts/verify-merchant-launch-preflight.test.mjs",
   archiveVerifier: "scripts/verify-launch-evidence-archive.mjs",
   archiveTest: "scripts/verify-launch-evidence-archive.test.mjs",
+  launchManifestVerifier: "scripts/verify-launch-manifest.mjs",
+  launchManifestTest: "scripts/verify-launch-manifest.test.mjs",
   productionReadiness: "docs/deploy/production-readiness.md",
   launchRunbook: "docs/deploy/production-launch-runbook.md",
   productionLaunchVerifier: "scripts/verify-production-launch.mjs",
@@ -34,6 +36,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:merchant-launch-preflight:safe",
   "verify:launch-evidence-archive",
   "verify:launch-evidence-archive:safe",
+  "verify:launch-manifest",
+  "verify:launch-manifest:safe",
   "verify:launch-evidence",
   "scripts/verify-launch-evidence.mjs",
 ]);
@@ -123,7 +127,48 @@ mustContainAll("archive tests", content.archiveTest, [
   "assertNoSecretMarkers",
 ]);
 
+mustContainAll("launch manifest verifier", content.launchManifestVerifier, [
+  "smart-cs-agent.launch-manifest.v1",
+  "Launch manifest verification passed.",
+  "Launch manifest verification failed:",
+  "SMARTCS_LAUNCH_MANIFEST_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_DIR",
+  "manifest contains unsupported field",
+  "evidence archive contains unsupported field",
+  "evidence boolean entries must be true or false",
+  "evidence fingerprint entries must be 12-character fingerprints",
+  "evidence channel entries must be supported commerce channels",
+  "duplicate tenantFingerprint and channel pair",
+  "evidence archive target does not match manifest entry",
+  "forbidden sensitive manifest field",
+]);
+mustNotContainAny("launch manifest verifier forbidden execution", content.launchManifestVerifier, [
+  "fetch(",
+  "execFile",
+  "spawn(",
+  "http.request",
+  "https.request",
+  "PrismaClient",
+]);
+
+mustContainAll("launch manifest tests", content.launchManifestTest, [
+  "launch manifest verifier accepts multiple sanitized evidence archives",
+  "launch manifest verifier reads file targets from safe env mode",
+  "launch manifest verifier rejects duplicate tenant channel entries",
+  "launch manifest verifier rejects raw sensitive manifest fields and unsafe evidence names",
+  "launch manifest verifier rejects path and body fields",
+  "launch manifest verifier rejects evidence archives that do not match the manifest entry",
+  "launch manifest verifier rejects unsafe values for allowed evidence keys",
+  "launch manifest verifier rejects failed archive checks even with a passing summary",
+  "assertNoSecretMarkers",
+]);
+
 mustContainAll("production readiness docs", content.productionReadiness, [
+  "PR46 Multi-Merchant Launch Manifest",
+  "npm run verify:launch-manifest:safe",
+  "smart-cs-agent.launch-manifest.v1",
+  "SMARTCS_LAUNCH_MANIFEST_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_DIR",
   "PR45 Launch Evidence Archive Safety",
   "npm run verify:merchant-launch-preflight:safe",
   "npm run generate:launch-evidence:safe",
@@ -143,9 +188,13 @@ mustContainAll("launch runbook", content.launchRunbook, [
   "npm run generate:launch-evidence:safe",
   "npm run verify:merchant-launch-preflight:safe",
   "npm run verify:launch-evidence-archive:safe",
+  "npm run verify:launch-manifest:safe",
   "npm run verify:launch-evidence",
   "SMARTCS_LAUNCH_EVIDENCE_OUT",
   "SMARTCS_LAUNCH_EVIDENCE_FILE",
+  "SMARTCS_LAUNCH_MANIFEST_FILE",
+  "SMARTCS_LAUNCH_EVIDENCE_DIR",
+  "SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true",
   "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
   "launch evidence bundle",
   "must not include raw tenant IDs",
@@ -155,12 +204,14 @@ mustContainAll("production launch verifier", content.productionLaunchVerifier, [
   "generate:launch-evidence",
   "generate:launch-evidence:safe",
   "verify:launch-evidence-archive",
+  "verify:launch-manifest",
   "verify:launch-evidence",
 ]);
 
 mustContainAll("task plan", content.taskPlan, [
-  "PR45 - Launch Evidence Archive Safety",
-  "generate:launch-evidence",
+  "PR46 - Multi-Merchant Launch Manifest",
+  "verify:launch-manifest",
+  "smart-cs-agent.launch-manifest.v1",
   "verify:launch-evidence-archive",
   "verify:launch-evidence",
 ]);
@@ -168,6 +219,8 @@ mustContainAll("task plan", content.taskPlan, [
 mustContainAll("progress", content.progress, [
   "Started PR44 launch evidence bundle",
   "generate:launch-evidence",
+  "Started PR46 multi-merchant launch manifest",
+  "smart-cs-agent.launch-manifest.v1",
 ]);
 
 if (failures.length > 0) {
