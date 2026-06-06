@@ -24,7 +24,7 @@
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
 | `GET /` | Public web shell | Shows login state before loading operator data |
-| `POST /api/operator/login` | Operator BFF auth | Validates the DB-backed operator account store, or explicit local env fallback, and sets HttpOnly signed session cookie |
+| `POST /api/operator/login` | Operator BFF auth | Authenticates through the configured `OPERATOR_IDENTITY_PROVIDER`; the current deployable providers are DB-backed operator accounts and explicit local env fallback, both issuing HttpOnly signed session cookies |
 | `POST /api/operator/logout` | Operator BFF auth | Clears HttpOnly session cookie |
 | `GET /api/operator/me` | Operator BFF auth | Requires HttpOnly operator session; returns sanitized operator profile and role permissions |
 | `GET /api/operator/operators` | Operator BFF admin | Requires HttpOnly admin session; returns sanitized operator account summaries for the session tenant |
@@ -44,7 +44,8 @@
 - Web BFF account-management responses must never expose `passwordHash` or `apiKey`; they may return account identity, role, disabled state, and `sessionVersion`.
 - Production operator accounts must use the `OperatorAccount` table with `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
 - Operator account creation and updates must be tenant-scoped from the admin session and must write an audit record without secrets.
-- `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_ACCOUNT_SOURCE=database` after migrations and seed/bootstrap have created operator accounts.
-- The current Web login is a first account-service boundary, not full commercial SSO/RBAC. A later production stage should add SSO/OIDC or account management UI.
+- `OPERATOR_IDENTITY_PROVIDER` is the Web BFF identity boundary. Supported deployable values are `database` and `env`; reserved values such as `oidc` and `sso` fail closed until a real provider adapter is implemented.
+- `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_IDENTITY_PROVIDER=database` after migrations and seed/bootstrap have created operator accounts. `OPERATOR_IDENTITY_PROVIDER` takes precedence over `OPERATOR_ACCOUNT_SOURCE`; the legacy `OPERATOR_ACCOUNT_SOURCE` switch is only consulted when the new provider variable is unset.
+- The current Web login is a first account-service boundary, not full commercial SSO/RBAC. A later production stage should add a real OIDC/SSO adapter behind this boundary.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real production channel webhooks must add provider signature verification before replacing the sandbox intake.

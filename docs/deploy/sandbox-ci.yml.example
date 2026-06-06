@@ -13,6 +13,7 @@ env:
   API_URL: http://localhost:4100
   OPERATOR_API_KEY: dev_operator_key
   OPERATOR_SESSION_SECRET: ci_operator_session_secret
+  OPERATOR_IDENTITY_PROVIDER: database
   OPERATOR_ACCOUNT_SOURCE: database
   OPERATOR_SESSION_ACCOUNTS: '[{"username":"demo","password":"demo123456","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]'
   NEXT_PUBLIC_API_URL: http://localhost:4100

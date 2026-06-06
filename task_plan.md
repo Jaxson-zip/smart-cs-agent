@@ -2,26 +2,26 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR12 - Production Identity Boundary
+## Current Stage: PR13 - Real Channel Intake Security
 
 Status: queued
 
-PR12 will turn the current operator login into a production identity boundary that can later swap to SSO/OIDC without weakening the existing HttpOnly session and RBAC model.
+PR13 will add the first real-channel intake security boundary: signed webhook verification, replay protection, and channel readiness without enabling irreversible real actions.
 
-### PR12 Scope
+### PR13 Scope
 
-- Define an identity-provider adapter boundary for operator authentication.
-- Keep database-backed accounts as the local/default provider.
-- Preserve HttpOnly signed sessions, tenant scoping, role mapping, disabled-account checks, and session-version revocation.
-- Keep `/api/operator/me` sanitized and permission-derived.
-- Document how production SSO/OIDC will attach to the adapter.
+- Define a real-channel webhook intake boundary with signature and timestamp validation.
+- Keep real-channel endpoints disabled unless explicitly configured.
+- Reject unsigned, expired, replayed, or tenant-mismatched events before normalization.
+- Add channel readiness signals for missing credentials/configuration.
+- Preserve the current WeCom sandbox route and smoke fixtures.
 
-### Out Of Scope For PR12
+### Out Of Scope For PR13
 
-- Real Taobao/Douyin callbacks.
+- Multi-channel production rollout.
 - Real payment/refund/coupon execution.
-- Full IAM, SCIM, organization sync, password reset flows, persisted permission policies, and billing.
-- Production WeCom credentials.
+- Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
+- Production Taobao/Douyin irreversible actions.
 
 ## Phases
 
@@ -42,11 +42,12 @@ PR12 will turn the current operator login into a production identity boundary th
 - [x] PR9 database-backed operator account service.
 - [x] PR10 operator account management endpoints and audit.
 - [x] PR11 operator account management UI.
-- [ ] PR12 production identity provider boundary.
+- [x] PR12 production identity provider boundary.
+- [ ] PR13 real channel intake security.
 
 ## Verification Gate
 
-Do not claim PR12 production identity boundary complete until these pass:
+Do not claim PR13 real channel intake security complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`

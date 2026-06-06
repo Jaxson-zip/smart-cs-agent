@@ -36,6 +36,7 @@ NEXT_PUBLIC_ENABLE_OFFLINE_DEMO=false
 API_URL=http://localhost:4100
 OPERATOR_API_KEY=dev_operator_key
 OPERATOR_SESSION_SECRET=replace_with_a_long_random_secret
+OPERATOR_IDENTITY_PROVIDER=database
 OPERATOR_ACCOUNT_SOURCE=database
 OPERATOR_SESSION_ACCOUNTS=[{"username":"demo","passwordHash":"scrypt:<salt>:<hash>","tenantId":"demo_tenant","operatorId":"sandbox_operator","role":"admin","apiKey":"dev_operator_key","sessionVersion":1}]
 ```

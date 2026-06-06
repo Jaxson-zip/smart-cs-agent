@@ -19,6 +19,7 @@ import {
 } from "./operator-admin";
 import {
   clearOperatorAccountStoreForTests,
+  clearOperatorIdentityProviderForTests,
   setOperatorAccountStoreForTests,
   type OperatorAccountStore,
 } from "./operator-session";
@@ -29,6 +30,7 @@ const originalOperatorApiKey = process.env.OPERATOR_API_KEY;
 const originalTenantId = process.env.OPERATOR_TENANT_ID;
 const originalOperatorId = process.env.OPERATOR_ID;
 const originalSessionSecret = process.env.OPERATOR_SESSION_SECRET;
+const originalOperatorIdentityProvider = process.env.OPERATOR_IDENTITY_PROVIDER;
 const originalOperatorAccountSource = process.env.OPERATOR_ACCOUNT_SOURCE;
 const originalSessionAccounts = process.env.OPERATOR_SESSION_ACCOUNTS;
 const originalSessionTtl = process.env.OPERATOR_SESSION_TTL_SECONDS;
@@ -43,6 +45,7 @@ describe("operator BFF routes", () => {
     restoreEnv("OPERATOR_TENANT_ID", originalTenantId);
     restoreEnv("OPERATOR_ID", originalOperatorId);
     restoreEnv("OPERATOR_SESSION_SECRET", originalSessionSecret);
+    restoreEnv("OPERATOR_IDENTITY_PROVIDER", originalOperatorIdentityProvider);
     restoreEnv("OPERATOR_ACCOUNT_SOURCE", originalOperatorAccountSource);
     restoreEnv("OPERATOR_SESSION_ACCOUNTS", originalSessionAccounts);
     restoreEnv("OPERATOR_SESSION_TTL_SECONDS", originalSessionTtl);
@@ -50,6 +53,7 @@ describe("operator BFF routes", () => {
     restoreEnv("NEXT_PUBLIC_API_URL", originalNextPublicApiUrl);
     clearOperatorAdminStoreForTests();
     clearOperatorAccountStoreForTests();
+    clearOperatorIdentityProviderForTests();
     delete process.env.NEXT_PUBLIC_OPERATOR_API_KEY;
   });
 
@@ -415,6 +419,95 @@ describe("operator BFF routes", () => {
           manageOperators: false,
         },
       },
+    });
+  });
+
+  it("uses an explicit env identity provider without falling through to the database account source", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "env";
+    process.env.OPERATOR_ACCOUNT_SOURCE = "database";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"env_agent","password":"secret","tenantId":"tenant_env","operatorId":"operator_env","role":"operator","apiKey":"env_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "env_agent",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(await response.json(), {
+      operator: {
+        username: "env_agent",
+        tenantId: "tenant_env",
+        operatorId: "operator_env",
+        role: "operator",
+        permissions: {
+          viewCases: true,
+          confirmReplies: true,
+          takeoverCases: true,
+          manageRules: false,
+          manageOperators: false,
+        },
+      },
+    });
+  });
+
+  it("fails closed when a reserved oidc identity provider is selected before it is configured", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "oidc";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator identity provider is not configured",
+    });
+  });
+
+  it("fails closed when a reserved sso identity provider is selected before it is configured", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "sso";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator identity provider is not configured",
+    });
+  });
+
+  it("fails closed for unknown identity providers instead of using local fallback", async () => {
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "local";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Operator identity provider is not configured",
     });
   });
 

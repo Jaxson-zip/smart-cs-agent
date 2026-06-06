@@ -79,6 +79,18 @@ export type OperatorAccountStore = {
   ): Promise<OperatorAccount | undefined>;
 };
 
+export type OperatorIdentityProvider = {
+  authenticate(
+    credentials: LoginCredentials,
+  ): Promise<OperatorAccount | undefined>;
+  findSessionAccount(
+    payload: Pick<
+      SignedSessionPayload,
+      "username" | "tenantId" | "operatorId" | "role"
+    >,
+  ): Promise<OperatorAccount | undefined>;
+};
+
 type PrismaClientLike = {
   operatorAccount: {
     findUnique(args: {
@@ -89,7 +101,10 @@ type PrismaClientLike = {
   };
 };
 
+export class OperatorIdentityProviderConfigurationError extends Error {}
+
 let operatorAccountStoreForTests: OperatorAccountStore | undefined;
+let operatorIdentityProviderForTests: OperatorIdentityProvider | undefined;
 
 export function setOperatorAccountStoreForTests(store: OperatorAccountStore) {
   operatorAccountStoreForTests = store;
@@ -97,6 +112,16 @@ export function setOperatorAccountStoreForTests(store: OperatorAccountStore) {
 
 export function clearOperatorAccountStoreForTests() {
   operatorAccountStoreForTests = undefined;
+}
+
+export function setOperatorIdentityProviderForTests(
+  provider: OperatorIdentityProvider,
+) {
+  operatorIdentityProviderForTests = provider;
+}
+
+export function clearOperatorIdentityProviderForTests() {
+  operatorIdentityProviderForTests = undefined;
 }
 
 export function getOperatorAccounts(): OperatorAccount[] {
@@ -119,13 +144,7 @@ export function getOperatorAccounts(): OperatorAccount[] {
 export async function authenticateOperator(
   credentials: LoginCredentials,
 ): Promise<OperatorAccount | undefined> {
-  const account = await operatorAccountStore().findByUsername(
-    credentials.username,
-  );
-  if (!account || account.disabled) return undefined;
-  return accountPasswordMatches(account, credentials.password)
-    ? account
-    : undefined;
+  return operatorIdentityProvider().authenticate(credentials);
 }
 
 export function createOperatorSessionCookie(account: OperatorAccount) {
@@ -167,11 +186,11 @@ export async function readOperatorSession(request: Request): Promise<SessionResu
 
   let account: OperatorAccount | undefined;
   try {
-    account = await operatorAccountStore().findSessionAccount(payload);
+    account = await operatorIdentityProvider().findSessionAccount(payload);
   } catch {
     return {
       status: "misconfigured",
-      message: "Operator session accounts are not configured",
+      message: "Operator identity provider is not configured",
     };
   }
 
@@ -272,6 +291,53 @@ function parseAccount(value: unknown): OperatorAccount {
   }
 
   return account;
+}
+
+function operatorIdentityProvider(): OperatorIdentityProvider {
+  if (operatorIdentityProviderForTests) return operatorIdentityProviderForTests;
+
+  const provider = process.env.OPERATOR_IDENTITY_PROVIDER
+    ?.trim()
+    .toLowerCase();
+
+  if (!provider) {
+    return accountStoreIdentityProvider(operatorAccountStore());
+  }
+
+  if (provider === "env") {
+    return accountStoreIdentityProvider(envOperatorAccountStore);
+  }
+
+  if (provider === "database") {
+    return accountStoreIdentityProvider(prismaOperatorAccountStore);
+  }
+
+  if (provider === "oidc" || provider === "sso") {
+    throw new OperatorIdentityProviderConfigurationError(
+      "Operator identity provider is not configured",
+    );
+  }
+
+  throw new OperatorIdentityProviderConfigurationError(
+    "Operator identity provider is not configured",
+  );
+}
+
+function accountStoreIdentityProvider(
+  store: OperatorAccountStore,
+): OperatorIdentityProvider {
+  return {
+    async authenticate(credentials) {
+      const account = await store.findByUsername(credentials.username);
+      if (!account || account.disabled) return undefined;
+      return accountPasswordMatches(account, credentials.password)
+        ? account
+        : undefined;
+    },
+    async findSessionAccount(payload) {
+      return store.findSessionAccount(payload);
+    },
+  };
 }
 
 function operatorAccountStore(): OperatorAccountStore {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   authenticateOperator,
+  OperatorIdentityProviderConfigurationError,
   setOperatorSessionCookie,
   toPublicOperatorAccount,
   type LoginCredentials,
@@ -28,9 +29,14 @@ export async function POST(request: Request) {
   let account;
   try {
     account = await authenticateOperator(payload);
-  } catch {
+  } catch (error) {
     return NextResponse.json(
-      { error: "Operator session accounts are not configured" },
+      {
+        error:
+          error instanceof OperatorIdentityProviderConfigurationError
+            ? error.message
+            : "Operator session accounts are not configured",
+      },
       { status: 503 },
     );
   }
