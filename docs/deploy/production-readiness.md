@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR50 Production Image Security Evidence Gate
+
+Production image security evidence is now checked by:
+
+```bash
+npm run verify:production-image-security
+npm run verify:production-image-security:docker
+```
+
+The default command validates the image security gate, docs, workflow example, and launch references. The `:docker` command runs SBOM and vulnerability scanners against the already-built API and Web image tags and stores local evidence artifacts. Use `docs/deploy/production-image-security.yml.example` after the image build and container smoke workflows. This gate still does not publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR49 Production Container Runtime Smoke Gate
 
 Production container runtime smoke is now checked by:

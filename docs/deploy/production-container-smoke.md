@@ -15,6 +15,7 @@ Run the Docker-backed runtime smoke in CI or another Docker-enabled environment 
 ```bash
 npm run verify:production-image-builds:docker
 npm run verify:production-container-smoke:docker
+npm run verify:production-image-security:docker
 ```
 
 The Docker-backed smoke starts a temporary Docker network with:
@@ -54,3 +55,5 @@ npm run verify:production-canary -- --api=<public-api-url> --max-stale-processin
 ```
 
 Those gates prove deployment-specific readiness. PR49 only proves the production images start and answer the minimal runtime probes.
+
+Run `docs/deploy/production-image-security.yml.example` after this smoke gate when release owners need SBOM and vulnerability evidence before publishing images.

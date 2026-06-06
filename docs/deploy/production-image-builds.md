@@ -25,6 +25,8 @@ It uses `--pull=false` and does not pass runtime environment variables, operator
 
 After the images build, run `npm run verify:production-container-smoke:docker` from `docs/deploy/production-container-smoke.yml.example` to verify the API and Web containers can start and answer their minimal runtime probes without publishing images.
 
+After runtime smoke passes, run `npm run verify:production-image-security:docker` from `docs/deploy/production-image-security.yml.example` to generate SBOM and vulnerability evidence for the same local API/Web image tags before publishing or deployment.
+
 ## CI Example
 
 Use `docs/deploy/production-image-build.yml.example` as the template for a GitHub Actions job. Keep it as a build-only job until a separate release process defines registry ownership, image signing, SBOM generation, provenance, and promotion rules.

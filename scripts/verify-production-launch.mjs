@@ -18,6 +18,9 @@ const files = {
   productionContainerSmoke: "docs/deploy/production-container-smoke.md",
   productionContainerSmokeWorkflow:
     "docs/deploy/production-container-smoke.yml.example",
+  productionImageSecurity: "docs/deploy/production-image-security.md",
+  productionImageSecurityWorkflow:
+    "docs/deploy/production-image-security.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
@@ -25,6 +28,8 @@ const files = {
     "scripts/verify-production-image-builds.mjs",
   productionContainerSmokeVerifier:
     "scripts/verify-production-container-smoke.mjs",
+  productionImageSecurityVerifier:
+    "scripts/verify-production-image-security.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -67,6 +72,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-image-builds:docker",
   "verify:production-container-smoke",
   "verify:production-container-smoke:docker",
+  "verify:production-image-security",
+  "verify:production-image-security:docker",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -116,6 +123,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-deploy-artifacts",
   "npm run verify:production-image-builds",
   "npm run verify:production-container-smoke",
+  "npm run verify:production-image-security",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -162,6 +170,13 @@ mustContainAll("launch runbook container smoke", content.launchRunbook, [
   "docs/deploy/production-container-smoke.yml.example",
   "npm run verify:production-container-smoke",
   "npm run verify:production-container-smoke:docker",
+]);
+
+mustContainAll("launch runbook image security", content.launchRunbook, [
+  "docs/deploy/production-image-security.md",
+  "docs/deploy/production-image-security.yml.example",
+  "npm run verify:production-image-security",
+  "npm run verify:production-image-security:docker",
 ]);
 
 mustContainAll("launch runbook rollback controls", content.launchRunbook, [
@@ -256,6 +271,13 @@ mustContainAll("production readiness references container smoke", content.produc
   "npm run verify:production-container-smoke:docker",
 ]);
 
+mustContainAll("production readiness references image security", content.productionReadiness, [
+  "PR50 Production Image Security Evidence Gate",
+  "docs/deploy/production-image-security.yml.example",
+  "npm run verify:production-image-security",
+  "npm run verify:production-image-security:docker",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -293,12 +315,19 @@ mustContainAll("task plan references PR49", content.taskPlan, [
   "production-container-smoke.yml.example",
 ]);
 
+mustContainAll("task plan references PR50", content.taskPlan, [
+  "PR50 - Production Image Security Evidence Gate",
+  "verify:production-image-security",
+  "production-image-security.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
+  "verify:production-image-security",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -370,6 +399,14 @@ mustContainAll("production container smoke verifier source", content.productionC
   "docker",
   "/health",
 ]);
+mustContainAll("production image security verifier source", content.productionImageSecurityVerifier, [
+  "verify:production-image-security",
+  "verify:production-image-security:docker",
+  "anchore/syft:latest",
+  "aquasec/trivy:latest",
+  "spdx-json",
+  "--severity",
+]);
 mustContainAll("production image build docs", content.productionImageBuilds, [
   "PR48 Production Image Build Gate",
   "npm run verify:production-image-builds",
@@ -391,6 +428,18 @@ mustContainAll("production container smoke workflow", content.productionContaine
   "permissions:",
   "contents: read",
   "npm run verify:production-container-smoke:docker",
+]);
+mustContainAll("production image security docs", content.productionImageSecurity, [
+  "PR50 Production Image Security Evidence Gate",
+  "npm run verify:production-image-security",
+  "npm run verify:production-image-security:docker",
+  "does not publish images",
+]);
+mustContainAll("production image security workflow", content.productionImageSecurityWorkflow, [
+  "permissions:",
+  "contents: read",
+  "npm run verify:production-image-security:docker",
+  "actions/upload-artifact@v4",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -430,6 +479,8 @@ mustNotContainUnsafeExamples({
   productionImageBuildWorkflow: content.productionImageBuildWorkflow,
   productionContainerSmoke: content.productionContainerSmoke,
   productionContainerSmokeWorkflow: content.productionContainerSmokeWorkflow,
+  productionImageSecurity: content.productionImageSecurity,
+  productionImageSecurityWorkflow: content.productionImageSecurityWorkflow,
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,

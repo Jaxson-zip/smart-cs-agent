@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR49 - Production Container Runtime Smoke Gate
+## Current Stage: PR50 - Production Image Security Evidence Gate
 
 Status: verified
 
-Previous Stage: PR48 - Production Image Build Gate was verified.
+Previous Stage: PR49 - Production Container Runtime Smoke Gate was verified.
+
+Container Runtime Stage: PR49 - Production Container Runtime Smoke Gate was verified with `production-container-smoke.yml.example` and must stay connected to production launch and image security checks.
 
 Image Build Stage: PR48 - Production Image Build Gate was verified with `production-image-build.yml.example` and must stay connected to production launch and container smoke checks.
 
@@ -38,22 +40,22 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR49 adds a production container runtime smoke gate. It gives release owners a static runtime-smoke verifier, a Docker-backed command that starts the API and Web images with synthetic production-shaped env, and a GitHub Actions example that proves the containers start without publishing images.
+PR50 adds a production image security evidence gate. It gives release owners a static image-security verifier, a Docker-backed command that generates SBOM and vulnerability reports for API/Web images, and a GitHub Actions example that uploads sanitized evidence without publishing images.
 
-### PR49 Scope
+### PR50 Scope
 
-- Add `npm run verify:production-container-smoke` for static runtime-smoke gate checks.
-- Add `npm run verify:production-container-smoke:docker` to start API and Web containers locally without publishing them.
-- Add `docs/deploy/production-container-smoke.md`.
-- Add `docs/deploy/production-container-smoke.yml.example` as a build-and-smoke GitHub Actions template.
-- Connect container smoke checks into production readiness, deployment artifact docs, image build docs, launch runbook, and `verify:production-launch`.
-- Keep the container smoke gate runtime-only: no registry login, no image push, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in smoke commands or CI examples.
+- Add `npm run verify:production-image-security` for static image-security evidence checks.
+- Add `npm run verify:production-image-security:docker` to run SBOM and vulnerability scans against local API and Web image tags without publishing them.
+- Add `docs/deploy/production-image-security.md`.
+- Add `docs/deploy/production-image-security.yml.example` as a build-smoke-scan GitHub Actions template.
+- Connect image security checks into production readiness, deployment artifact docs, image build docs, container smoke docs, launch runbook, and `verify:production-launch`.
+- Keep the image security gate evidence-only: no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in scan commands or CI examples.
 
-### Out Of Scope For PR49
+### Out Of Scope For PR50
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
-- Signing images, SBOM/provenance generation, vulnerability scanning, or promotion rules.
+- Signing images, SBOM attestation, provenance signing, vulnerability waiver policy, or promotion rules.
 - Choosing a final cloud vendor, Kubernetes chart, Terraform stack, or managed secret store.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
@@ -61,7 +63,7 @@ PR49 adds a production container runtime smoke gate. It gives release owners a s
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, production databases, vault, provider networks, or registry APIs from container-smoke static verification.
+- Calling production API readiness, production databases, vault, provider networks, or registry APIs from image-security static verification.
 - Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
@@ -128,10 +130,11 @@ PR49 adds a production container runtime smoke gate. It gives release owners a s
 - [x] PR47 production deployment artifacts.
 - [x] PR48 production image build gate.
 - [x] PR49 production container runtime smoke gate.
+- [x] PR50 production image security evidence gate.
 
 ## Verification Gate
 
-Do not claim PR49 production container runtime smoke gate complete until these pass:
+Do not claim PR50 production image security evidence gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -168,6 +171,9 @@ Do not claim PR49 production container runtime smoke gate complete until these p
 - `node --check scripts/verify-production-container-smoke.mjs`
 - `node --test scripts/verify-production-container-smoke.test.mjs`
 - `npm.cmd run verify:production-container-smoke`
+- `node --check scripts/verify-production-image-security.mjs`
+- `node --test scripts/verify-production-image-security.test.mjs`
+- `npm.cmd run verify:production-image-security`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+production-image-security-artifacts/
 
 # next.js
 /.next/

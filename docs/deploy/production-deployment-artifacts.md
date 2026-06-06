@@ -10,6 +10,10 @@ The Dockerfiles introduced here are now covered by `npm run verify:production-im
 
 Built images are now covered by `npm run verify:production-container-smoke`. Docker-enabled CI should run `npm run verify:production-container-smoke:docker` from `docs/deploy/production-container-smoke.yml.example` after the image build gate to prove the API and Web production containers start without publishing images or calling real channels.
 
+## PR50 Production Image Security Evidence Gate
+
+Built and smoke-tested images are now covered by `npm run verify:production-image-security`. Docker-enabled CI should run `npm run verify:production-image-security:docker` from `docs/deploy/production-image-security.yml.example` after container smoke to generate SBOM and vulnerability evidence without publishing images, reading deployment secrets, or calling real channels.
+
 ## Artifacts
 
 - `apps/api/Dockerfile`: builds the Nest API from the workspace, generates the Prisma client, runs as the non-root `node` user, exposes port `4100`, disables sandbox/demo defaults, and health-checks `GET /health`.
