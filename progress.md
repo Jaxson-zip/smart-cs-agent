@@ -135,3 +135,10 @@
 - Added DB-down metrics behavior so monitoring can still scrape `smart_cs_agent_api_up 1` and `smart_cs_agent_database_ready 0` without exposing the database error.
 - Addressed independent review by adding PR31 production-readiness text checks to `npm run verify:channel-runbook`.
 - Final PR31 verification passed: API tests, Web tests, full typecheck, lint, production build, Prisma generate/migrate deploy, runbook verifier, operator bootstrap verifier, script syntax checks, production-readiness pass/fail/warning scenarios, and independent code review follow-up.
+- Started PR32 production canary verifier.
+- Added `scripts/verify-production-canary.mjs` and `npm run verify:production-canary` to check live public `/health/ready` plus `/metrics` after deploy.
+- Added `scripts/verify-production-canary.test.mjs` with local HTTP canary coverage for healthy deploys, degraded queue handling, required real-channel intake, kill-switch failure, sensitive metric marker detection, and unknown-argument redaction.
+- Updated production readiness and queue runbook docs, plus the runbook verifier, so PR32 canary behavior and safety boundaries are guarded.
+- Fixed the API workspace test script to use a small Node runner that sets `TSX_TSCONFIG=tsconfig.json` and invokes the `tsx` CLI directly, so decorator-based controller specs run reliably under the current Node/tsx toolchain.
+- Addressed independent review findings by redacting bare unknown URL-like arguments and making `/metrics` leakage detection fail on non-public label keys such as tenant/channel/secret labels.
+- Final PR32 verification passed: canary behavior tests, canary package command live check, API tests, Web tests, typecheck, lint, production build, Prisma generate/migrate deploy, runbook verifier, operator bootstrap verifier, production-readiness good/bad scenarios, and script syntax checks.

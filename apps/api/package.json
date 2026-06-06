@@ -11,7 +11,7 @@
     "build": "nest build",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test \"src/**/*.spec.ts\""
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",

@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR31 - Public Monitoring Metrics
+## Current Stage: PR32 - Production Canary Verifier
 
 Status: verified
 
-PR31 adds a public Prometheus-compatible `/metrics` endpoint with aggregate service, database, real-channel intake, kill-switch, and queue gauges for production monitoring.
+PR32 adds an executable deploy/on-call canary that checks public `/health/ready` and `/metrics` after deployment, without requiring operator credentials or exposing response bodies/secrets in logs.
 
 ### PR16 Scope
 
@@ -66,15 +66,18 @@ PR31 adds a public Prometheus-compatible `/metrics` endpoint with aggregate serv
 - [x] PR29 production operator identity closure.
 - [x] PR30 real-channel emergency kill switch.
 - [x] PR31 public monitoring metrics.
+- [x] PR32 production canary verifier.
 
 ## Verification Gate
 
-Do not claim PR31 public monitoring metrics complete until these pass:
+Do not claim PR32 production canary verifier complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
 - `npm.cmd run test --workspace @smart-cs-agent/web`
+- `node --test scripts/verify-production-canary.test.mjs`
+- `node --check scripts/verify-production-canary.mjs`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
 - `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`
 - `npm.cmd run build --workspaces --if-present`
@@ -92,6 +95,8 @@ Do not claim PR31 public monitoring metrics complete until these pass:
 - Production verifier check: `--require-real-channel` fails when `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`; the same env without `--require-real-channel` passes with a warning and without printing secrets.
 - Monitoring metrics check: `GET /metrics` returns Prometheus text with API, database, webhook readiness, kill switch, queue count, oldest pending age, and degraded reason gauges without tenant IDs, channel names, customer messages, provider payloads, external IDs, operator keys, secrets, signatures, or raw bodies.
 - Monitoring failure check: `GET /metrics` remains scrapeable when the database is unavailable and reports `smart_cs_agent_database_ready 0` without leaking the database error.
+- Production canary check: `npm.cmd run verify:production-canary -- --api=<healthy-local-canary> --require-real-channel` passes against healthy public readiness/metrics.
+- Production canary failure checks: degraded readiness/queue fails unless `--allow-degraded`; `--require-real-channel` fails when webhook status is not `ok` or kill switch is enabled; forbidden tenant/channel/payload/secret markers in `/metrics` fail without echoing the marker.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
@@ -125,3 +130,5 @@ Do not claim PR31 public monitoring metrics complete until these pass:
 | 2026-06-06 | Real-channel normalization can collapse the trust boundary if body tenant/channel overrides signed context | PR14 derives tenant/channel from the signed context, only checks body merchant identity for consistency, and keeps normalized events out of Agent/Action/case processing |
 | 2026-06-06 | Normalized real-channel events need a controlled path into case review without becoming automatic actions | PR15 adds a pending/replayed/ignored review lifecycle and operator-gated replay that forces human review modes |
 | 2026-06-06 | PR15 review pool queries could mix non-real-channel normalized events if they only filter tenant and pending status | Added `source=real_channel_webhook` filters, status enum migration, source-aware index, and regression tests |
+| 2026-06-06 | API workspace tests could miss `experimentalDecorators` under the current Node/tsx worker path | Added `apps/api/scripts/run-tests.mjs` to set `TSX_TSCONFIG=tsconfig.json` and invoke the `tsx` CLI directly |
+| 2026-06-06 | Initial production canary redacted only `--key=value` unknown args and looked for a narrow set of leaked metric values | Added tests for bare URL argument redaction and generic public metric label leakage, then restricted public metric labels to `status` and `reason` |

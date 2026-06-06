@@ -1,5 +1,19 @@
 # Production-Readiness Baseline
 
+## PR32 Production Canary Verifier
+
+Deploy and on-call checks now have an executable live canary:
+
+```bash
+npm run verify:production-canary -- --api=https://api.example.com --require-real-channel
+```
+
+The canary reads only public `GET /health/ready` and `GET /metrics`. It fails when readiness is not `ok`, the API/database metrics are not healthy, real-channel webhook readiness is `misconfigured`, `--require-real-channel` is set while webhook status is not `ok` or the emergency kill switch is enabled, queue degraded metrics are active, stale processing claims exceed the threshold, oldest pending age exceeds the threshold, or `/metrics` contains forbidden tenant/channel/payload/secret markers.
+
+Use `--allow-degraded` only during a planned degraded rollout or incident where the team has explicitly accepted queue pressure. The canary will still fail on database down, API down, misconfigured real-channel intake, kill switch under `--require-real-channel`, stale processing above `--max-stale-processing`, or oldest pending age above `--max-oldest-pending-age-seconds`.
+
+The canary must not print response bodies, API URLs with query strings, metric bodies, tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
+
 ## PR31 Public Monitoring Metrics
 
 The API now exposes `GET /metrics` in Prometheus text format. It is public like `/health` and `/health/ready`, but it contains only aggregate numeric gauges: API up, database readiness, real-channel webhook enabled state, emergency kill switch state, one-hot webhook readiness status, source-wide queue counts, oldest pending age, and known degraded reasons.

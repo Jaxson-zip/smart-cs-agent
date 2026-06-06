@@ -10,6 +10,9 @@ const files = {
   publicApi: "docs/deploy/public-api-surface.md",
   productionReadiness: "docs/deploy/production-readiness.md",
   sandboxCiExample: "docs/deploy/sandbox-ci.yml.example",
+  packageJson: "package.json",
+  productionCanary: "scripts/verify-production-canary.mjs",
+  productionCanaryTest: "scripts/verify-production-canary.test.mjs",
   healthController: "apps/api/src/health/health.controller.ts",
   channelController: "apps/api/src/channels/channel-events.controller.ts",
   channelService: "apps/api/src/channels/channel-event-review.service.ts",
@@ -149,6 +152,7 @@ mustContainAll("runbook operations", content.runbook, [
   "Check readiness",
   "Check monitoring metrics",
   "Check queue metrics",
+  "npm run verify:production-canary",
   "Recover stale processing claims",
   "Review recent recovery records",
   "Recheck readiness",
@@ -159,8 +163,21 @@ mustContainAll("runbook operations", content.runbook, [
   "fail closed",
   "per-process",
 ]);
+mustContainAll("runbook production canary safety", content.runbook, [
+  "--require-real-channel",
+  "--allow-degraded",
+  "--max-stale-processing",
+  "--max-oldest-pending-age-seconds",
+  "must not require operator API keys",
+  "must not print tenant IDs",
+  "must not print tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, raw request bodies, full metric bodies, or API URLs containing secrets",
+]);
 
 mustContainAll(".env.example", content.envExample, envVars);
+mustContainAll("package scripts", content.packageJson, [
+  "verify:production-canary",
+  "scripts/verify-production-canary.mjs",
+]);
 mustContainAll("sandbox CI example", content.sandboxCiExample, envVars);
 mustContainAll("public API surface endpoints", content.publicApi, endpoints);
 mustContainAll("public API surface safety", content.publicApi, [
@@ -181,6 +198,13 @@ mustContainAll("public API surface safety", content.publicApi, [
   "`/metrics` must not use tenant ID",
 ]);
 mustContainAll("production readiness intake gates", content.productionReadiness, [
+  "PR32 Production Canary Verifier",
+  "npm run verify:production-canary",
+  "--require-real-channel",
+  "--allow-degraded",
+  "--max-stale-processing",
+  "--max-oldest-pending-age-seconds",
+  "must not print response bodies",
   "PR31 Public Monitoring Metrics",
   "GET /metrics",
   "smart_cs_agent_api_up 1",
@@ -200,6 +224,31 @@ mustContainAll("production readiness intake gates", content.productionReadiness,
   "CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS",
   "CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD",
   "CHANNEL_QUEUE_STALE_AFTER_MINUTES",
+]);
+mustContainAll("production canary verifier", content.productionCanary, [
+  "/health/ready",
+  "/metrics",
+  "smart_cs_agent_api_up",
+  "smart_cs_agent_database_ready",
+  'smart_cs_agent_real_channel_webhook_status',
+  'status: "misconfigured"',
+  "smart_cs_agent_real_channel_webhook_kill_switch_enabled",
+  "smart_cs_agent_channel_queue_degraded",
+  "smart_cs_agent_channel_queue_stale_processing_total",
+  "smart_cs_agent_channel_queue_oldest_pending_age_seconds",
+  "--require-real-channel",
+  "--allow-degraded",
+  "--max-stale-processing",
+  "--max-oldest-pending-age-seconds",
+  "redactArgument",
+  "GET /metrics exposes a forbidden tenant, channel, payload, or secret marker",
+]);
+mustContainAll("production canary tests", content.productionCanaryTest, [
+  "production canary passes when readiness and public metrics are healthy",
+  "production canary fails on degraded queue unless explicitly allowed",
+  "production canary requires real-channel intake to be open when requested",
+  "production canary fails closed without echoing sensitive metric values",
+  "production canary redacts unknown argument values",
 ]);
 
 mustContainAll("api config rate limit", content.apiConfig, [

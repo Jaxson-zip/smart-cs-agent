@@ -22,6 +22,14 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
 | `POST /v1/channels/:channel/webhook/events` | Signed real-channel webhook intake | Disabled by default; HMAC and `REAL_CHANNEL_WEBHOOK_ALLOWLIST` required; `REAL_CHANNEL_WEBHOOK_KILL_SWITCH` can emergency-disable all intake; optional per-process rate limit |
 
+For deploy and incident checks, prefer the executable canary when a shell is available:
+
+```bash
+npm run verify:production-canary -- --api=https://api.example.com --require-real-channel
+```
+
+Use `--allow-degraded` only when queue pressure is already accepted and actively monitored. The canary reads public readiness and monitoring metrics only; it must not require operator API keys and must not print tenant IDs, customer messages, provider payloads, external IDs, operator API keys, webhook secrets, signatures, raw request bodies, full metric bodies, or API URLs containing secrets.
+
 ## Queue States
 
 - `pending`: a normalized real-channel event is waiting for an operator to generate a reviewed after-sales case or ignore it.
@@ -117,6 +125,14 @@ Alert on these aggregate gauges:
 - `smart_cs_agent_channel_queue_stale_processing_total > 0`: at least one review claim may be stuck.
 
 The `/metrics` response must stay aggregate. It must not include tenant IDs, merchant IDs, channel names, customer messages, provider payloads, source names, external conversation IDs, external message IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
+
+The same checks can be run as a deploy canary:
+
+```bash
+npm run verify:production-canary -- --api=http://localhost:4100
+```
+
+Add `--require-real-channel` when signed real-channel intake must be open. Add `--max-stale-processing=<count>` or `--max-oldest-pending-age-seconds=<seconds>` to tighten the default stale-processing and oldest-pending limits for a launch window.
 
 ### 3. Check queue metrics
 
@@ -263,4 +279,4 @@ Run the documentation verifier after changing readiness, channel-event metrics, 
 npm run verify:channel-runbook
 ```
 
-The verifier checks this runbook, `.env.example`, `docs/deploy/public-api-surface.md`, and the relevant API source files for the required endpoints, threshold variables, degraded reasons, and safety boundaries.
+The verifier checks this runbook, `.env.example`, `docs/deploy/public-api-surface.md`, the production canary script, and the relevant API source files for the required endpoints, threshold variables, degraded reasons, and safety boundaries.
