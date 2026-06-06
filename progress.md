@@ -73,3 +73,7 @@
 - Added tenant-scoped API and Web BFF metrics for pending, processing, stale processing, replayed, ignored, and oldest pending age.
 - BFF metrics responses strip tenant/source/internal fields before returning to the browser.
 - Final PR19 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live metrics endpoint smoke returning queue counts and oldest pending age.
+- Started PR20 channel queue readiness thresholds.
+- Connected aggregate real-channel queue health into `/health/ready`, returning `degraded` when configured thresholds are exceeded while keeping DB failure as `unhealthy`/503.
+- Added queue threshold env vars to `.env.example` with blank warning thresholds disabled by default.
+- Final PR20 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live degraded readiness smoke with aggregate queue reasons only.

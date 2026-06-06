@@ -511,6 +511,86 @@ describe("ChannelEventReviewService", () => {
       },
     ]);
   });
+
+  it("reports source-wide queue health for readiness without tenant details", async () => {
+    const countQueries: unknown[] = [];
+    const findFirstQueries: unknown[] = [];
+    const service = new ChannelEventReviewService(
+      {
+        normalizedChannelEvent: {
+          count: async (query: unknown) => {
+            countQueries.push(query);
+            return [12, 2, 1][countQueries.length - 1] ?? 0;
+          },
+          findFirst: async (query: unknown) => {
+            findFirstQueries.push(query);
+            return { receivedAt: new Date("2026-06-06T07:00:00.000Z") };
+          },
+        },
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+
+    const result = await service.getQueueHealth({
+      now: new Date("2026-06-06T07:30:00.000Z"),
+      staleAfterMinutes: 15,
+      pendingWarnThreshold: 10,
+      oldestPendingWarnSeconds: 900,
+      staleProcessingWarnThreshold: 0,
+    });
+
+    assert.deepStrictEqual(result, {
+      status: "degraded",
+      measuredAt: new Date("2026-06-06T07:30:00.000Z"),
+      pendingCount: 12,
+      processingCount: 2,
+      staleProcessingCount: 1,
+      oldestPendingAgeSeconds: 1800,
+      thresholds: {
+        pendingWarnThreshold: 10,
+        oldestPendingWarnSeconds: 900,
+        staleProcessingWarnThreshold: 0,
+        staleAfterMinutes: 15,
+      },
+      reasons: [
+        "pending_count_above_threshold",
+        "oldest_pending_age_above_threshold",
+        "stale_processing_above_threshold",
+      ],
+    });
+    assert.deepStrictEqual(countQueries, [
+      {
+        where: {
+          source: "real_channel_webhook",
+          reviewStatus: "pending",
+        },
+      },
+      {
+        where: {
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+        },
+      },
+      {
+        where: {
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+          reviewedAt: { lt: new Date("2026-06-06T07:15:00.000Z") },
+        },
+      },
+    ]);
+    assert.deepStrictEqual(findFirstQueries, [
+      {
+        where: {
+          source: "real_channel_webhook",
+          reviewStatus: "pending",
+        },
+        select: { receivedAt: true },
+        orderBy: { receivedAt: "asc" },
+      },
+    ]);
+    assert.ok(!JSON.stringify(result).includes("tenant_"));
+  });
 });
 
 function normalizedEvent(input: { reviewStatus?: string } = {}) {

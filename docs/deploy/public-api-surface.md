@@ -7,7 +7,7 @@
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
 | `GET /health` | Public liveness | No tenant data, no database details |
-| `GET /health/ready` | Public readiness | No tenant data; may return 503 when DB unavailable |
+| `GET /health/ready` | Public readiness | No tenant data; may return `ok`, `degraded`, or 503 `unhealthy` when DB unavailable |
 | `GET /v1/cases` | Operator API | `Authorization: Bearer <operator-key>` or `x-api-key`; tenant derived from key |
 | `GET /v1/cases/:id` | Operator API | Same as `/v1/cases`; service filters by tenant |
 | `GET /v1/rules/:tenantId?` | Operator API | Same as `/v1/cases`; path tenant must match key tenant |
@@ -65,4 +65,5 @@
 - Real-channel readiness may expose configured channel names, but must never expose webhook secrets, signatures, or raw request bodies.
 - Real-channel replay APIs are operator-gated review controls over `NormalizedChannelEvent.source=real_channel_webhook` only. Replay may create an after-sales case, customer message, pending action rows, and audit logs, but must force `human_confirm` or `human_takeover`; it must never return `auto_execute`, call channel `sendMessage()`, or run action execution.
 - Real-channel metrics are read-only and tenant-scoped. They may expose counts, timestamps, and age seconds, but must not expose customer message text, tenant identifiers, source names, webhook payloads, external conversation IDs, or external message IDs to the browser.
+- Readiness may include aggregate real-channel queue health. It may report `degraded` when configured queue thresholds are exceeded, but it must not expose tenant identifiers, customer message text, payloads, external conversation IDs, or external message IDs.
 - Real-channel stale recovery is admin-only. It may move old `processing` events back to `pending` for the same tenant/source after a crash or interrupted replay, but it must not call AgentService, create cases, execute actions, or send customer replies.

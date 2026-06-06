@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR20 Queue Readiness Thresholds
+
+`GET /health/ready` now includes aggregate real-channel queue health. Database failure still returns HTTP 503 with `status=unhealthy`; queue pressure returns HTTP 200 with `status=degraded` so deploy platforms can distinguish "service is up but needs operator attention" from "service cannot serve".
+
+Queue degraded thresholds are configured with `CHANNEL_QUEUE_PENDING_WARN_THRESHOLD`, `CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS`, `CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD`, and `CHANNEL_QUEUE_STALE_AFTER_MINUTES`. Empty threshold values disable the corresponding warning. Readiness queue checks are source-wide aggregates and must not expose tenant IDs, customer messages, provider payloads, external conversation IDs, or external message IDs.
+
 ## PR19 Queue Metrics
 
 Real-channel review operations now expose a tenant-scoped queue metrics snapshot through `GET /v1/channel-events/metrics` and the same-origin BFF route `GET /api/operator/channel-events/metrics`. The response includes counts for `pending`, `processing`, stale `processing`, `replayed`, and `ignored`, plus the oldest pending receive time and age in seconds.

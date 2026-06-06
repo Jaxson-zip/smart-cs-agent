@@ -2,6 +2,7 @@ import { ServiceUnavailableException } from "@nestjs/common";
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { ChannelWebhookSecurityService } from "../channels/channel-webhook-security.service";
+import type { ChannelEventReviewService } from "../channels/channel-event-review.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { HealthController, HealthReadinessController } from "./health.controller";
 
@@ -26,6 +27,7 @@ describe("HealthController", () => {
     const controller = new HealthReadinessController(
       prisma,
       new ChannelWebhookSecurityService(receiptStore()),
+      queueHealthService(),
     );
 
     const response = await controller.getReadiness();
@@ -45,6 +47,7 @@ describe("HealthController", () => {
     const controller = new HealthReadinessController(
       prisma,
       new ChannelWebhookSecurityService(receiptStore()),
+      queueHealthService(),
     );
 
     await assert.rejects(
@@ -104,6 +107,7 @@ describe("HealthController", () => {
       const controller = new HealthReadinessController(
         prisma,
         new ChannelWebhookSecurityService(receiptStore()),
+        queueHealthService(),
       );
 
       const response = await controller.getReadiness();
@@ -119,6 +123,82 @@ describe("HealthController", () => {
       restoreEnv("REAL_CHANNEL_WEBHOOK_SECRETS", previousSecrets);
     }
   });
+
+  it("reports degraded readiness when channel queue thresholds are exceeded", async () => {
+    const previousPending = process.env.CHANNEL_QUEUE_PENDING_WARN_THRESHOLD;
+    const previousOldest = process.env.CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS;
+    const previousStale = process.env.CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD;
+    const previousStaleAfter = process.env.CHANNEL_QUEUE_STALE_AFTER_MINUTES;
+    process.env.CHANNEL_QUEUE_PENDING_WARN_THRESHOLD = "10";
+    process.env.CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS = "900";
+    process.env.CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD = "0";
+    process.env.CHANNEL_QUEUE_STALE_AFTER_MINUTES = "15";
+    try {
+      const prisma = {
+        $queryRaw: async () => [{ "?column?": 1 }],
+      } as unknown as PrismaService;
+      const controller = new HealthReadinessController(
+        prisma,
+        new ChannelWebhookSecurityService(receiptStore()),
+        {
+          getQueueHealth: async (input: unknown) => {
+            assert.deepStrictEqual(input, {
+              pendingWarnThreshold: 10,
+              oldestPendingWarnSeconds: 900,
+              staleProcessingWarnThreshold: 0,
+              staleAfterMinutes: 15,
+            });
+            return {
+              status: "degraded",
+              pendingCount: 12,
+              processingCount: 2,
+              staleProcessingCount: 1,
+              oldestPendingAgeSeconds: 1800,
+              thresholds: {
+                pendingWarnThreshold: 10,
+                oldestPendingWarnSeconds: 900,
+                staleProcessingWarnThreshold: 0,
+                staleAfterMinutes: 15,
+              },
+              reasons: [
+                "pending_count_above_threshold",
+                "oldest_pending_age_above_threshold",
+                "stale_processing_above_threshold",
+              ],
+            };
+          },
+        } as unknown as ChannelEventReviewService,
+      );
+
+      const response = await controller.getReadiness();
+
+      assert.strictEqual(response.status, "degraded");
+      assert.deepStrictEqual(response.checks.channelQueue, {
+        status: "degraded",
+        pendingCount: 12,
+        processingCount: 2,
+        staleProcessingCount: 1,
+        oldestPendingAgeSeconds: 1800,
+        thresholds: {
+          pendingWarnThreshold: 10,
+          oldestPendingWarnSeconds: 900,
+          staleProcessingWarnThreshold: 0,
+          staleAfterMinutes: 15,
+        },
+        reasons: [
+          "pending_count_above_threshold",
+          "oldest_pending_age_above_threshold",
+          "stale_processing_above_threshold",
+        ],
+      });
+      assert.ok(!JSON.stringify(response).includes("tenant_"));
+    } finally {
+      restoreEnv("CHANNEL_QUEUE_PENDING_WARN_THRESHOLD", previousPending);
+      restoreEnv("CHANNEL_QUEUE_OLDEST_PENDING_WARN_SECONDS", previousOldest);
+      restoreEnv("CHANNEL_QUEUE_STALE_PROCESSING_WARN_THRESHOLD", previousStale);
+      restoreEnv("CHANNEL_QUEUE_STALE_AFTER_MINUTES", previousStaleAfter);
+    }
+  });
 });
 
 function receiptStore() {
@@ -127,6 +207,20 @@ function receiptStore() {
       create: async () => ({}),
     },
   } as unknown as PrismaService;
+}
+
+function queueHealthService() {
+  return {
+    getQueueHealth: async () => ({
+      status: "ok",
+      pendingCount: 0,
+      processingCount: 0,
+      staleProcessingCount: 0,
+      oldestPendingAgeSeconds: null,
+      thresholds: {},
+      reasons: [],
+    }),
+  } as unknown as ChannelEventReviewService;
 }
 
 function restoreEnv(key: string, value: string | undefined) {

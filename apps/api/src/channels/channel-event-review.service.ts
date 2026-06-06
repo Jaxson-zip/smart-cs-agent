@@ -25,6 +25,14 @@ type QueueMetricsInput = {
   now?: Date;
 };
 
+type QueueHealthInput = {
+  staleAfterMinutes?: number;
+  pendingWarnThreshold?: number;
+  oldestPendingWarnSeconds?: number;
+  staleProcessingWarnThreshold?: number;
+  now?: Date;
+};
+
 const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
@@ -354,6 +362,88 @@ export class ChannelEventReviewService {
       ignoredCount,
       oldestPendingReceivedAt,
       oldestPendingAgeSeconds,
+    };
+  }
+
+  async getQueueHealth(input: QueueHealthInput = {}) {
+    const staleAfterMinutes = input.staleAfterMinutes ?? 15;
+    const measuredAt = input.now ?? new Date();
+    const staleBefore = new Date(
+      measuredAt.getTime() - staleAfterMinutes * 60_000,
+    );
+    const baseWhere = {
+      source: REAL_CHANNEL_EVENT_SOURCE,
+    };
+
+    const [
+      pendingCount,
+      processingCount,
+      staleProcessingCount,
+      oldestPending,
+    ] = await Promise.all([
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: PENDING_REVIEW_STATUS },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: { ...baseWhere, reviewStatus: PROCESSING_REVIEW_STATUS },
+      }),
+      this.prisma.normalizedChannelEvent.count({
+        where: {
+          ...baseWhere,
+          reviewStatus: PROCESSING_REVIEW_STATUS,
+          reviewedAt: { lt: staleBefore },
+        },
+      }),
+      this.prisma.normalizedChannelEvent.findFirst({
+        where: { ...baseWhere, reviewStatus: PENDING_REVIEW_STATUS },
+        select: { receivedAt: true },
+        orderBy: { receivedAt: "asc" },
+      }),
+    ]);
+    const oldestPendingAgeSeconds = oldestPending
+      ? Math.max(
+          0,
+          Math.floor(
+            (measuredAt.getTime() - oldestPending.receivedAt.getTime()) / 1000,
+          ),
+        )
+      : null;
+    const reasons: string[] = [];
+
+    if (
+      input.pendingWarnThreshold !== undefined &&
+      pendingCount > input.pendingWarnThreshold
+    ) {
+      reasons.push("pending_count_above_threshold");
+    }
+    if (
+      input.oldestPendingWarnSeconds !== undefined &&
+      oldestPendingAgeSeconds !== null &&
+      oldestPendingAgeSeconds > input.oldestPendingWarnSeconds
+    ) {
+      reasons.push("oldest_pending_age_above_threshold");
+    }
+    if (
+      input.staleProcessingWarnThreshold !== undefined &&
+      staleProcessingCount > input.staleProcessingWarnThreshold
+    ) {
+      reasons.push("stale_processing_above_threshold");
+    }
+
+    return {
+      status: reasons.length > 0 ? "degraded" as const : "ok" as const,
+      measuredAt,
+      pendingCount,
+      processingCount,
+      staleProcessingCount,
+      oldestPendingAgeSeconds,
+      thresholds: {
+        pendingWarnThreshold: input.pendingWarnThreshold,
+        oldestPendingWarnSeconds: input.oldestPendingWarnSeconds,
+        staleProcessingWarnThreshold: input.staleProcessingWarnThreshold,
+        staleAfterMinutes,
+      },
+      reasons,
     };
   }
 }

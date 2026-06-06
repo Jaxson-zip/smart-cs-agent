@@ -14,6 +14,6 @@ import { RealChannelController } from "./real-channel.controller";
     RealChannelNormalizerService,
     ChannelEventReviewService,
   ],
-  exports: [ChannelWebhookSecurityService],
+  exports: [ChannelWebhookSecurityService, ChannelEventReviewService],
 })
 export class ChannelsModule {}

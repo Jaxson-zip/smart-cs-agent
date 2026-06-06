@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR19 - Channel Event Queue Metrics
+## Current Stage: PR20 - Channel Queue Readiness Thresholds
 
 Status: verified
 
-PR19 builds on PR18 by exposing tenant-scoped, read-only queue metrics for the real-channel review pool. Operators can observe pending volume, processing volume, stale processing claims, replayed/ignored totals, and oldest pending age without exposing customer messages, provider identifiers, webhook payloads, tenant IDs, API keys, or source names to the browser.
+PR20 builds on PR19 by connecting aggregate real-channel queue metrics into `/health/ready`. Queue pressure can mark readiness as `degraded` without returning HTTP 503, while database failure still returns `unhealthy`. Degraded checks expose only aggregate counts, age, thresholds, and reason codes.
 
 ### PR16 Scope
 
@@ -54,10 +54,11 @@ PR19 builds on PR18 by exposing tenant-scoped, read-only queue metrics for the r
 - [x] PR17 channel event replay atomic claim safety.
 - [x] PR18 channel event processing recovery.
 - [x] PR19 channel event queue metrics.
+- [x] PR20 channel queue readiness thresholds.
 
 ## Verification Gate
 
-Do not claim PR19 channel event queue metrics complete until these pass:
+Do not claim PR20 channel queue readiness thresholds complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
