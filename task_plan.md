@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR43 - Merchant Launch Preflight
+## Current Stage: PR44 - Launch Evidence Bundle
 
 Status: verified
 
-Previous Stage: PR42 - Provider Readonly Sandbox Harness was verified.
+Previous Stage: PR43 - Merchant Launch Preflight was verified.
+
+Provider Readonly Harness Stage: PR42 - Provider Readonly Sandbox Harness was verified and must stay connected to provider read harness checks.
 
 Provider Credential Store Stage: PR41 - Provider Credential Store Boundary was verified and must stay connected to credential inventory checks.
 
@@ -26,17 +28,17 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR43 adds a merchant/channel launch preflight command. It checks whether a target tenant/channel pair is ready for a controlled launch window without calling the API, connecting to the database, reading a secret manager, calling provider networks, or exposing raw tenant IDs and secrets in output.
+PR44 adds a sanitized launch evidence bundle generator. It packages local launch-readiness evidence for one tenant/channel pair into a JSON artifact without calling the API, connecting to the database, reading a secret manager, calling provider networks, or exposing raw tenant IDs and secrets in output.
 
-### PR43 Scope
+### PR44 Scope
 
-- Add `npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel>` as a local preflight for one merchant/channel pair.
-- Check real-channel launch prerequisites when `--require-real-channel` is set: production toggles, kill switch off, allowlist match, matching webhook secret, rate limit, freshness window, and queue thresholds.
-- Check provider readonly prerequisites when `--require-provider-readonly` is set: readonly adapter match, secret/vault credential reference shape, and matching `PROVIDER_CREDENTIALS` ref-only inventory record.
-- Check production operator identity basics for the target tenant: DB-backed identity/account source and at least one admin operator key.
-- Keep output sanitized: show tenant fingerprints, channel, booleans, and credential fingerprints only; never print raw tenant IDs, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, or customer data.
+- Add `npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --out=<launch-evidence-json>` as a local JSON evidence bundle generator.
+- Include production-readiness, merchant launch preflight, provider readonly preflight, provider safety boundary, and launch runbook evidence sections.
+- Keep the bundle schema explicit as `smart-cs-agent.launch-evidence.v1`.
+- Generate both pass and fail evidence bundles so failed launch attempts can be archived without copying raw config values.
+- Keep output sanitized: show tenant fingerprints, channel, booleans, document/script references, and credential fingerprints only; never print raw tenant IDs, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, or raw logistics IDs.
 
-### Out Of Scope For PR43
+### Out Of Scope For PR44
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -45,7 +47,8 @@ PR43 adds a merchant/channel launch preflight command. It checks whether a targe
 - Persisting or returning full `credentialRef` values.
 - Returning credential material or provider tokens to provider clients.
 - Returning real provider data to API or Web clients.
-- Calling production API readiness, database, vault, or provider networks from the merchant preflight command.
+- Calling production API readiness, database, vault, or provider networks from the launch evidence generator.
+- Embedding live canary response bodies or metric bodies in the evidence bundle.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -105,10 +108,11 @@ PR43 adds a merchant/channel launch preflight command. It checks whether a targe
 - [x] PR41 provider credential store boundary.
 - [x] PR42 provider readonly sandbox harness.
 - [x] PR43 merchant launch preflight.
+- [x] PR44 launch evidence bundle.
 
 ## Verification Gate
 
-Do not claim PR43 merchant launch preflight complete until these pass:
+Do not claim PR44 launch evidence bundle complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -128,6 +132,10 @@ Do not claim PR43 merchant launch preflight complete until these pass:
 - `node --check scripts/verify-provider-read-harness.mjs`
 - `node --check scripts/verify-merchant-launch-preflight.mjs`
 - `node --test scripts/verify-merchant-launch-preflight.test.mjs`
+- `node --check scripts/generate-launch-evidence.mjs`
+- `node --check scripts/generate-launch-evidence.test.mjs`
+- `node --test scripts/generate-launch-evidence.test.mjs`
+- `node --check scripts/verify-launch-evidence.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -137,6 +145,8 @@ Do not claim PR43 merchant launch preflight complete until these pass:
 - `npm.cmd run verify:provider-credential-store`
 - `npm.cmd run verify:provider-read-harness`
 - `npm.cmd run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly`
+- `npm.cmd run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>`
+- `npm.cmd run verify:launch-evidence`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

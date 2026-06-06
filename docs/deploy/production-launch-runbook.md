@@ -26,6 +26,7 @@ Launch may proceed only when all of these are true:
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
 - `npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly` passes for every tenant/channel pair included in the launch allowlist.
+- `npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>` has produced a sanitized launch evidence bundle for every tenant/channel pair in scope.
 - `npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900` passes.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
@@ -55,6 +56,8 @@ npm run lint --workspaces --if-present -- --max-warnings=0
 npm run build --workspaces --if-present
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
 npm run verify:merchant-launch-preflight -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly
+npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>
+npm run verify:launch-evidence
 npm run verify:production-canary -- --api=<public-api-url> --require-real-channel --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 npm run verify:production-alerting
 npm run verify:provider-adapters
@@ -134,6 +137,7 @@ Collect these facts in the launch ticket without copying sensitive values:
 - Migration status and whether there were pending migrations.
 - Production readiness verifier result.
 - Production canary result.
+- Sanitized launch evidence bundle path and summary status.
 - Alert route confirmation.
 - Real-channel intake state: closed, kill-switch enabled, or allowlist-open.
 - Queue metrics summary: pending count, stale processing count, and oldest pending age.
@@ -141,6 +145,8 @@ Collect these facts in the launch ticket without copying sensitive values:
 - Rollback decision: not needed, partial allowlist pause, kill switch, intake disabled, or artifact reverted.
 
 Do not paste response bodies, metric bodies, customer messages, provider payloads, tenant IDs, external conversation IDs, external message IDs, operator API keys, webhook secrets, signatures, or raw request bodies.
+
+The launch evidence bundle must not include raw tenant IDs, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, raw logistics IDs, response bodies, metric bodies, external conversation IDs, external message IDs, signatures, or raw request bodies.
 
 ## Rehearsal
 

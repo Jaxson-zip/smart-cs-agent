@@ -33,6 +33,8 @@
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",
     "verify:merchant-launch-preflight": "node scripts/verify-merchant-launch-preflight.mjs",
+    "generate:launch-evidence": "node scripts/generate-launch-evidence.mjs",
+    "verify:launch-evidence": "node scripts/verify-launch-evidence.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"
   },

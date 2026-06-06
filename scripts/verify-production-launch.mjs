@@ -22,6 +22,8 @@ const files = {
     "scripts/verify-provider-credential-store.mjs",
   providerReadHarnessVerifier:
     "scripts/verify-provider-read-harness.mjs",
+  launchEvidenceVerifier:
+    "scripts/verify-launch-evidence.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -51,6 +53,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-credential-store",
   "verify:provider-read-harness",
   "verify:merchant-launch-preflight",
+  "generate:launch-evidence",
+  "verify:launch-evidence",
   "verify:channel-runbook",
 ]);
 
@@ -91,6 +95,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-credential-store",
   "npm run verify:provider-read-harness",
   "npm run verify:merchant-launch-preflight",
+  "npm run generate:launch-evidence",
+  "--out=<launch-evidence-json>",
   "--tenant=<tenant-slug>",
   "--channel=<channel>",
   "npm run verify:channel-runbook",
@@ -192,6 +198,8 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-credential-store",
   "verify:provider-read-harness",
   "verify:merchant-launch-preflight",
+  "generate:launch-evidence",
+  "verify:launch-evidence",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
@@ -220,6 +228,9 @@ mustContainAll("provider credential store verifier source", content.providerCred
 ]);
 mustContainAll("provider read harness verifier source", content.providerReadHarnessVerifier, [
   "verify:provider-read-harness",
+]);
+mustContainAll("launch evidence verifier source", content.launchEvidenceVerifier, [
+  "verify:launch-evidence",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

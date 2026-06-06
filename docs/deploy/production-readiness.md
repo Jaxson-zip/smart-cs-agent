@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR44 Launch Evidence Bundle
+
+Launch evidence can now be generated as a sanitized local JSON bundle:
+
+```bash
+npm run generate:launch-evidence -- --env-file=<secure-production-env> --tenant=<tenant-slug> --channel=<channel> --require-real-channel --require-provider-readonly --out=<launch-evidence-json>
+npm run verify:launch-evidence
+```
+
+The bundle schema is `smart-cs-agent.launch-evidence.v1`. It records the target `tenantFingerprint`, channel, launch-track booleans, check statuses, evidence flags, document/script references, and warning counts. It does not call the API, connect to the database, read a secret manager or vault, call provider networks, execute provider actions, or send customer-visible replies.
+
+Evidence may include booleans such as `webhookSecretConfigured=true`, `providerCredentialConfigured=true`, and `networkAttempted=false`, plus `credentialRefFingerprint`. It must not include raw tenant IDs, webhook secrets, operator API keys, full credential refs, provider tokens, provider payloads, customer data, raw order IDs, or raw logistics IDs.
+
 ## PR43 Merchant Launch Preflight
 
 Merchant/channel launch now has a checked local preflight command:
