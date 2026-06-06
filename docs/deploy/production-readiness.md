@@ -1,5 +1,17 @@
 # Production-Readiness Baseline
 
+## PR27 Production Readiness Verifier
+
+Production readiness now has an executable preflight:
+
+```bash
+npm run verify:production-readiness -- --env-file=/secure/path/production.env --require-real-channel --api=https://api.example.com
+```
+
+The verifier checks the production environment without printing secret values. It fails when production uses local or sandbox defaults, enables legacy demo APIs, enables offline demo data, uses insecure operator headers, uses env-backed operator accounts, keeps placeholder session or API secrets, or opens real-channel webhooks without the PR26 intake gates. When `--api` is provided, it also checks `GET /health/ready`; by default readiness must be `ok`.
+
+Use `--require-real-channel` for a launch where real signed webhook intake must be open. Omit it for a production deployment that is ready to serve the operator workbench but has real-channel intake intentionally closed.
+
 ## PR26 Production Real-Channel Intake Gates
 
 Production API startup now fails closed when `NODE_ENV=production` and `REAL_CHANNEL_WEBHOOKS_ENABLED=true` are set without the required intake gates. A production real-channel intake must configure at least one webhook secret, a positive `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE`, an explicit `REAL_CHANNEL_WEBHOOK_MAX_AGE_SECONDS`, and all channel queue thresholds before the API can start.

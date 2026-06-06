@@ -19,7 +19,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "demo:smoke": "node scripts/demo/wecom-sandbox-smoke.mjs",
     "demo:real-channel-smoke": "node scripts/demo/real-channel-webhook-smoke.mjs",
-    "verify:channel-runbook": "node scripts/verify-channel-queue-runbook.mjs"
+    "verify:channel-runbook": "node scripts/verify-channel-queue-runbook.mjs",
+    "verify:production-readiness": "node scripts/verify-production-readiness.mjs"
   },
   "devDependencies": {
     "prisma": "^6.16.0",
