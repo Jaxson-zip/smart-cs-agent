@@ -22,6 +22,13 @@ const ignoreBodySchema = z
   })
   .optional();
 
+const recoverStaleBodySchema = z
+  .object({
+    olderThanMinutes: z.number().int().min(1).max(1440).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  })
+  .optional();
+
 @Controller("v1/channel-events")
 export class ChannelEventsController {
   constructor(private readonly reviewService: ChannelEventReviewService) {}
@@ -30,6 +37,26 @@ export class ChannelEventsController {
   async list(@Headers() headers: RequestHeaders) {
     const context = requireRequestContext(headers);
     return this.reviewService.listPending(context.tenantId);
+  }
+
+  @Post("recover-stale")
+  async recoverStale(
+    @Body() body: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireReviewRecoveryAccess(context);
+    const parsed = recoverStaleBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+
+    return this.reviewService.recoverStaleProcessing({
+      tenantId: context.tenantId,
+      operatorId: context.operatorId,
+      olderThanMinutes: parsed.data?.olderThanMinutes,
+      limit: parsed.data?.limit,
+    });
   }
 
   @Post(":id/replay")
@@ -66,5 +93,11 @@ export class ChannelEventsController {
 function requireReviewMutationAccess(context: RequestContext) {
   if (context.role === "viewer") {
     throw new ForbiddenException("Viewer operators cannot review channel events");
+  }
+}
+
+function requireReviewRecoveryAccess(context: RequestContext) {
+  if (context.role !== "admin") {
+    throw new ForbiddenException("Channel event recovery requires admin permission");
   }
 }

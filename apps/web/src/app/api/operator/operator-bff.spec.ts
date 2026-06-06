@@ -6,6 +6,7 @@ import { GET as getCaseDetails } from "./cases/[id]/route";
 import { GET as listChannelEvents } from "./channel-events/route";
 import { POST as ignoreChannelEvent } from "./channel-events/[id]/ignore/route";
 import { POST as replayChannelEvent } from "./channel-events/[id]/replay/route";
+import { POST as recoverStaleChannelEvents } from "./channel-events/recover-stale/route";
 import { POST as loginOperator } from "./login/route";
 import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
@@ -886,6 +887,92 @@ describe("operator BFF routes", () => {
     });
     assert.deepStrictEqual(await ignoreResponse.json(), {
       error: "Channel event review requires operator permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+  });
+
+  it("lets admin sessions recover stale channel events through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedBody = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      proxiedBody = String(init?.body ?? "");
+      return Response.json({
+        status: "recovered",
+        recoveredCount: 2,
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await recoverStaleChannelEvents(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/channel-events/recover-stale",
+        loginResponse.headers.get("set-cookie") ?? "",
+        { olderThanMinutes: 20, limit: 25 },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/recover-stale",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
+    assert.deepStrictEqual(JSON.parse(proxiedBody), {
+      olderThanMinutes: 20,
+      limit: 25,
+    });
+    assert.deepStrictEqual(await response.json(), {
+      status: "recovered",
+      recoveredCount: 2,
+    });
+  });
+
+  it("blocks non-admin sessions from recovering stale channel events in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({ ok: true });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await recoverStaleChannelEvents(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/channel-events/recover-stale",
+        loginResponse.headers.get("set-cookie") ?? "",
+        { olderThanMinutes: 20 },
+      ),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Channel event recovery requires admin permission",
     });
     assert.strictEqual(fetchCalled, false);
   });

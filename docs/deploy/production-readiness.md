@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR18 Processing Recovery
+
+Admin operators can recover stale real-channel review events through `POST /v1/channel-events/recover-stale` or the same-origin BFF route `POST /api/operator/channel-events/recover-stale`. Recovery only touches the current tenant, `source=real_channel_webhook`, `reviewStatus=processing`, and rows whose `reviewedAt` is older than the requested cutoff.
+
+This is an operations safety valve for interrupted replay attempts. It moves stale claims back to `pending`, clears `reviewedBy` and `reviewedAt`, records a non-secret audit log, and does not call AgentService, create cases, execute actions, or send customer-visible replies.
+
 ## PR17 Channel Review Concurrency
 
 Real-channel review replay now uses a server-side `pending -> processing -> replayed` lifecycle. The `processing` status is an internal claim state, not an operator-facing product state. Its purpose is to prevent two operators from generating duplicate after-sales cases from the same pending real-channel message.

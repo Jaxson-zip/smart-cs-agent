@@ -339,6 +339,89 @@ describe("ChannelEventReviewService", () => {
     );
     assert.strictEqual(agentCalled, false);
   });
+
+  it("recovers stale processing events for the request tenant and audits the operation", async () => {
+    const findManyQueries: unknown[] = [];
+    const updateManyQueries: unknown[] = [];
+    const auditLogs: unknown[] = [];
+    const service = new ChannelEventReviewService(
+      {
+        $transaction: async <T>(callback: (tx: unknown) => Promise<T>) =>
+          callback({
+            normalizedChannelEvent: {
+              findMany: async (query: unknown) => {
+                findManyQueries.push(query);
+                return [{ id: "event_1" }, { id: "event_2" }];
+              },
+              updateMany: async (query: unknown) => {
+                updateManyQueries.push(query);
+                return { count: 2 };
+              },
+            },
+            auditLog: {
+              create: async ({ data }: { data: unknown }) => {
+                auditLogs.push(data);
+                return data;
+              },
+            },
+          }),
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+    const now = new Date("2026-06-06T07:30:00.000Z");
+
+    const result = await service.recoverStaleProcessing({
+      tenantId: "tenant_1",
+      operatorId: "admin_1",
+      olderThanMinutes: 15,
+      limit: 50,
+      now,
+    });
+
+    const recoveredBefore = new Date("2026-06-06T07:15:00.000Z");
+    assert.deepStrictEqual(result, {
+      status: "recovered",
+      recoveredCount: 2,
+      recoveredBefore,
+      eventIds: ["event_1", "event_2"],
+    });
+    assert.deepStrictEqual(findManyQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+          reviewedAt: { lt: recoveredBefore },
+        },
+        select: { id: true },
+        take: 50,
+        orderBy: { reviewedAt: "asc" },
+      },
+    ]);
+    assert.deepStrictEqual(updateManyQueries, [
+      {
+        where: {
+          id: { in: ["event_1", "event_2"] },
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+          reviewedAt: { lt: recoveredBefore },
+        },
+        data: {
+          reviewStatus: "pending",
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewNote: "Recovered stale processing claim by admin_1",
+        },
+      },
+    ]);
+    assert.strictEqual(
+      auditLogs.some((entry) =>
+        JSON.stringify(entry).includes("real_channel_event_processing_recovered"),
+      ),
+      true,
+    );
+  });
 });
 
 function normalizedEvent(input: { reviewStatus?: string } = {}) {

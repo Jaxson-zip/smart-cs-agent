@@ -13,6 +13,12 @@ type IgnoreInput = ReviewContext & {
   note?: string;
 };
 
+type RecoverStaleProcessingInput = ReviewContext & {
+  olderThanMinutes?: number;
+  limit?: number;
+  now?: Date;
+};
+
 const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
@@ -206,6 +212,74 @@ export class ChannelEventReviewService {
         caseId,
         automationMode,
         reviewedAt,
+      };
+    });
+  }
+
+  async recoverStaleProcessing(input: RecoverStaleProcessingInput) {
+    const olderThanMinutes = input.olderThanMinutes ?? 15;
+    const limit = input.limit ?? 100;
+    const now = input.now ?? new Date();
+    const recoveredBefore = new Date(now.getTime() - olderThanMinutes * 60_000);
+
+    return this.prisma.$transaction(async (tx) => {
+      const staleEvents = await tx.normalizedChannelEvent.findMany({
+        where: {
+          merchantId: input.tenantId,
+          source: REAL_CHANNEL_EVENT_SOURCE,
+          reviewStatus: PROCESSING_REVIEW_STATUS,
+          reviewedAt: { lt: recoveredBefore },
+        },
+        select: { id: true },
+        take: limit,
+        orderBy: { reviewedAt: "asc" },
+      });
+      const eventIds = staleEvents.map((event) => event.id);
+
+      if (eventIds.length === 0) {
+        return {
+          status: "recovered" as const,
+          recoveredCount: 0,
+          recoveredBefore,
+          eventIds,
+        };
+      }
+
+      const result = await tx.normalizedChannelEvent.updateMany({
+        where: {
+          id: { in: eventIds },
+          merchantId: input.tenantId,
+          source: REAL_CHANNEL_EVENT_SOURCE,
+          reviewStatus: PROCESSING_REVIEW_STATUS,
+          reviewedAt: { lt: recoveredBefore },
+        },
+        data: {
+          reviewStatus: PENDING_REVIEW_STATUS,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewNote: `Recovered stale processing claim by ${input.operatorId}`,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          caseId: null,
+          action: "real_channel_event_processing_recovered",
+          details: toJsonInput({
+            tenantId: input.tenantId,
+            operatorId: input.operatorId,
+            recoveredBefore: recoveredBefore.toISOString(),
+            recoveredCount: result.count,
+            eventIds,
+          }),
+        },
+      });
+
+      return {
+        status: "recovered" as const,
+        recoveredCount: result.count,
+        recoveredBefore,
+        eventIds,
       };
     });
   }

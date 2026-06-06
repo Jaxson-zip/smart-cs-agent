@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR16 - Operator Workbench Review Pool UI
+## Current Stage: PR18 - Channel Event Processing Recovery
 
 Status: verified
 
-PR16 builds on PR15 by exposing the real-channel review pool through the Web BFF and operator workbench. Customer service operators can see pending inbound channel messages, generate a human-reviewed after-sales case, or mark noise as not handled, without seeing webhook payloads, provider secrets, or internal event terminology.
+PR18 builds on PR17 by adding an admin-only recovery path for real-channel review events that are stuck in `processing` after an interrupted replay attempt. Recovery returns stale claims to `pending`, stays tenant/source scoped, and writes a non-secret audit log without triggering AgentService, case creation, commerce actions, or customer-visible replies.
 
 ### PR16 Scope
 
@@ -52,10 +52,11 @@ PR16 builds on PR15 by exposing the real-channel review pool through the Web BFF
 - [x] PR15 real channel review replay pool.
 - [x] PR16 operator workbench review pool UI.
 - [x] PR17 channel event replay atomic claim safety.
+- [x] PR18 channel event processing recovery.
 
 ## Verification Gate
 
-Do not claim PR17 channel event replay atomic claim safety complete until these pass:
+Do not claim PR18 channel event processing recovery complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`

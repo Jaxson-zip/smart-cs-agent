@@ -94,6 +94,74 @@ describe("ChannelEventsController", () => {
     ]);
   });
 
+  it("lets admin operators recover stale processing events", async () => {
+    const calls: unknown[] = [];
+    const controller = new ChannelEventsController({
+      recoverStaleProcessing: async (input: unknown) => {
+        calls.push(input);
+        return { status: "recovered", recoveredCount: 2 };
+      },
+    } as unknown as ChannelEventReviewService);
+
+    const result = await controller.recoverStale(
+      {
+        olderThanMinutes: 20,
+        limit: 25,
+      },
+      {
+        "x-tenant-id": "tenant_1",
+        "x-operator-id": "admin_1",
+      },
+    );
+
+    assert.deepStrictEqual(result, { status: "recovered", recoveredCount: 2 });
+    assert.deepStrictEqual(calls, [
+      {
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        olderThanMinutes: 20,
+        limit: 25,
+      },
+    ]);
+  });
+
+  it("rejects non-admin stale recovery requests", async () => {
+    const controller = new ChannelEventsController({
+      recoverStaleProcessing: async () => {
+        throw new Error("recover should not be called");
+      },
+    } as unknown as ChannelEventReviewService);
+    const envValue = process.env.OPERATOR_API_KEYS;
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_api_key",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+
+    try {
+      await assert.rejects(
+        () =>
+          controller.recoverStale(
+            { olderThanMinutes: 20 },
+            {
+              authorization: "Bearer operator_api_key",
+              "x-tenant-id": "tenant_1",
+            },
+          ),
+        ForbiddenException,
+      );
+    } finally {
+      if (envValue === undefined) {
+        delete process.env.OPERATOR_API_KEYS;
+      } else {
+        process.env.OPERATOR_API_KEYS = envValue;
+      }
+    }
+  });
+
   it("rejects malformed ignore bodies with a bad request error", async () => {
     const controller = new ChannelEventsController({
       ignore: async () => {

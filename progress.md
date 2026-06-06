@@ -65,3 +65,7 @@
 - Added a `processing` review status so real-channel replay first claims a pending event before creating an internal after-sales case.
 - Updated replay and ignore flows to return 409 Conflict for already reviewed events instead of treating them as missing or allowing duplicate replay work.
 - Final PR17 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.
+- Started PR18 channel event processing recovery.
+- Added an admin-only API and Web BFF recovery path for stale real-channel events stuck in `processing`.
+- Recovery moves stale claims back to `pending`, clears the processing claim fields, and writes an audit log without calling AgentService or sending customer-visible replies.
+- Final PR18 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, real-channel replay smoke, and a live recovery endpoint smoke returning `recoveredCount: 0`.
