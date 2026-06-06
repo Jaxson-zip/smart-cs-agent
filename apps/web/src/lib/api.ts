@@ -52,6 +52,28 @@ export type ChannelEventOperationAudit = {
   createdAt: string;
 };
 
+export type ChannelEventAuditSummary = {
+  measuredAt: string;
+  window: {
+    from: string;
+    to: string;
+  };
+  totals: {
+    replayedCount: number;
+    ignoredCount: number;
+    recoveryRunCount: number;
+    recoveredEventCount: number;
+  };
+  byOperator: Array<{
+    operatorId: string;
+    replayedCount: number;
+    ignoredCount: number;
+    recoveryRunCount: number;
+    recoveredEventCount: number;
+    lastActivityAt: string | null;
+  }>;
+};
+
 export type OperatorLoginResult = {
   operator: OperatorProfile;
 };
@@ -272,6 +294,20 @@ export async function fetchChannelEventOperationAudits(): Promise<
   return body.map(toChannelEventOperationAudit);
 }
 
+export async function fetchChannelEventAuditSummary(): Promise<
+  ChannelEventAuditSummary
+> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/channel-events/audit-summary`,
+  );
+
+  if (!res.ok) {
+    throw new ApiError("Queue audit summary is temporarily unavailable", res.status);
+  }
+
+  return toChannelEventAuditSummary(await res.json());
+}
+
 export async function replayChannelEvent(
   eventId: string,
 ): Promise<ChannelEventReplayResult> {
@@ -476,6 +512,44 @@ function toChannelEventOperationAudit(value: unknown): ChannelEventOperationAudi
         }
       : null,
     createdAt: readString(value, "createdAt"),
+  };
+}
+
+function toChannelEventAuditSummary(value: unknown): ChannelEventAuditSummary {
+  if (!isRecord(value) || !isRecord(value.window) || !isRecord(value.totals)) {
+    throw new ApiError("Queue audit summary data is invalid", 502);
+  }
+
+  return {
+    measuredAt: readString(value, "measuredAt"),
+    window: {
+      from: readString(value.window, "from"),
+      to: readString(value.window, "to"),
+    },
+    totals: {
+      replayedCount: readFiniteNumber(value.totals, "replayedCount"),
+      ignoredCount: readFiniteNumber(value.totals, "ignoredCount"),
+      recoveryRunCount: readFiniteNumber(value.totals, "recoveryRunCount"),
+      recoveredEventCount: readFiniteNumber(value.totals, "recoveredEventCount"),
+    },
+    byOperator: Array.isArray(value.byOperator)
+      ? value.byOperator.map(toChannelEventOperatorAuditSummary)
+      : [],
+  };
+}
+
+function toChannelEventOperatorAuditSummary(value: unknown) {
+  if (!isRecord(value)) {
+    throw new ApiError("Queue audit summary data is invalid", 502);
+  }
+
+  return {
+    operatorId: readString(value, "operatorId"),
+    replayedCount: readFiniteNumber(value, "replayedCount"),
+    ignoredCount: readFiniteNumber(value, "ignoredCount"),
+    recoveryRunCount: readFiniteNumber(value, "recoveryRunCount"),
+    recoveredEventCount: readFiniteNumber(value, "recoveredEventCount"),
+    lastActivityAt: readNullableString(value, "lastActivityAt"),
   };
 }
 

@@ -529,6 +529,168 @@ describe("ChannelEventReviewService", () => {
     assert.ok(!JSON.stringify(audits).includes("real_channel_webhook"));
   });
 
+  it("summarizes queue review operations for the request tenant without leaking raw details", async () => {
+    const countQueries: unknown[] = [];
+    const findManyQueries: unknown[] = [];
+    const service = new ChannelEventReviewService(
+      {
+        normalizedChannelEvent: {
+          count: async (query: unknown) => {
+            countQueries.push(query);
+            return [5, 3][countQueries.length - 1] ?? 0;
+          },
+          findMany: async (query: unknown) => {
+            findManyQueries.push(query);
+            return [
+              {
+                reviewedBy: "agent_1",
+                reviewStatus: "replayed",
+                reviewedAt: new Date("2026-06-06T07:10:00.000Z"),
+                merchantId: "tenant_1",
+                source: "real_channel_webhook",
+                externalMessageId: "must_not_leak",
+                text: "must_not_leak",
+              },
+              {
+                reviewedBy: "agent_1",
+                reviewStatus: "ignored",
+                reviewedAt: new Date("2026-06-06T07:20:00.000Z"),
+                merchantId: "tenant_1",
+                source: "real_channel_webhook",
+              },
+              {
+                reviewedBy: "agent_2",
+                reviewStatus: "replayed",
+                reviewedAt: new Date("2026-06-06T07:30:00.000Z"),
+                merchantId: "tenant_1",
+                source: "real_channel_webhook",
+              },
+            ];
+          },
+        },
+        auditLog: {
+          findMany: async (query: unknown) => {
+            findManyQueries.push(query);
+            return [
+              {
+                id: "audit_1",
+                action: "real_channel_event_processing_recovered",
+                createdAt: new Date("2026-06-06T07:40:00.000Z"),
+                details: {
+                  tenantId: "tenant_1",
+                  operatorId: "agent_2",
+                  recoveredCount: 4,
+                  recoveredBefore: "2026-06-06T07:15:00.000Z",
+                  eventIds: ["must_not_leak"],
+                  payload: "must_not_leak",
+                },
+              },
+              {
+                id: "audit_2",
+                action: "real_channel_event_processing_recovered",
+                createdAt: new Date("2026-06-06T07:45:00.000Z"),
+                details: {
+                  tenantId: "tenant_1",
+                  operatorId: "agent_1",
+                  recoveredCount: 1,
+                },
+              },
+            ];
+          },
+        },
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+    const from = new Date("2026-06-06T07:00:00.000Z");
+    const to = new Date("2026-06-06T08:00:00.000Z");
+
+    const summary = await service.getQueueAuditSummary({
+      tenantId: "tenant_1",
+      from,
+      to,
+      now: to,
+    });
+
+    assert.deepStrictEqual(countQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "replayed",
+          reviewedAt: { gte: from, lte: to },
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "ignored",
+          reviewedAt: { gte: from, lte: to },
+        },
+      },
+    ]);
+    assert.deepStrictEqual(findManyQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: { in: ["replayed", "ignored"] },
+          reviewedAt: { gte: from, lte: to },
+        },
+        select: {
+          reviewedBy: true,
+          reviewStatus: true,
+          reviewedAt: true,
+        },
+      },
+      {
+        where: {
+          action: { in: ["real_channel_event_processing_recovered"] },
+          createdAt: { gte: from, lte: to },
+          details: { path: ["tenantId"], equals: "tenant_1" },
+        },
+        select: {
+          createdAt: true,
+          details: true,
+        },
+      },
+    ]);
+    assert.deepStrictEqual(summary, {
+      measuredAt: "2026-06-06T08:00:00.000Z",
+      window: {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      totals: {
+        replayedCount: 5,
+        ignoredCount: 3,
+        recoveryRunCount: 2,
+        recoveredEventCount: 5,
+      },
+      byOperator: [
+        {
+          operatorId: "agent_1",
+          replayedCount: 1,
+          ignoredCount: 1,
+          recoveryRunCount: 1,
+          recoveredEventCount: 1,
+          lastActivityAt: "2026-06-06T07:45:00.000Z",
+        },
+        {
+          operatorId: "agent_2",
+          replayedCount: 1,
+          ignoredCount: 0,
+          recoveryRunCount: 1,
+          recoveredEventCount: 4,
+          lastActivityAt: "2026-06-06T07:40:00.000Z",
+        },
+      ],
+    });
+    assert.ok(!JSON.stringify(summary).includes("tenant_1"));
+    assert.ok(!JSON.stringify(summary).includes("must_not_leak"));
+    assert.ok(!JSON.stringify(summary).includes("real_channel_webhook"));
+  });
+
   it("reports queue metrics without exposing customer event details", async () => {
     const countQueries: unknown[] = [];
     const findFirstQueries: unknown[] = [];

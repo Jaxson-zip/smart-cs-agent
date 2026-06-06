@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
 import { GET as listChannelEvents } from "./channel-events/route";
+import { GET as getChannelEventAuditSummary } from "./channel-events/audit-summary/route";
 import { GET as getChannelEventMetrics } from "./channel-events/metrics/route";
 import { GET as listChannelEventOperations } from "./channel-events/operation-audits/route";
 import { POST as ignoreChannelEvent } from "./channel-events/[id]/ignore/route";
@@ -865,6 +866,163 @@ describe("operator BFF routes", () => {
         createdAt: "2026-06-06T07:31:00.000Z",
       },
     ]);
+  });
+
+  it("lets admin sessions read a sanitized queue audit summary through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json({
+        measuredAt: "2026-06-06T08:00:00.000Z",
+        window: {
+          from: "2026-06-06T07:00:00.000Z",
+          to: "2026-06-06T08:00:00.000Z",
+        },
+        totals: {
+          replayedCount: 5,
+          ignoredCount: 3,
+          recoveryRunCount: 2,
+          recoveredEventCount: 5,
+        },
+        byOperator: [
+          {
+            operatorId: "admin_1",
+            replayedCount: 2,
+            ignoredCount: 1,
+            recoveryRunCount: 1,
+            recoveredEventCount: 4,
+            lastActivityAt: "2026-06-06T07:45:00.000Z",
+          },
+        ],
+        tenantId: "must_not_leak",
+        source: "must_not_leak",
+        payload: { secret: true },
+        eventIds: ["must_not_leak"],
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await getChannelEventAuditSummary(
+      new Request(
+        "http://localhost/api/operator/channel-events/audit-summary?from=2026-06-06T07%3A00%3A00.000Z&to=2026-06-06T08%3A00%3A00.000Z",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/audit-summary?from=2026-06-06T07%3A00%3A00.000Z&to=2026-06-06T08%3A00%3A00.000Z",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.deepStrictEqual(await response.json(), {
+      measuredAt: "2026-06-06T08:00:00.000Z",
+      window: {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      totals: {
+        replayedCount: 5,
+        ignoredCount: 3,
+        recoveryRunCount: 2,
+        recoveredEventCount: 5,
+      },
+      byOperator: [
+        {
+          operatorId: "admin_1",
+          replayedCount: 2,
+          ignoredCount: 1,
+          recoveryRunCount: 1,
+          recoveredEventCount: 4,
+          lastActivityAt: "2026-06-06T07:45:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("rejects malformed queue audit summary fields in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+
+    globalThis.fetch = async () =>
+      Response.json({
+        measuredAt: "2026-06-06T08:00:00.000Z",
+        window: {
+          from: "2026-06-06T07:00:00.000Z",
+          to: "2026-06-06T08:00:00.000Z",
+        },
+        totals: {
+          replayedCount: "5",
+          ignoredCount: 3,
+          recoveryRunCount: 2,
+          recoveredEventCount: 5,
+        },
+        byOperator: [],
+      });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await getChannelEventAuditSummary(
+      new Request("http://localhost/api/operator/channel-events/audit-summary", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 502);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Channel event audit summary response is invalid",
+    });
+  });
+
+  it("blocks non-admin sessions from reading queue audit summaries in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({});
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await getChannelEventAuditSummary(
+      new Request("http://localhost/api/operator/channel-events/audit-summary", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Channel event audit summary requires admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("blocks non-admin sessions from listing queue operation records in the BFF", async () => {

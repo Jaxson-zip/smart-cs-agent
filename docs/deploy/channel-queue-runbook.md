@@ -15,6 +15,8 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `GET /api/operator/channel-events/metrics` | Same metrics through the Web BFF | Operator session required |
 | `GET /v1/channel-events/operation-audits` | Tenant-scoped recent queue recovery records | Admin operator API key required |
 | `GET /api/operator/channel-events/operation-audits` | Same recovery records through the Web BFF | Admin operator session required |
+| `GET /v1/channel-events/audit-summary` | Tenant-scoped queue review and recovery totals over a bounded window | Admin operator API key required |
+| `GET /api/operator/channel-events/audit-summary` | Same queue audit summary through the Web BFF | Admin operator session required |
 | `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
 
@@ -143,6 +145,46 @@ If the only degraded reason was `stale_processing_above_threshold`, readiness sh
 
 If `pending_count_above_threshold` or `oldest_pending_age_above_threshold` remains, recovery is not the fix. Pause or reduce real-channel intake where possible, add operator capacity, and continue reviewing pending messages.
 
+### 6. Review queue audit summary
+
+Use this during daily operations or incident follow-up to see how many real-channel review messages became cases, were intentionally not handled, or were recovered from stale processing.
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer <admin-operator-key>" \
+  "http://localhost:4100/v1/channel-events/audit-summary?from=2026-06-06T00:00:00.000Z&to=2026-06-06T23:59:59.999Z"
+```
+
+When `from` and `to` are omitted, the API returns the last 24 hours. Custom windows must be ordered and no longer than 24 hours.
+
+Expected result:
+
+```json
+{
+  "measuredAt": "2026-06-06T08:00:00.000Z",
+  "window": {
+    "from": "2026-06-05T08:00:00.000Z",
+    "to": "2026-06-06T08:00:00.000Z"
+  },
+  "totals": {
+    "replayedCount": 5,
+    "ignoredCount": 3,
+    "recoveryRunCount": 2,
+    "recoveredEventCount": 5
+  },
+  "byOperator": [
+    {
+      "operatorId": "admin_1",
+      "replayedCount": 2,
+      "ignoredCount": 1,
+      "recoveryRunCount": 1,
+      "recoveredEventCount": 4,
+      "lastActivityAt": "2026-06-06T07:45:00.000Z"
+    }
+  ]
+}
+```
+
 ## Safety Boundaries
 
 Recovery is an operations safety valve, not a customer action.
@@ -154,6 +196,8 @@ Metrics and readiness must not expose tenant IDs, must not expose customer messa
 The Web BFF route may return tenant-scoped counts, timestamps, and age seconds to the browser. It must strip tenant/source/internal fields before responding.
 
 Queue operation audit records are admin-only and read-only. They may return sanitized recovery counts, operator identity, timestamps, and queue-after counts. They must not expose raw audit JSON, tenant IDs, event ID lists, normalized event IDs, source names, provider payloads, external conversation IDs, external message IDs, operator API keys, or secrets.
+
+Queue audit summaries are admin-only and read-only. They may return bounded windows up to 24 hours, aggregate counts, operator IDs, and last activity timestamps. They must not expose raw audit JSON, tenant IDs, event ID lists, normalized event IDs, source names, provider payloads, customer messages, external conversation IDs, external message IDs, operator API keys, or secrets.
 
 ## Verification
 

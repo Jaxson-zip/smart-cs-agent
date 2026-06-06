@@ -4,6 +4,7 @@ import {
   ApiError,
   fetchApiReadiness,
   fetchChannelEvents,
+  fetchChannelEventAuditSummary,
   fetchChannelEventOperationAudits,
   fetchChannelEventMetrics,
   fetchOperatorAccounts,
@@ -226,6 +227,94 @@ describe("channel event API client", () => {
       },
     ]);
     assert.ok(!JSON.stringify(audits).includes("must_not_leak"));
+  });
+
+  it("maps queue audit summaries without leaking internal audit details", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    mockJsonResponse({
+      status: 200,
+      body: {
+        measuredAt: "2026-06-06T08:00:00.000Z",
+        window: {
+          from: "2026-06-06T07:00:00.000Z",
+          to: "2026-06-06T08:00:00.000Z",
+        },
+        totals: {
+          replayedCount: 5,
+          ignoredCount: 3,
+          recoveryRunCount: 2,
+          recoveredEventCount: 5,
+        },
+        byOperator: [
+          {
+            operatorId: "admin_1",
+            replayedCount: 2,
+            ignoredCount: 1,
+            recoveryRunCount: 1,
+            recoveredEventCount: 4,
+            lastActivityAt: "2026-06-06T07:45:00.000Z",
+            tenantId: "must_not_leak",
+          },
+        ],
+        tenantId: "must_not_leak",
+        payload: { secret: true },
+        eventIds: ["must_not_leak"],
+      },
+      requests,
+    });
+
+    const summary = await fetchChannelEventAuditSummary();
+
+    assert.equal(requests[0]?.url, "/api/operator/channel-events/audit-summary");
+    assert.deepEqual(summary, {
+      measuredAt: "2026-06-06T08:00:00.000Z",
+      window: {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      totals: {
+        replayedCount: 5,
+        ignoredCount: 3,
+        recoveryRunCount: 2,
+        recoveredEventCount: 5,
+      },
+      byOperator: [
+        {
+          operatorId: "admin_1",
+          replayedCount: 2,
+          ignoredCount: 1,
+          recoveryRunCount: 1,
+          recoveredEventCount: 4,
+          lastActivityAt: "2026-06-06T07:45:00.000Z",
+        },
+      ],
+    });
+    assert.ok(!JSON.stringify(summary).includes("must_not_leak"));
+  });
+
+  it("rejects malformed queue audit summaries", async () => {
+    mockJsonResponse({
+      status: 200,
+      body: {
+        measuredAt: "2026-06-06T08:00:00.000Z",
+        window: {
+          from: "2026-06-06T07:00:00.000Z",
+          to: "2026-06-06T08:00:00.000Z",
+        },
+        totals: {
+          replayedCount: "5",
+          ignoredCount: 3,
+          recoveryRunCount: 2,
+          recoveredEventCount: 5,
+        },
+        byOperator: [],
+      },
+    });
+
+    await assert.rejects(
+      fetchChannelEventAuditSummary(),
+      (error) => error instanceof ApiError && error.status === 502,
+    );
   });
 
   it("rejects malformed channel event list responses", async () => {

@@ -97,6 +97,158 @@ describe("ChannelEventsController", () => {
     ]);
   });
 
+  it("lets admin operators read a queue audit summary for a bounded window", async () => {
+    const calls: unknown[] = [];
+    const controller = new ChannelEventsController({
+      getQueueAuditSummary: async (input: unknown) => {
+        calls.push(input);
+        return {
+          measuredAt: "2026-06-06T08:00:00.000Z",
+          window: {
+            from: "2026-06-06T07:00:00.000Z",
+            to: "2026-06-06T08:00:00.000Z",
+          },
+          totals: {
+            replayedCount: 5,
+            ignoredCount: 3,
+            recoveryRunCount: 2,
+            recoveredEventCount: 5,
+          },
+          byOperator: [],
+        };
+      },
+    } as unknown as ChannelEventReviewService);
+
+    const result = await controller.auditSummary(
+      {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      {
+        "x-tenant-id": "tenant_1",
+        "x-operator-id": "admin_1",
+      },
+    );
+
+    assert.deepStrictEqual(calls, [
+      {
+        tenantId: "tenant_1",
+        from: new Date("2026-06-06T07:00:00.000Z"),
+        to: new Date("2026-06-06T08:00:00.000Z"),
+      },
+    ]);
+    assert.deepStrictEqual(result, {
+      measuredAt: "2026-06-06T08:00:00.000Z",
+      window: {
+        from: "2026-06-06T07:00:00.000Z",
+        to: "2026-06-06T08:00:00.000Z",
+      },
+      totals: {
+        replayedCount: 5,
+        ignoredCount: 3,
+        recoveryRunCount: 2,
+        recoveredEventCount: 5,
+      },
+      byOperator: [],
+    });
+  });
+
+  it("rejects invalid queue audit summary windows", async () => {
+    const controller = new ChannelEventsController({
+      getQueueAuditSummary: async () => {
+        throw new Error("summary should not be called");
+      },
+    } as unknown as ChannelEventReviewService);
+
+    await assert.rejects(
+      () =>
+        controller.auditSummary(
+          { from: "not-a-date", to: "2026-06-06T08:00:00.000Z" },
+          {
+            "x-tenant-id": "tenant_1",
+            "x-operator-id": "admin_1",
+          },
+        ),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () =>
+        controller.auditSummary(
+          {
+            from: "2026-06-06T08:00:00.000Z",
+            to: "2026-06-06T07:00:00.000Z",
+          },
+          {
+            "x-tenant-id": "tenant_1",
+            "x-operator-id": "admin_1",
+          },
+        ),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () =>
+        controller.auditSummary(
+          { from: "2999-06-06T08:00:00.000Z" },
+          {
+            "x-tenant-id": "tenant_1",
+            "x-operator-id": "admin_1",
+          },
+        ),
+      BadRequestException,
+    );
+    await assert.rejects(
+      () =>
+        controller.auditSummary(
+          {
+            from: "2026-06-01T08:00:00.000Z",
+            to: "2026-06-06T08:00:00.000Z",
+          },
+          {
+            "x-tenant-id": "tenant_1",
+            "x-operator-id": "admin_1",
+          },
+        ),
+      BadRequestException,
+    );
+  });
+
+  it("rejects non-admin queue audit summary requests", async () => {
+    const controller = new ChannelEventsController({
+      getQueueAuditSummary: async () => {
+        throw new Error("summary should not be called");
+      },
+    } as unknown as ChannelEventReviewService);
+    const envValue = process.env.OPERATOR_API_KEYS;
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_api_key",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+
+    try {
+      await assert.rejects(
+        () =>
+          controller.auditSummary(
+            {},
+            {
+              authorization: "Bearer operator_api_key",
+              "x-tenant-id": "tenant_1",
+            },
+          ),
+        ForbiddenException,
+      );
+    } finally {
+      if (envValue === undefined) {
+        delete process.env.OPERATOR_API_KEYS;
+      } else {
+        process.env.OPERATOR_API_KEYS = envValue;
+      }
+    }
+  });
+
   it("rejects non-admin queue operation audit requests", async () => {
     const controller = new ChannelEventsController({
       listQueueOperationAudits: async () => {

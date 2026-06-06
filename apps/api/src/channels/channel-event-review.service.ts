@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import type { ChannelEventReviewStatus } from "@prisma/client";
 import type { AutomationMode, AfterSalesAction } from "@smart-cs-agent/shared";
 import { AgentService } from "../agent/agent.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -30,6 +31,13 @@ type QueueOperationAuditInput = {
   limit?: number;
 };
 
+type QueueAuditSummaryInput = {
+  tenantId: string;
+  from?: Date;
+  to?: Date;
+  now?: Date;
+};
+
 type QueueHealthInput = {
   staleAfterMinutes?: number;
   pendingWarnThreshold?: number;
@@ -45,6 +53,10 @@ const REAL_CHANNEL_EVENT_SOURCE = "real_channel_webhook";
 const RECOVERY_AUDIT_ACTION = "real_channel_event_processing_recovered";
 const PENDING_REVIEW_STATUS = "pending";
 const PROCESSING_REVIEW_STATUS = "processing";
+const REVIEWED_REVIEW_STATUSES: ChannelEventReviewStatus[] = [
+  "replayed",
+  "ignored",
+];
 
 @Injectable()
 export class ChannelEventReviewService {
@@ -361,6 +373,114 @@ export class ChannelEventReviewService {
     });
   }
 
+  async getQueueAuditSummary(input: QueueAuditSummaryInput) {
+    const measuredAt = input.now ?? new Date();
+    const to = input.to ?? measuredAt;
+    const from = input.from ?? new Date(to.getTime() - 24 * 60 * 60_000);
+    const reviewedWhere = {
+      merchantId: input.tenantId,
+      source: REAL_CHANNEL_EVENT_SOURCE,
+      reviewStatus: { in: REVIEWED_REVIEW_STATUSES },
+      reviewedAt: { gte: from, lte: to },
+    };
+    const recoveryWhere = {
+      action: { in: [RECOVERY_AUDIT_ACTION] },
+      createdAt: { gte: from, lte: to },
+      details: { path: ["tenantId"], equals: input.tenantId },
+    };
+
+    const [replayedCount, ignoredCount, reviewedEvents, recoveryLogs] =
+      await Promise.all([
+        this.prisma.normalizedChannelEvent.count({
+          where: {
+            merchantId: input.tenantId,
+            source: REAL_CHANNEL_EVENT_SOURCE,
+            reviewStatus: "replayed",
+            reviewedAt: { gte: from, lte: to },
+          },
+        }),
+        this.prisma.normalizedChannelEvent.count({
+          where: {
+            merchantId: input.tenantId,
+            source: REAL_CHANNEL_EVENT_SOURCE,
+            reviewStatus: "ignored",
+            reviewedAt: { gte: from, lte: to },
+          },
+        }),
+        this.prisma.normalizedChannelEvent.findMany({
+          where: reviewedWhere,
+          select: {
+            reviewedBy: true,
+            reviewStatus: true,
+            reviewedAt: true,
+          },
+        }),
+        this.prisma.auditLog.findMany({
+          where: recoveryWhere,
+          select: {
+            createdAt: true,
+            details: true,
+          },
+        }),
+      ]);
+    const byOperator = new Map<
+      string,
+      {
+        operatorId: string;
+        replayedCount: number;
+        ignoredCount: number;
+        recoveryRunCount: number;
+        recoveredEventCount: number;
+        lastActivityAt: Date | null;
+      }
+    >();
+
+    for (const event of reviewedEvents) {
+      const operatorId = event.reviewedBy ?? "unknown";
+      const summary = ensureOperatorSummary(byOperator, operatorId);
+      if (event.reviewStatus === "replayed") summary.replayedCount += 1;
+      if (event.reviewStatus === "ignored") summary.ignoredCount += 1;
+      updateLastActivity(summary, event.reviewedAt);
+    }
+
+    let recoveredEventCount = 0;
+    for (const log of recoveryLogs) {
+      const details = isRecord(log.details) ? log.details : {};
+      const operatorId = readString(details.operatorId) || "unknown";
+      const recoveredCount = readFiniteNumber(details.recoveredCount);
+      const summary = ensureOperatorSummary(byOperator, operatorId);
+
+      summary.recoveryRunCount += 1;
+      summary.recoveredEventCount += recoveredCount;
+      recoveredEventCount += recoveredCount;
+      updateLastActivity(summary, log.createdAt);
+    }
+
+    return {
+      measuredAt: measuredAt.toISOString(),
+      window: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      totals: {
+        replayedCount,
+        ignoredCount,
+        recoveryRunCount: recoveryLogs.length,
+        recoveredEventCount,
+      },
+      byOperator: Array.from(byOperator.values())
+        .sort((left, right) => {
+          const rightTime = right.lastActivityAt?.getTime() ?? 0;
+          const leftTime = left.lastActivityAt?.getTime() ?? 0;
+          return rightTime - leftTime || left.operatorId.localeCompare(right.operatorId);
+        })
+        .map((summary) => ({
+          ...summary,
+          lastActivityAt: summary.lastActivityAt?.toISOString() ?? null,
+        })),
+    };
+  }
+
   async getQueueMetrics(input: QueueMetricsInput) {
     const staleAfterMinutes = input.staleAfterMinutes ?? 15;
     const measuredAt = input.now ?? new Date();
@@ -545,4 +665,43 @@ function readString(value: unknown) {
 
 function readFiniteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function ensureOperatorSummary(
+  summaries: Map<
+    string,
+    {
+      operatorId: string;
+      replayedCount: number;
+      ignoredCount: number;
+      recoveryRunCount: number;
+      recoveredEventCount: number;
+      lastActivityAt: Date | null;
+    }
+  >,
+  operatorId: string,
+) {
+  const existing = summaries.get(operatorId);
+  if (existing) return existing;
+
+  const created = {
+    operatorId,
+    replayedCount: 0,
+    ignoredCount: 0,
+    recoveryRunCount: 0,
+    recoveredEventCount: 0,
+    lastActivityAt: null,
+  };
+  summaries.set(operatorId, created);
+  return created;
+}
+
+function updateLastActivity(
+  summary: { lastActivityAt: Date | null },
+  activityAt: Date | null,
+) {
+  if (!activityAt) return;
+  if (!summary.lastActivityAt || activityAt > summary.lastActivityAt) {
+    summary.lastActivityAt = activityAt;
+  }
 }

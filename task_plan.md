@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR23 - Queue Operation Audit Records
+## Current Stage: PR24 - Queue Audit Summary
 
 Status: verified
 
-PR23 adds admin-facing queue operation audit records. The goal is to let admins confirm who recovered stale processing claims, how many messages were restored, and whether the queue became healthy afterward, while keeping browser responses sanitized and the recovery path free of Agent/Action/customer-visible side effects.
+PR24 adds an admin-facing queue audit summary over a bounded time window. The goal is to let admins see how many real-channel review messages were generated into cases, marked not handled, and recovered from stale processing, plus per-operator activity totals, while keeping browser responses sanitized and avoiding Agent/Action/customer-visible side effects.
 
 ### PR16 Scope
 
@@ -58,10 +58,11 @@ PR23 adds admin-facing queue operation audit records. The goal is to let admins 
 - [x] PR21 channel queue operations runbook and verifier.
 - [x] PR22 operator queue operations status.
 - [x] PR23 queue operation audit records.
+- [x] PR24 queue audit summary.
 
 ## Verification Gate
 
-Do not claim PR23 queue operation audit records complete until these pass:
+Do not claim PR24 queue audit summary complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -77,7 +78,8 @@ Do not claim PR23 queue operation audit records complete until these pass:
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`
-- Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; queue status remains visible; admin queue operation records do not expose `webhook`, `normalized`, `channel-events`, tenant IDs, payloads, event IDs, or API key terms in the operator UI.
+- Live admin check for `GET /v1/channel-events/audit-summary` and `GET /api/operator/channel-events/audit-summary`.
+- Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; queue status remains visible; admin queue audit summary and operation records do not expose `webhook`, `normalized`, `channel-events`, tenant IDs, payloads, event IDs, source names, external IDs, or API key terms in the operator UI.
 
 ## Errors Encountered
 

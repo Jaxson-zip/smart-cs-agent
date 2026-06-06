@@ -3,6 +3,7 @@
 ## 2026-06-06
 
 - PR20 keeps readiness operationally useful: queue pressure should degrade readiness without pretending the process is down, while DB failure remains unhealthy/503. Queue readiness must stay aggregate and tenant-free.
+- PR24 adds admin queue audit summaries as operational aggregates only: summary responses may expose counts, bounded windows up to 24 hours, operator IDs, and last activity timestamps, but must not expose tenant IDs, source names, raw audit JSON, payloads, event IDs, external IDs, API keys, secrets, or customer message text.
 - PR21 makes queue operations auditable as documentation: the runbook must cover readiness, metrics, stale recovery, degraded reason codes, and data-leak boundaries, and the verifier should fail if those operational facts drift out of the docs or source.
 - PR22 closes the operator visibility gap for queue pressure: degraded readiness and queue metrics should be visible in the workbench as product-language status, while stale recovery remains admin-only through the BFF.
 - PR23 closes the recovery accountability gap: stale recovery should leave an admin-visible sanitized record showing actor, recovered count, cutoff, and queue-after health without exposing tenant IDs, raw audit JSON, event IDs, source names, payloads, external IDs, API keys, or secrets.

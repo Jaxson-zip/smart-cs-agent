@@ -30,6 +30,7 @@ import {
 import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
 import {
   ApiError,
+  fetchChannelEventAuditSummary,
   fetchChannelEvents,
   fetchChannelEventOperationAudits,
   fetchApiReadiness,
@@ -45,6 +46,7 @@ import {
   recoverStaleChannelEvents,
   updateOperatorAccount,
   type ApiReadiness,
+  type ChannelEventAuditSummary,
   type ChannelEventOperationAudit,
   type ChannelEventQueueMetrics,
   type ChannelEventSummary,
@@ -196,6 +198,8 @@ export default function OperatorWorkbench() {
   const [queueOperationAudits, setQueueOperationAudits] = useState<
     ChannelEventOperationAudit[]
   >([]);
+  const [queueAuditSummary, setQueueAuditSummary] =
+    useState<ChannelEventAuditSummary>();
   const [selectedChannelEventId, setSelectedChannelEventId] = useState<string>();
   const [channelEventActionId, setChannelEventActionId] = useState("");
   const [channelEventActionError, setChannelEventActionError] = useState("");
@@ -213,7 +217,14 @@ export default function OperatorWorkbench() {
       .then(async (session) => {
         setChannelEventsLoading(true);
         setQueueOpsLoading(true);
-        const [data, eventResult, readinessResult, metricsResult, auditResult] = await Promise.all([
+        const [
+          data,
+          eventResult,
+          readinessResult,
+          metricsResult,
+          auditResult,
+          auditSummaryResult,
+        ] = await Promise.all([
           fetchCases(),
           fetchChannelEvents()
             .then((events) => ({ ok: true as const, events }))
@@ -229,6 +240,11 @@ export default function OperatorWorkbench() {
                 .then((audits) => ({ ok: true as const, audits }))
                 .catch((error: unknown) => ({ ok: false as const, error }))
             : Promise.resolve({ ok: true as const, audits: [] }),
+          session.operator.role === "admin"
+            ? fetchChannelEventAuditSummary()
+                .then((summary) => ({ ok: true as const, summary }))
+                .catch((error: unknown) => ({ ok: false as const, error }))
+            : Promise.resolve({ ok: true as const, summary: undefined }),
         ]);
         return {
           data,
@@ -236,6 +252,7 @@ export default function OperatorWorkbench() {
           readinessResult,
           metricsResult,
           auditResult,
+          auditSummaryResult,
           operator: session.operator,
         };
       })
@@ -284,6 +301,12 @@ export default function OperatorWorkbench() {
           setQueueOperationAudits([]);
         }
 
+        if (data.auditSummaryResult.ok) {
+          setQueueAuditSummary(data.auditSummaryResult.summary);
+        } else {
+          setQueueAuditSummary(undefined);
+        }
+
         if (data.data.length === 0 && (!data.eventResult.ok || data.eventResult.events.length === 0)) {
           setCases([]);
           setDataState("empty");
@@ -305,11 +328,13 @@ export default function OperatorWorkbench() {
           setQueueReadiness(undefined);
           setQueueMetrics(undefined);
           setQueueOperationAudits([]);
+          setQueueAuditSummary(undefined);
           setDataState("login");
           return;
         }
 
         if (process.env.NEXT_PUBLIC_ENABLE_OFFLINE_DEMO === "true") {
+          setQueueAuditSummary(undefined);
           setCases(fallbackCases);
           setDataState("fallback");
           return;
@@ -320,6 +345,7 @@ export default function OperatorWorkbench() {
         setQueueReadiness(undefined);
         setQueueMetrics(undefined);
         setQueueOperationAudits([]);
+        setQueueAuditSummary(undefined);
         setSyncError(
           error instanceof Error
             ? error.message
@@ -616,6 +642,7 @@ export default function OperatorWorkbench() {
     setQueueReadiness(undefined);
     setQueueMetrics(undefined);
     setQueueOperationAudits([]);
+    setQueueAuditSummary(undefined);
     setQueueOpsError("");
     setQueueRecoveryMessage("");
     setSelectedId(undefined);
@@ -883,6 +910,7 @@ export default function OperatorWorkbench() {
             <QueueOperationsPanel
               summary={queueOperations}
               autoResolvedCount={autoResolvedCases.length}
+              auditSummary={queueAuditSummary}
               operationAudits={queueOperationAudits}
               recoveryMessage={queueRecoveryMessage}
               canRecover={canRecoverQueue}
@@ -1264,6 +1292,7 @@ export default function OperatorWorkbench() {
 function QueueOperationsPanel({
   summary,
   autoResolvedCount,
+  auditSummary,
   operationAudits,
   recoveryMessage,
   canRecover,
@@ -1272,6 +1301,7 @@ function QueueOperationsPanel({
 }: {
   summary: QueueOperationsSummary;
   autoResolvedCount: number;
+  auditSummary?: ChannelEventAuditSummary;
   operationAudits: ChannelEventOperationAudit[];
   recoveryMessage: string;
   canRecover: boolean;
@@ -1290,6 +1320,10 @@ function QueueOperationsPanel({
       : summary.tone === "warn"
         ? Clock3
         : PackageCheck;
+  const handledCount = auditSummary
+    ? auditSummary.totals.replayedCount + auditSummary.totals.ignoredCount
+    : 0;
+  const topOperator = auditSummary?.byOperator[0];
 
   return (
     <div className="space-y-2">
@@ -1320,6 +1354,38 @@ function QueueOperationsPanel({
           value={formatDuration(summary.oldestPendingAgeSeconds)}
         />
       </div>
+
+      {auditSummary ? (
+        <div className="rounded-lg bg-white p-2.5 text-xs ring-1 ring-slate-200">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-semibold text-slate-700">近24小时</span>
+            <span className="shrink-0 text-slate-400">
+              {formatShortTime(auditSummary.measuredAt)}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <MiniQueueMetric
+              label="生成工单"
+              value={String(auditSummary.totals.replayedCount)}
+            />
+            <MiniQueueMetric
+              label="不处理"
+              value={String(auditSummary.totals.ignoredCount)}
+            />
+            <MiniQueueMetric
+              label="恢复"
+              value={String(auditSummary.totals.recoveredEventCount)}
+            />
+            <MiniQueueMetric label="合计" value={String(handledCount)} />
+          </div>
+          {topOperator ? (
+            <div className="mt-2 truncate border-t border-slate-100 pt-2 text-slate-500">
+              {topOperator.operatorId} 最近处理{" "}
+              {formatShortTime(topOperator.lastActivityAt ?? auditSummary.measuredAt)}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {canRecover ? (
         <button

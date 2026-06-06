@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR24 Queue Audit Summary
+
+Admin operators can now review bounded queue handling totals through `GET /v1/channel-events/audit-summary` and the same-origin BFF route `GET /api/operator/channel-events/audit-summary`. The summary includes generated-case counts, intentionally not-handled counts, stale recovery run counts, recovered event counts, and per-operator activity totals. Custom summary windows are capped at 24 hours.
+
+The audit summary response is tenant-scoped and sanitized. It must not expose tenant IDs, raw audit JSON, provider payloads, source names, normalized event IDs, event ID lists, customer messages, external conversation IDs, external message IDs, operator API keys, or secrets. The Web BFF requires an admin session before proxying this endpoint.
+
 ## PR23 Queue Operation Audit Records
 
 Admin operators can now review recent queue recovery operations from the workbench through `GET /v1/channel-events/operation-audits` and the same-origin BFF route `GET /api/operator/channel-events/operation-audits`. Recovery audit entries include who ran the recovery, how many stale processing claims were restored, the cutoff timestamp, and whether the queue was healthy afterward.

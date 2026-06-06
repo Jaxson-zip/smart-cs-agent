@@ -13,6 +13,7 @@ const files = {
   channelService: "apps/api/src/channels/channel-event-review.service.ts",
   webMetricsRoute: "apps/web/src/app/api/operator/channel-events/metrics/route.ts",
   webOperationAuditsRoute: "apps/web/src/app/api/operator/channel-events/operation-audits/route.ts",
+  webAuditSummaryRoute: "apps/web/src/app/api/operator/channel-events/audit-summary/route.ts",
   webRecoverRoute: "apps/web/src/app/api/operator/channel-events/recover-stale/route.ts",
 };
 
@@ -72,9 +73,11 @@ const endpoints = [
   "/health/ready",
   "/v1/channel-events/metrics",
   "/v1/channel-events/operation-audits",
+  "/v1/channel-events/audit-summary",
   "/v1/channel-events/recover-stale",
   "/api/operator/channel-events/metrics",
   "/api/operator/channel-events/operation-audits",
+  "/api/operator/channel-events/audit-summary",
   "/api/operator/channel-events/recover-stale",
 ];
 
@@ -126,6 +129,8 @@ mustContainAll("runbook operations", content.runbook, [
   "Recover stale processing claims",
   "Review recent recovery records",
   "Recheck readiness",
+  "Review queue audit summary",
+  "no longer than 24 hours",
 ]);
 
 mustContainAll(".env.example", content.envExample, envVars);
@@ -134,7 +139,9 @@ mustContainAll("public API surface safety", content.publicApi, [
   "Real-channel metrics are read-only",
   "Real-channel stale recovery is admin-only",
   "Real-channel queue operation audits are admin-only",
+  "Real-channel queue audit summaries are admin-only",
   "Readiness may include aggregate real-channel queue health",
+  "bounded windows up to 24 hours",
 ]);
 
 mustContainAll("health controller env vars", content.healthController, envVars);
@@ -142,12 +149,14 @@ mustContainAll("channel controller routes", content.channelController, [
   '@Controller("v1/channel-events")',
   '@Get("metrics")',
   '@Get("operation-audits")',
+  '@Get("audit-summary")',
   '@Post("recover-stale")',
 ]);
 mustContainAll("channel service degraded reasons", content.channelService, degradedReasons);
 mustContainAll("channel service recovery scope", content.channelService, [
   "recoverStaleProcessing",
   "listQueueOperationAudits",
+  "getQueueAuditSummary",
   "real_channel_event_processing_recovered",
   "reviewStatus: PROCESSING_REVIEW_STATUS",
   "reviewStatus: PENDING_REVIEW_STATUS",
@@ -187,6 +196,15 @@ mustContainAll("web operation audits BFF", content.webOperationAuditsRoute, [
   "Channel event operation audits require admin permission",
   "recoveredCount",
   "queueHealthyAfter",
+]);
+mustContainAll("web audit summary BFF", content.webAuditSummaryRoute, [
+  "sessionResult.session.role !== \"admin\"",
+  "/v1/channel-events/audit-summary",
+  "Channel event audit summary requires admin permission",
+  "replayedCount",
+  "ignoredCount",
+  "recoveryRunCount",
+  "recoveredEventCount",
 ]);
 mustContainAll("web recover BFF", content.webRecoverRoute, [
   "sessionResult.session.role !== \"admin\"",
