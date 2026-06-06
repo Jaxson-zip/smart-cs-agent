@@ -65,3 +65,6 @@ jobs:
 
       - name: Build workspaces
         run: npm run build --workspaces --if-present
+
+      - name: Verify operator bootstrap script
+        run: npm run verify:operator-bootstrap

@@ -296,6 +296,8 @@ function parseAccount(value: unknown): OperatorAccount {
 function operatorIdentityProvider(): OperatorIdentityProvider {
   if (operatorIdentityProviderForTests) return operatorIdentityProviderForTests;
 
+  assertProductionIdentityConfiguration();
+
   const provider = process.env.OPERATOR_IDENTITY_PROVIDER
     ?.trim()
     .toLowerCase();
@@ -305,6 +307,11 @@ function operatorIdentityProvider(): OperatorIdentityProvider {
   }
 
   if (provider === "env") {
+    if (isProduction()) {
+      throw new OperatorIdentityProviderConfigurationError(
+        "Env operator identity provider is not allowed in production",
+      );
+    }
     return accountStoreIdentityProvider(envOperatorAccountStore);
   }
 
@@ -348,9 +355,26 @@ function operatorAccountStore(): OperatorAccountStore {
 
 function shouldUseEnvOperatorAccounts() {
   if (process.env.OPERATOR_ACCOUNT_SOURCE === "database") return false;
-  if (process.env.OPERATOR_ACCOUNT_SOURCE === "env") return true;
+  if (process.env.OPERATOR_ACCOUNT_SOURCE === "env") {
+    if (isProduction()) {
+      throw new OperatorIdentityProviderConfigurationError(
+        "Env operator account source is not allowed in production",
+      );
+    }
+    return true;
+  }
   if (isProduction()) return false;
   return Boolean(process.env.OPERATOR_SESSION_ACCOUNTS);
+}
+
+function assertProductionIdentityConfiguration() {
+  if (!isProduction()) return;
+
+  if (process.env.OPERATOR_ACCOUNT_SOURCE === "env") {
+    throw new OperatorIdentityProviderConfigurationError(
+      "Env operator account source is not allowed in production",
+    );
+  }
 }
 
 const envOperatorAccountStore: OperatorAccountStore = {

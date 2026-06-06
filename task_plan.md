@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR28 - Real-Channel Gray-Release Allowlist
+## Current Stage: PR29 - Production Operator Identity Closure
 
 Status: verified
 
-PR28 adds a merchant/channel allowlist gate for signed real-channel webhook intake. The goal is to let one real channel/tenant pair be opened deliberately without treating every configured secret as live traffic, while still keeping the path normalized-only and human-reviewed.
+PR29 closes the remaining production operator identity fallback: env-backed operator accounts are local/sandbox only, production Web login must use database-backed `OperatorAccount` records, and the first admin can be bootstrapped through a sanitized script.
 
 ### PR16 Scope
 
@@ -63,10 +63,11 @@ PR28 adds a merchant/channel allowlist gate for signed real-channel webhook inta
 - [x] PR26 production real-channel intake gates.
 - [x] PR27 production readiness verifier.
 - [x] PR28 real-channel gray-release allowlist.
+- [x] PR29 production operator identity closure.
 
 ## Verification Gate
 
-Do not claim PR28 real-channel gray-release allowlist complete until these pass:
+Do not claim PR29 production operator identity closure complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -79,8 +80,11 @@ Do not claim PR28 real-channel gray-release allowlist complete until these pass:
 - `npm.cmd run verify:channel-runbook`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
 - `node --check scripts/demo/real-channel-webhook-smoke.mjs`
+- `node --check scripts/bootstrap-operator-admin.mjs`
+- `npm.cmd run verify:operator-bootstrap`
 - Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
 - Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
+- Production identity check: Web BFF login rejects `OPERATOR_IDENTITY_PROVIDER=env` and `OPERATOR_ACCOUNT_SOURCE=env` when `NODE_ENV=production`, while database-backed accounts still work.
 - Live rate-limit check with `REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE=1`: first signed real-channel webhook returns 202; second signed webhook for the same tenant/channel returns 429; only one receipt and one normalized event are persisted.
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`

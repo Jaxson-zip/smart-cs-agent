@@ -1,5 +1,19 @@
 # Production-Readiness Baseline
 
+## PR29 Production Operator Identity Closure
+
+Production Web login now fails closed if `OPERATOR_IDENTITY_PROVIDER=env` or `OPERATOR_ACCOUNT_SOURCE=env` is selected. Env-backed operator accounts are local/sandbox only. A deployable environment must use `OPERATOR_IDENTITY_PROVIDER=database`, run migrations, and create the first admin account in the `OperatorAccount` table before operators can log in.
+
+Bootstrap the first admin without printing secrets:
+
+```bash
+export OPERATOR_BOOTSTRAP_PASSWORD="<long temporary password>"
+export OPERATOR_BOOTSTRAP_API_KEY="<matching operator API key>"
+npm run operator:bootstrap-admin -- --username=admin --tenant=tenant_1 --operator-id=admin_1
+```
+
+Use `npm run verify:operator-bootstrap` in CI to prove the bootstrap script dry-run works and does not print passwords, API keys, or password hashes.
+
 ## PR28 Real-Channel Gray-Release Allowlist
 
 Real-channel intake now has a merchant/channel allowlist gate. When `REAL_CHANNEL_WEBHOOKS_ENABLED=true`, every signed webhook must match an exact pair in `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, and every allowlisted pair must have a matching item in `REAL_CHANNEL_WEBHOOK_SECRETS`.
@@ -244,7 +258,7 @@ PR9 将 Web 客服台账号来源从静态 `OPERATOR_SESSION_ACCOUNTS` 迁移到
 
 `OperatorAccount` 保存 `username`、`tenantId`、`operatorId`、`role`、`passwordHash`、`apiKey`、`disabled` 和 `sessionVersion`。登录和 session 校验都会重新读取账号状态；账号被禁用或 `sessionVersion` 提升后，旧 cookie 会失效。`/api/operator/login` 和 `/api/operator/me` 仍只返回脱敏身份与权限，不暴露 `apiKey` 或 `passwordHash`。
 
-`OPERATOR_SESSION_ACCOUNTS` 现在只作为本地/沙盒兜底来源。若显式设置 `OPERATOR_ACCOUNT_SOURCE=env`，Web BFF 会继续使用旧 JSON 账号；否则存在 `OPERATOR_SESSION_ACCOUNTS` 时仍会兼容旧本地配置。正式部署不要依赖该 JSON 作为主账号系统。
+`OPERATOR_SESSION_ACCOUNTS` 现在只作为本地/沙盒兜底来源。若显式设置 `OPERATOR_ACCOUNT_SOURCE=env`，Web BFF 只会在非生产环境继续使用旧 JSON 账号；`NODE_ENV=production` 会直接 fail closed。正式部署必须使用数据库 `OperatorAccount`，首个管理员通过 `npm run operator:bootstrap-admin` 创建。
 
 本地开发继续使用 `npm run db:migrate`；部署环境使用 `npm run db:migrate:deploy`，避免在生产执行 Prisma dev migration 语义。
 

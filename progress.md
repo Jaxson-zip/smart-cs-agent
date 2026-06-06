@@ -120,3 +120,8 @@
 - Added `REAL_CHANNEL_WEBHOOK_ALLOWLIST` as an exact `channel + tenantId` gate after signature verification and before rate limiting or persistence.
 - Updated production startup gates, production readiness verifier, readiness schema, docs, smoke instructions, and runbook verifier so real-channel intake cannot be opened without an explicit allowlisted pair.
 - Final PR28 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, production-readiness verifier missing-allowlist failure, fully allowlisted production env success, and independent code review with no findings.
+- Started PR29 production operator identity closure.
+- Blocked env-backed operator identity provider and env account source at Web BFF runtime when `NODE_ENV=production`.
+- Added `npm run operator:bootstrap-admin` and `npm run verify:operator-bootstrap` so deployments can create the first database-backed admin without printing passwords, API keys, or password hashes.
+- Addressed independent review by also rejecting `OPERATOR_ACCOUNT_SOURCE=env` when `OPERATOR_IDENTITY_PROVIDER=database` is set in production, and by avoiding secret-marker echo in verifier failure messages.
+- Final PR29 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, operator bootstrap verifier, script syntax checks, production-readiness env-account failure/good-env success checks, and independent code review follow-up fixes.

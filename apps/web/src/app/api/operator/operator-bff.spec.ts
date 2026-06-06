@@ -190,18 +190,26 @@ describe("operator BFF routes", () => {
 
   it("rejects production login when the session secret is not production safe", async () => {
     setEnv("NODE_ENV", "production");
-    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
     process.env.OPERATOR_SESSION_SECRET = "short";
-    process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
-      {
-        username: "alice",
-        passwordHash: testPasswordHash("secret"),
-        tenantId: "tenant_1",
-        operatorId: "operator_1",
-        role: "operator",
-        apiKey: "session_api_key",
+    delete process.env.OPERATOR_SESSION_ACCOUNTS;
+    const dbBackedAccount = {
+      username: "alice",
+      passwordHash: testPasswordHash("secret"),
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      role: "operator" as const,
+      apiKey: "session_api_key",
+      disabled: false,
+      sessionVersion: 1,
+    };
+    setOperatorAccountStoreForTests({
+      async findByUsername(username) {
+        return username === dbBackedAccount.username ? dbBackedAccount : undefined;
       },
-    ]);
+      async findSessionAccount() {
+        return dbBackedAccount;
+      },
+    });
 
     const response = await loginOperator(
       jsonRequest("http://localhost/api/operator/login", {
@@ -232,7 +240,7 @@ describe("operator BFF routes", () => {
 
     assert.strictEqual(response.status, 503);
     assert.deepStrictEqual(await response.json(), {
-      error: "Operator session accounts are not configured",
+      error: "Env operator account source is not allowed in production",
     });
   });
 
@@ -461,6 +469,81 @@ describe("operator BFF routes", () => {
     });
   });
 
+  it("fails closed when the env identity provider is selected in production", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "env";
+    process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
+      {
+        username: "env_agent",
+        passwordHash: testPasswordHash("secret"),
+        tenantId: "tenant_env",
+        operatorId: "operator_env",
+        role: "operator",
+        apiKey: "env_api_key",
+      },
+    ]);
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "env_agent",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Env operator identity provider is not allowed in production",
+    });
+  });
+
+  it("fails closed when the env account source is selected in production", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
+    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
+    process.env.OPERATOR_SESSION_ACCOUNTS = JSON.stringify([
+      {
+        username: "env_agent",
+        passwordHash: testPasswordHash("secret"),
+        tenantId: "tenant_env",
+        operatorId: "operator_env",
+        role: "operator",
+        apiKey: "env_api_key",
+      },
+    ]);
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "env_agent",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Env operator account source is not allowed in production",
+    });
+  });
+
+  it("fails closed when production selects database provider with env account source", async () => {
+    setEnv("NODE_ENV", "production");
+    process.env.OPERATOR_SESSION_SECRET = "a_safe_test_secret_with_more_than_32_chars";
+    process.env.OPERATOR_IDENTITY_PROVIDER = "database";
+    process.env.OPERATOR_ACCOUNT_SOURCE = "env";
+
+    const response = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "db_agent",
+        password: "secret",
+      }),
+    );
+
+    assert.strictEqual(response.status, 503);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Env operator account source is not allowed in production",
+    });
+  });
+
   it("fails closed when a reserved oidc identity provider is selected before it is configured", async () => {
     process.env.OPERATOR_SESSION_SECRET = "test_secret";
     process.env.OPERATOR_IDENTITY_PROVIDER = "oidc";
@@ -552,7 +635,7 @@ describe("operator BFF routes", () => {
 
     assert.strictEqual(response.status, 503);
     assert.deepStrictEqual(await response.json(), {
-      error: "Operator session accounts are not configured",
+      error: "Env operator account source is not allowed in production",
     });
   });
 

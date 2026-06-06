@@ -34,7 +34,7 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 | Route | Exposure | Required Boundary |
 | --- | --- | --- |
 | `GET /` | Public web shell | Shows login state before loading operator data |
-| `POST /api/operator/login` | Operator BFF auth | Authenticates through the configured `OPERATOR_IDENTITY_PROVIDER`; the current deployable providers are DB-backed operator accounts and explicit local env fallback, both issuing HttpOnly signed session cookies |
+| `POST /api/operator/login` | Operator BFF auth | Authenticates through the configured `OPERATOR_IDENTITY_PROVIDER`; production requires DB-backed operator accounts, while env fallback is local/sandbox only; sessions use HttpOnly signed cookies |
 | `POST /api/operator/logout` | Operator BFF auth | Clears HttpOnly session cookie |
 | `GET /api/operator/me` | Operator BFF auth | Requires HttpOnly operator session; returns sanitized operator profile and role permissions |
 | `GET /api/operator/operators` | Operator BFF admin | Requires HttpOnly admin session; returns sanitized operator account summaries for the session tenant |
@@ -62,8 +62,8 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 - Web BFF channel-event responses must be sanitized before reaching the browser. The operator UI may receive customer name, channel, message text, and received time, but must not receive or render webhook, normalized event, source, payload, tenant, API key, or external message identifiers.
 - Production operator accounts must use the `OperatorAccount` table with `passwordHash`; disabled accounts and mismatched `sessionVersion` values must invalidate sessions before any operator data is proxied.
 - Operator account creation and updates must be tenant-scoped from the admin session and must write an audit record without secrets.
-- `OPERATOR_IDENTITY_PROVIDER` is the Web BFF identity boundary. Supported deployable values are `database` and `env`; reserved values such as `oidc` and `sso` fail closed until a real provider adapter is implemented.
-- `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_IDENTITY_PROVIDER=database` after migrations and seed/bootstrap have created operator accounts. `OPERATOR_IDENTITY_PROVIDER` takes precedence over `OPERATOR_ACCOUNT_SOURCE`; the legacy `OPERATOR_ACCOUNT_SOURCE` switch is only consulted when the new provider variable is unset.
+- `OPERATOR_IDENTITY_PROVIDER` is the Web BFF identity boundary. Production must use `database`; `env` is local/sandbox only and fails closed when `NODE_ENV=production`. Reserved values such as `oidc` and `sso` fail closed until a real provider adapter is implemented.
+- `OPERATOR_SESSION_ACCOUNTS` is only a local/sandbox fallback. Deployable environments should set `OPERATOR_IDENTITY_PROVIDER=database` after migrations and `npm run operator:bootstrap-admin` have created the first admin account. `OPERATOR_IDENTITY_PROVIDER` takes precedence over `OPERATOR_ACCOUNT_SOURCE`; the legacy `OPERATOR_ACCOUNT_SOURCE=env` switch is also blocked in production.
 - The current Web login is a first account-service boundary, not full commercial SSO/RBAC. A later production stage should add a real OIDC/SSO adapter behind this boundary.
 - Legacy demo APIs are not part of the production product path and must stay disabled in deployable environments.
 - Real-channel webhook intake is a normalization boundary only. It accepts signed receipts and writes `NormalizedChannelEvent`, but must not route into Agent/Action/customer replies until a later sandbox replay and provider adapter stage is separately reviewed.
