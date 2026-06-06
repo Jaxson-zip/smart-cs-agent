@@ -33,6 +33,21 @@ Expected result:
 - Response includes `normalizedEventId`.
 - Response does not include secrets, signatures, raw request body, or customer message text.
 
+## Optional Replay Smoke
+
+To verify the PR15 human-controlled replay pool, run the smoke with `--replay` and an operator key for the same tenant:
+
+```bash
+npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key
+```
+
+Expected replay result:
+
+- `GET /v1/channel-events` can see the newly normalized `source=real_channel_webhook` event for the operator tenant.
+- `POST /v1/channel-events/:id/replay` creates an internal after-sales case.
+- Replay response `automationMode` is `human_confirm` or `human_takeover`, never `auto_execute`.
+- No customer-visible reply is sent and no commerce action is executed.
+
 ## Signature Contract
 
 Headers:
@@ -58,4 +73,4 @@ The raw request body bytes are mandatory. If raw-body capture is unavailable, th
 
 ## Production Boundary
 
-PR14 is still not a real Taobao/Douyin business integration. The next stage must add sandbox replay controls, allowlisted tenants, human-review gates, provider-specific error handling, and rollback controls before any normalized event can reach automated after-sales actions.
+PR15 is still not a real Taobao/Douyin business integration. Replay creates an internal, human-reviewed case only. The next stage must add operator UI, allowlisted tenants, provider-specific error handling, and rollback controls before any normalized event can reach automated after-sales actions.

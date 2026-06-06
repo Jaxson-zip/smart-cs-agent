@@ -11,6 +11,9 @@
 | `GET /v1/cases` | Operator API | `Authorization: Bearer <operator-key>` or `x-api-key`; tenant derived from key |
 | `GET /v1/cases/:id` | Operator API | Same as `/v1/cases`; service filters by tenant |
 | `GET /v1/rules/:tenantId?` | Operator API | Same as `/v1/cases`; path tenant must match key tenant |
+| `GET /v1/channel-events` | Operator API | Operator key required; lists only `source=real_channel_webhook` pending normalized events for the key tenant |
+| `POST /v1/channel-events/:id/replay` | Operator API | Operator key required; replays one pending normalized event into a human-reviewed after-sales case without executing actions or sending replies |
+| `POST /v1/channel-events/:id/ignore` | Operator API | Operator key required; marks one pending normalized event ignored for the key tenant |
 | `POST /v1/wecom/events` | Sandbox channel intake | Controlled by `WECOM_SANDBOX_ENABLED`; production disabled unless explicitly enabled |
 | `POST /v1/wecom/webhook/send` | Operator API | Operator key required; body `merchantId` must match key tenant |
 | `POST /v1/channels/:channel/webhook/events` | Real-channel normalization intake | Disabled unless `REAL_CHANNEL_WEBHOOKS_ENABLED=true`; requires raw-body HMAC headers, timestamp freshness, configured tenant secret, and replay receipt uniqueness; writes a `NormalizedChannelEvent`; returns `mode: normalized_only` and does not create cases or execute actions |
@@ -52,3 +55,4 @@
 - Real-channel webhook intake is a normalization boundary only. It accepts signed receipts and writes `NormalizedChannelEvent`, but must not route into Agent/Action/customer replies until a later sandbox replay and provider adapter stage is separately reviewed.
 - Real-channel webhook signatures use `x-smartcs-signature-version: v1`, `x-smartcs-tenant-id`, `x-smartcs-event-id`, `x-smartcs-timestamp`, and `x-smartcs-signature`. The HMAC payload is `version + channel + tenantId + timestamp + eventId + sha256(rawBody)`, joined by newline characters.
 - Real-channel readiness may expose configured channel names, but must never expose webhook secrets, signatures, or raw request bodies.
+- Real-channel replay APIs are operator-gated review controls over `NormalizedChannelEvent.source=real_channel_webhook` only. Replay may create an after-sales case, customer message, pending action rows, and audit logs, but must force `human_confirm` or `human_takeover`; it must never return `auto_execute`, call channel `sendMessage()`, or run action execution.

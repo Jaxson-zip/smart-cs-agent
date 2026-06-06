@@ -49,3 +49,8 @@
 - Started PR14 real-channel payload normalization.
 - Added Taobao/Douyin-shaped payload normalizer tests and implementation.
 - Updated the real-channel controller to return `sandbox_queued` / `normalized_only` after writing `NormalizedChannelEvent`, while still avoiding AgentService, ActionService, case creation, messages, and customer-visible replies.
+- Started PR15 real-channel review replay pool.
+- Added review lifecycle fields to `NormalizedChannelEvent`.
+- Added operator-gated channel event review service/controller tests and implementation for list, ignore, and manual replay.
+- Addressed PR15 spec review findings by restricting the review pool to `source=real_channel_webhook`, adding a review status enum migration, and covering malformed/viewer/source boundary cases in tests.
+- Final PR15 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, smoke script syntax checks, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.

@@ -88,8 +88,14 @@ model AfterSalesCase {
   auditLogs   AuditLog[]
 }
 
+enum ChannelEventReviewStatus {
+  pending
+  replayed
+  ignored
+}
+
 model NormalizedChannelEvent {
-  id                     String   @id @default(cuid())
+  id                     String                   @id @default(cuid())
   source                 String
   merchantId             String
   channel                String
@@ -98,7 +104,14 @@ model NormalizedChannelEvent {
   senderName             String
   text                   String
   receivedAt             DateTime
-  createdAt              DateTime @default(now())
+  reviewStatus           ChannelEventReviewStatus @default(pending)
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  replayedCaseId         String?
+  reviewNote             String?
+  createdAt              DateTime                 @default(now())
+
+  @@index([merchantId, source, reviewStatus, createdAt])
 }
 
 model ChannelWebhookReceipt {

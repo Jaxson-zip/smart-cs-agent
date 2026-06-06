@@ -32,3 +32,5 @@
 - PR14 changes the real-channel response from `security_only` to `normalized_only`. This means the event is stored as `NormalizedChannelEvent`, but it is still not an after-sales case and must not appear in the operator queue until a separate sandbox replay/review stage exists.
 - Real-channel body merchant identifiers are consistency checks only. The signed header context remains authoritative for `tenantId` and route `channel`.
 - PR14 writes replay receipts and normalized events in the same transaction after normalization succeeds. A malformed provider payload should not consume the replay key, so the channel can retry after fixing the payload mapping.
+- PR15 adds the first controlled bridge from real-channel normalized events into after-sales cases. The bridge is operator-gated and always forces human review modes, so it is still not real-channel automation.
+- PR15 review pool operations must filter `source=real_channel_webhook`; `NormalizedChannelEvent` can also contain sandbox sources, and mixing them would make the review pool semantically unsafe.

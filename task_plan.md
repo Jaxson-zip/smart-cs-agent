@@ -2,27 +2,28 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR14 - Real Channel Payload Normalization
+## Current Stage: PR15 - Real Channel Review Replay Pool
 
-Status: verified
+Status: verified and pushed
 
-PR14 builds on PR13 by normalizing signed real-channel payloads into `NormalizedChannelEvent` records while still preventing any automated after-sales processing.
+PR15 builds on PR14 by giving operators a controlled review pool for normalized real-channel events. Operators can list pending events, ignore noise, or replay one event into an internal after-sales case that still requires human confirmation or takeover.
 
-### PR14 Scope
+### PR15 Scope
 
-- Reuse the PR13 signed webhook boundary and replay receipt.
-- Normalize Taobao-shaped and Douyin-shaped sandbox payloads into the shared channel event shape.
-- Persist normalized events for later sandbox replay and inspection.
-- Keep the real-channel path out of AgentService, ActionService, customer replies, and case creation.
-- Update smoke/docs so teammates understand the endpoint is `normalized_only`, not business automation.
+- Add review lifecycle fields to `NormalizedChannelEvent`.
+- Add operator-gated APIs to list pending normalized events.
+- Add an ignore action for duplicate/noise events.
+- Add a replay action that creates an internal after-sales case while forcing `human_confirm` or `human_takeover`.
+- Keep replay out of action execution and channel replies.
 
-### Out Of Scope For PR14
+### Out Of Scope For PR15
 
 - Multi-channel production rollout.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
-- Routing normalized events into the operator workbench or automated after-sales case queue.
+- Browser UI for the review pool.
+- Automated replay or auto-execution from normalized events.
 - Provider-specific production API callbacks beyond sandbox-shaped payloads.
 
 ## Phases
@@ -47,10 +48,11 @@ PR14 builds on PR13 by normalizing signed real-channel payloads into `Normalized
 - [x] PR12 production identity provider boundary.
 - [x] PR13 real channel intake security.
 - [x] PR14 real channel payload normalization.
+- [x] PR15 real channel review replay pool.
 
 ## Verification Gate
 
-Do not claim PR14 real channel payload normalization complete until these pass:
+Do not claim PR15 real channel review replay pool complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run test --workspace @smart-cs-agent/api`
@@ -60,7 +62,9 @@ Do not claim PR14 real channel payload normalization complete until these pass:
 - `npm.cmd run build --workspaces --if-present`
 - `node --check scripts/demo/wecom-sandbox-smoke.mjs`
 - `node --check scripts/demo/real-channel-webhook-smoke.mjs`
+- `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
+- `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`
 - Browser checks if UI files changed.
 
 ## Errors Encountered
@@ -87,3 +91,5 @@ Do not claim PR14 real channel payload normalization complete until these pass:
 | 2026-06-06 | A real-channel webhook path could accidentally be mistaken for a production business integration | PR13 creates a separate security-only intake at `/v1/channels/:channel/webhook/events`; it writes replay receipts only and never calls Agent/Action/customer-visible replies |
 | 2026-06-06 | Real-channel HMAC verification must use raw request bytes and fail closed if raw body capture or secret parsing breaks | PR13 enables Nest raw body, rejects missing raw body, converts malformed secret config to controlled auth failure, and signs `channel + tenantId + timestamp + eventId + sha256(rawBody)` |
 | 2026-06-06 | Real-channel normalization can collapse the trust boundary if body tenant/channel overrides signed context | PR14 derives tenant/channel from the signed context, only checks body merchant identity for consistency, and keeps normalized events out of Agent/Action/case processing |
+| 2026-06-06 | Normalized real-channel events need a controlled path into case review without becoming automatic actions | PR15 adds a pending/replayed/ignored review lifecycle and operator-gated replay that forces human review modes |
+| 2026-06-06 | PR15 review pool queries could mix non-real-channel normalized events if they only filter tenant and pending status | Added `source=real_channel_webhook` filters, status enum migration, source-aware index, and regression tests |

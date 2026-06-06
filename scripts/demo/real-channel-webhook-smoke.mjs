@@ -16,9 +16,11 @@ const secret = String(
 );
 const eventId = String(
   args.get("--event-id") ??
-    `${channel}_${tenantId}_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`,
+    `${channel}_${tenantId}_${new Date().toISOString().replace(/[-:.TZ]/g, "")}_${Math.random().toString(36).slice(2, 8)}`,
 );
 const timeoutMs = Number(args.get("--timeout-ms") ?? 5000);
+const replay = args.has("--replay");
+const operatorApiKey = args.get("--operator-api-key") ?? process.env.OPERATOR_API_KEY;
 
 const body = JSON.stringify(buildPayload({ channel, tenantId, eventId }));
 const rawBody = Buffer.from(body);
@@ -103,6 +105,13 @@ async function postSignedWebhook() {
         2,
       ),
     );
+
+    if (replay) {
+      await replayNormalizedEvent({
+        normalizedEventId: payload.normalizedEventId,
+        eventId,
+      });
+    }
   } catch (error) {
     if (error.name === "AbortError") {
       console.error(`Timed out after ${timeoutMs}ms while calling ${url}`);
@@ -114,10 +123,91 @@ async function postSignedWebhook() {
     console.error(
       `  REAL_CHANNEL_WEBHOOK_SECRETS='[{"channel":"${channel}","tenantId":"${tenantId}","secret":"<matching-secret>"}]'`,
     );
+    if (replay) {
+      console.error("Replay smoke also requires:");
+      console.error("  OPERATOR_API_KEYS with an operator key for the same tenant");
+      console.error("  --operator-api-key=<matching-operator-key>");
+    }
     process.exitCode = 1;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function replayNormalizedEvent({ normalizedEventId, eventId }) {
+  if (!operatorApiKey) {
+    throw new Error("--replay requires --operator-api-key or OPERATOR_API_KEY");
+  }
+
+  const eventList = await requestJson(`${apiBase}/v1/channel-events`, {
+    headers: operatorHeaders(),
+  });
+  if (!Array.isArray(eventList) || !eventList.some((event) => event.id === normalizedEventId)) {
+    throw new Error(`Normalized event ${normalizedEventId} was not visible in the pending review pool`);
+  }
+
+  const replayResult = await requestJson(
+    `${apiBase}/v1/channel-events/${encodeURIComponent(normalizedEventId)}/replay`,
+    {
+      method: "POST",
+      headers: operatorHeaders(),
+    },
+  );
+  if (
+    replayResult?.status !== "replayed" ||
+    replayResult?.eventId !== normalizedEventId ||
+    typeof replayResult?.caseId !== "string" ||
+    replayResult?.automationMode === "auto_execute"
+  ) {
+    throw new Error(`Unexpected replay response: ${JSON.stringify(replayResult, null, 2)}`);
+  }
+
+  console.log("Real channel replay smoke created a human-reviewed case.");
+  console.log(
+    JSON.stringify(
+      {
+        eventId,
+        normalizedEventId,
+        caseId: replayResult.caseId,
+        automationMode: replayResult.automationMode,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+async function requestJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        ...options.headers,
+      },
+    });
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${url}: ${text}`);
+    }
+
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function operatorHeaders() {
+  return {
+    Authorization: `Bearer ${operatorApiKey}`,
+    "x-tenant-id": tenantId,
+  };
 }
 
 function buildPayload({ channel, tenantId, eventId }) {

@@ -108,6 +108,9 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - `POST /v1/channels/:channel/webhook/events` 是真实渠道安全接收和归一化入口。启用后必须携带 `x-smartcs-signature-version: v1`、`x-smartcs-tenant-id`、`x-smartcs-event-id`、`x-smartcs-timestamp` 和 `x-smartcs-signature`；签名 payload 为 `version/channel/tenantId/timestamp/eventId/sha256(rawBody)` 逐行拼接后做 HMAC-SHA256。成功返回 `202`、`mode: normalized_only` 和 `normalizedEventId`，但不回显客户消息文本。
 - 真实渠道入口会先完成签名验证和 payload 归一化，再在同一事务中写入 replay receipt 与 `NormalizedChannelEvent`。归一化失败时不应写 replay receipt，以免合法重试被重复事件保护误拦截。
 - `GET /v1/cases` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的 seed 或 smoke 后售后工单。
+- `GET /v1/channel-events` 携带 `Authorization: Bearer <operator-key>` 后只能读取该 key 所属租户仍处于 `pending` 且 `source=real_channel_webhook` 的真实渠道归一化事件。
+- `POST /v1/channel-events/:id/replay` 携带 operator key 后，可将一个 pending 归一化事件转成售后工单，但必须强制进入 `human_confirm` 或 `human_takeover`，不得自动执行动作、不得真实回传、不得创建 agent 已发送消息。
+- `POST /v1/channel-events/:id/ignore` 携带 operator key 后，可将一个 pending 归一化事件标记为 `ignored`，用于重复、噪音或暂不处理的真实渠道消息。
 - `GET /v1/rules/demo_tenant` 携带 `Authorization: Bearer <operator-key>` 后能读取该 key 所属租户的沙盒规则配置；请求其他租户应返回 403。
 - `GET /v2/integrations`、`POST /v2/actions/execute`、`POST /v2/compensation/declined`、`POST /v2/handoffs` 等操作侧接口也必须携带 operator key。
 - `POST /v1/wecom/webhook/send` 必须携带 operator key，且 key 所属租户必须与 body 中的 `merchantId` 一致。
@@ -116,6 +119,7 @@ PR1 的 readiness baseline 还应通过数据库路径验证，而不是只看 `
 - Web 侧 `/api/chat` 和 `/api/db` 默认返回 404；只有显式设置 `ENABLE_LEGACY_WEB_DEMO_API=true` 才会打开旧 demo 接口。
 - `npm run demo:smoke` 能向沙盒 API 发送 5 条售后消息，并验证分类、风险等级和自动化模式。
 - `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=<matching-secret>` 能验证真实渠道安全入口可以接受一条签名事件并归一化入库。运行前服务端必须显式设置 `REAL_CHANNEL_WEBHOOKS_ENABLED=true` 和匹配的 `REAL_CHANNEL_WEBHOOK_SECRETS`。该 smoke 不会触发 Agent、Action 或客户消息回传。
+- `npm run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=<matching-secret> --replay --operator-api-key=<operator-key>` 会继续验证归一化事件可被 operator 手动回放为人工审核工单；该 smoke 仍应证明 `automationMode` 不是 `auto_execute`。
 
 公开路由清单见 `docs/deploy/public-api-surface.md`。新增任何 HTTP 路由时，应同步更新该清单和对应测试。
 
@@ -141,6 +145,7 @@ PR1 的回滚边界是应用版本和沙盒数据库 schema：
 - `OPENAI_API_KEY` 为空时，任何依赖真实模型调用的能力都应视为未启用。
 - 沙盒 smoke payload 是演示数据，不可作为真实售后判责、退款或客服绩效依据。
 - 真实渠道 webhook PR13/PR14 只证明“可安全接收签名事件并归一化入库”，不证明已经能生产处理淘宝/抖音售后。进入自动处理前还需要沙盒回放、人工审核开关、provider-specific 错误处理和真实小流量灰度。
+- PR15 的回放池只证明“人工可控地把真实渠道归一化事件转成内部售后工单”。它只接受 `source=real_channel_webhook` 的事件，仍不代表真实客户回复、真实退款、真实改地址或真实补偿动作已经上线。
 - `ChannelWebhookReceipt` 只保存 `channel`、`tenantId`、`eventId`、`bodySha256` 和时间信息；不得保存 raw body、signature 或密钥。
 - `OPERATOR_API_KEY` 和 `OPERATOR_SESSION_ACCOUNTS[*].apiKey` 属于服务端 secret，不能使用 `NEXT_PUBLIC_` 前缀，也不能暴露给浏览器。
 - `OPERATOR_SESSION_ACCOUNTS[*].password` 当前仅适用于本地沙盒登录演示；生产环境必须使用 `passwordHash`。真正上线前仍建议替换为 SSO、OIDC 或独立账号服务，并补 RBAC 管理界面。
