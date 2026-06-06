@@ -1,12 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import type {
-  AgentCaseDecision,
-  CompensationDeclinedRequest,
-  CompensationDeclinedResponse,
-  ExecuteActionRequest,
-  ExecuteActionResponse,
-  HandoffRequest,
-  IntegrationStatus,
+import {
+  ProviderReadResponseSchema,
+  type AgentCaseDecision,
+  type CompensationDeclinedRequest,
+  type CompensationDeclinedResponse,
+  type ExecuteActionRequest,
+  type ExecuteActionResponse,
+  type HandoffRequest,
+  type IntegrationStatus,
+  type ProviderReadRequest,
+  type ProviderReadResponse,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 
@@ -52,6 +55,33 @@ export class OpsService {
       requiresHuman: false,
       retryable: true,
     };
+  }
+
+  executeProviderRead(request: ProviderReadRequest): ProviderReadResponse {
+    const policy = this.providerAdapters.evaluateReadPolicy(request);
+
+    if (!policy.allowed) {
+      return ProviderReadResponseSchema.parse({
+        readRunId: `read_${Date.now()}`,
+        status: "blocked",
+        networkExecution: "not_started",
+        providerDataReturned: false,
+        operatorVisibleResult: policy.reason,
+        requiresHuman: true,
+        retryable: policy.retryable,
+      });
+    }
+
+    return ProviderReadResponseSchema.parse({
+      readRunId: `read_${Date.now()}`,
+      status: "policy_accepted",
+      networkExecution: "not_implemented",
+      providerDataReturned: false,
+      operatorVisibleResult:
+        "Readonly provider read accepted by policy; provider network execution is not implemented in this build.",
+      requiresHuman: false,
+      retryable: false,
+    });
   }
 
   handleCompensationDeclined(

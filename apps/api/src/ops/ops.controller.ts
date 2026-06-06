@@ -4,10 +4,12 @@ import {
   CompensationDeclinedRequestSchema,
   ExecuteActionRequestSchema,
   HandoffRequestSchema,
+  ProviderReadRequestSchema,
   type ChannelMessageIngest,
   type CompensationDeclinedRequest,
   type ExecuteActionRequest,
   type HandoffRequest,
+  type ProviderReadRequest,
 } from "@smart-cs-agent/shared";
 import {
   requireRequestContext,
@@ -43,6 +45,20 @@ export class OpsController {
     const context = requireRequestContext(headers);
     const request = ExecuteActionRequestSchema.parse(body);
     return this.opsService.executeAction({
+      ...request,
+      tenantId: context.tenantId,
+      operatorId: context.operatorId,
+    });
+  }
+
+  @Post("provider-reads/execute")
+  executeProviderRead(
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderReadRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    const request = ProviderReadRequestSchema.parse(body);
+    return this.opsService.executeProviderRead({
       ...request,
       tenantId: context.tenantId,
       operatorId: context.operatorId,

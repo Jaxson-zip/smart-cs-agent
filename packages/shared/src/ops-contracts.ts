@@ -96,6 +96,63 @@ export const ExecuteActionResponseSchema = z.object({
   retryable: z.boolean(),
 });
 
+export const ProviderReadLookupSchema = z
+  .object({
+    orderId: z.string().min(1).optional(),
+    logisticsId: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.orderId !== undefined ||
+      value.logisticsId !== undefined,
+    "at least one provider read lookup identifier is required",
+  );
+
+export const ProviderReadRequestSchema = z
+  .object({
+    caseId: z.string().min(1),
+    tenantId: z.string().min(1).optional(),
+    channel: CommerceChannelSchema,
+    readCapability: ProviderReadCapabilitySchema,
+    lookup: ProviderReadLookupSchema,
+    idempotencyKey: z.string().min(1),
+    operatorId: z.string().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.readCapability === "get_order" && !value.lookup.orderId) {
+      context.addIssue({
+        code: "custom",
+        path: ["lookup", "orderId"],
+        message: "get_order provider reads require orderId",
+      });
+    }
+    if (
+      value.readCapability === "query_logistics" &&
+      !value.lookup.orderId &&
+      !value.lookup.logisticsId
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["lookup"],
+        message: "query_logistics provider reads require orderId or logisticsId",
+      });
+    }
+  });
+
+export const ProviderReadResponseSchema = z
+  .object({
+    readRunId: z.string(),
+    status: z.enum(["policy_accepted", "blocked", "failed"]),
+    networkExecution: z.enum(["not_started", "not_implemented"]),
+    providerDataReturned: z.literal(false),
+    operatorVisibleResult: z.string(),
+    requiresHuman: z.boolean(),
+    retryable: z.boolean(),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -159,6 +216,9 @@ export type ChannelMessageIngest = z.infer<typeof ChannelMessageIngestSchema>;
 export type AgentCaseDecision = z.infer<typeof AgentCaseDecisionSchema>;
 export type ExecuteActionRequest = z.infer<typeof ExecuteActionRequestSchema>;
 export type ExecuteActionResponse = z.infer<typeof ExecuteActionResponseSchema>;
+export type ProviderReadLookup = z.infer<typeof ProviderReadLookupSchema>;
+export type ProviderReadRequest = z.infer<typeof ProviderReadRequestSchema>;
+export type ProviderReadResponse = z.infer<typeof ProviderReadResponseSchema>;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema
 >;

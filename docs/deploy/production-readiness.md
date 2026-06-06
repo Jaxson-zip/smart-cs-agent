@@ -1,5 +1,17 @@
 # Production-Readiness Baseline
 
+## PR37 Provider Read Execution Contract
+
+Provider readonly execution now has a checked API contract:
+
+- `POST /v2/provider-reads/execute`: authenticated operator route for future non-mutating provider reads.
+- The server derives `tenantId` and `operatorId` from request context, so body-supplied tenant or operator values cannot spoof the provider read boundary.
+- `status=policy_accepted` is possible only for tenant/channel pairs configured as `real_readonly` / `read_only` through `PROVIDER_READONLY_ADAPTERS`.
+- Accepted responses still return `networkExecution=not_implemented` and `providerDataReturned=false`.
+- `npm run verify:provider-read-contract`: checks that the route, shared contract, policy tests, docs, and launch runbook preserve the no-real-network and no-provider-data boundary.
+
+This contract does not enable live provider reads, real provider network calls, real order data return, refunds, address changes, coupons, logistics edits, invoices, or customer-visible replies.
+
 ## PR36 Real Provider Readonly Foundation
 
 Real provider adapters now have a checked readonly configuration boundary:

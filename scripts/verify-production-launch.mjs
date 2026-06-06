@@ -13,6 +13,7 @@ const files = {
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
+  providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -35,6 +36,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
+  "verify:provider-read-contract",
   "verify:channel-runbook",
 ]);
 
@@ -68,6 +70,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-alerting",
   "npm run verify:provider-adapters",
   "npm run verify:provider-readonly",
+  "npm run verify:provider-read-contract",
   "npm run verify:channel-runbook",
 ]);
 
@@ -112,6 +115,9 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "Provider adapter contract",
   "real provider network calls",
   "PROVIDER_READONLY_ADAPTERS",
+  "POST /v2/provider-reads/execute",
+  "providerDataReturned=false",
+  "networkExecution=not_implemented",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -153,6 +159,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
+  "verify:provider-read-contract",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
@@ -163,6 +170,9 @@ mustContainAll("provider adapter verifier source", content.providerAdapterVerifi
 ]);
 mustContainAll("provider readonly verifier source", content.providerReadonlyVerifier, [
   "verify:provider-readonly",
+]);
+mustContainAll("provider read contract verifier source", content.providerReadContractVerifier, [
+  "verify:provider-read-contract",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

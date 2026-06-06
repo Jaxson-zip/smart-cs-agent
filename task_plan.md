@@ -2,28 +2,32 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR36 - Real Provider Readonly Foundation
+## Current Stage: PR37 - Provider Read Execution Contract
 
 Status: verified
 
-Previous Stage: PR35 - Provider Adapter Contract Package was verified.
+Previous Stage: PR36 - Real Provider Readonly Foundation was verified.
+
+Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified and must stay connected to provider adapter checks.
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR36 adds a checked real-provider readonly foundation so Taobao, Douyin, Shopify, WeChat, and email adapters can expose non-mutating read capability metadata through `PROVIDER_READONLY_ADAPTERS` without enabling real commerce writes or customer-visible actions.
+PR37 adds the checked API contract for future provider readonly execution. It allows the system to evaluate whether a tenant/channel is allowed to attempt `get_order` or `query_logistics`, but this stage still returns `networkExecution=not_implemented` and `providerDataReturned=false`.
 
-### PR36 Scope
+### PR37 Scope
 
-- Add strict `PROVIDER_READONLY_ADAPTERS` parsing for tenant-scoped provider credential references.
-- Keep provider credentials as secret manager references only, never inline tokens or passwords.
-- Expose real-provider readonly state through integration metadata without enabling real commerce writes.
-- Add shared `readCapabilities` metadata while keeping executable provider `capabilities` limited to `handoff`.
-- Keep `/v2/actions/execute` tenant-scoped from request context, not body-supplied tenant IDs.
-- Add verifier coverage so readonly provider drift fails before launch.
+- Add shared provider read request/response schemas for `get_order` and `query_logistics`.
+- Add `POST /v2/provider-reads/execute` behind operator request context.
+- Keep tenant/operator identity derived from request context, not body-supplied fields.
+- Add provider read policy evaluation for `real_readonly` / `read_only` tenant-channel pairs.
+- Return `policy_accepted` only as a policy result; do not call provider networks or return provider payloads.
+- Add verifier coverage so provider read contract drift fails before launch.
 
-### Out Of Scope For PR36
+### Out Of Scope For PR37
 
 - Multi-channel production rollout.
+- Live Taobao/Douyin order or logistics API calls.
+- Returning real provider order, logistics, customer, or payload data.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -76,10 +80,11 @@ PR36 adds a checked real-provider readonly foundation so Taobao, Douyin, Shopify
 - [x] PR34 production launch and rollback runbook.
 - [x] PR35 provider adapter contract package.
 - [x] PR36 real provider readonly foundation.
+- [x] PR37 provider read execution contract.
 
 ## Verification Gate
 
-Do not claim PR36 real provider readonly foundation complete until these pass:
+Do not claim PR37 provider read execution contract complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -91,8 +96,10 @@ Do not claim PR36 real provider readonly foundation complete until these pass:
 - `node --check scripts/verify-production-launch.mjs`
 - `node --check scripts/verify-provider-adapters.mjs`
 - `node --check scripts/verify-provider-readonly.mjs`
+- `node --check scripts/verify-provider-read-contract.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
+- `npm.cmd run verify:provider-read-contract`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

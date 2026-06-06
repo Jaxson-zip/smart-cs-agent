@@ -2,6 +2,26 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR37 Provider Read Execution Contract
+
+PR37 adds the API contract for future non-mutating provider reads:
+
+- `POST /v2/provider-reads/execute`
+- Request fields: `caseId`, `channel`, `readCapability`, `lookup`, and `idempotencyKey`; the server derives `tenantId` and `operatorId` from the authenticated request context.
+- `readCapability` is limited to `get_order` and `query_logistics`.
+
+The route evaluates `ProviderAdapterRegistry.evaluateReadPolicy()`. A read can reach `status=policy_accepted` only when the current tenant/channel is configured through `PROVIDER_READONLY_ADAPTERS` and the adapter is projected as `real_readonly` / `read_only`.
+
+This PR still does not call real provider APIs, does not query Taobao or Douyin directly, and does not return raw provider data. Even when policy is accepted, the response returns `networkExecution=not_implemented` and `providerDataReturned=false`. The route is a checked contract and policy boundary for future live reads, not a live provider connector.
+
+Run:
+
+```bash
+npm run verify:provider-read-contract
+```
+
+This verifier checks the shared request/response contract, read policy, route context injection, no-network/no-provider-data response, tests, public API docs, production readiness docs, launch runbook references, and task plan.
+
 ## PR36 Real Provider Readonly Foundation
 
 PR36 adds a narrow readonly foundation for future real provider integrations. Configure it with `PROVIDER_READONLY_ADAPTERS`:

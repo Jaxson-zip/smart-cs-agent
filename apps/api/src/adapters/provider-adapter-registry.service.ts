@@ -4,6 +4,7 @@ import type {
   CommerceChannel,
   ExecuteActionRequest,
   IntegrationStatus,
+  ProviderReadRequest,
   ProviderReadCapability,
 } from "@smart-cs-agent/shared";
 import { loadProviderReadonlyAdapterConfigs } from "../config/api-config";
@@ -12,6 +13,10 @@ import { MockDouyinAdapter } from "./mock-douyin.adapter";
 import { MockTaobaoAdapter } from "./mock-taobao.adapter";
 
 type ActionPolicyResult =
+  | { allowed: true }
+  | { allowed: false; reason: string; retryable: boolean };
+
+type ReadPolicyResult =
   | { allowed: true }
   | { allowed: false; reason: string; retryable: boolean };
 
@@ -106,6 +111,37 @@ export class ProviderAdapterRegistry {
         allowed: false,
         reason:
           "Blocked by provider write policy: customer-visible actions are disabled.",
+        retryable: false,
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  evaluateReadPolicy(request: ProviderReadRequest): ReadPolicyResult {
+    const tenantId = request.tenantId ?? "";
+    const contract = this.getContract(request.channel, tenantId);
+    if (!contract) {
+      return {
+        allowed: false,
+        reason: "No provider adapter contract is registered for this channel.",
+        retryable: false,
+      };
+    }
+
+    if (contract.mode !== "real_readonly" || contract.writePolicy !== "read_only") {
+      return {
+        allowed: false,
+        reason:
+          "Provider readonly credentials are not configured for this tenant and channel.",
+        retryable: false,
+      };
+    }
+
+    if (!contract.readCapabilities.includes(request.readCapability)) {
+      return {
+        allowed: false,
+        reason: "Provider readonly contract does not expose this read capability.",
         retryable: false,
       };
     }

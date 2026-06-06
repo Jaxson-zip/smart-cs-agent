@@ -168,3 +168,10 @@
 - Added `npm run verify:provider-readonly` and connected PR36 into production readiness, public API surface, launch runbook, `.env.example`, and the task plan.
 - Addressed PR36 independent review findings by constraining `credentialRef` to `secret://` or `vault://`, making readonly projection tenant-and-channel scoped, and deriving action tenant IDs from request context rather than request bodies.
 - Final PR36 verification passed: Prisma generate/migrate deploy, API tests, Web tests, typecheck, lint, build, provider readonly/adapters verifiers, launch/alerting/channel/operator verifiers, production canary tests, script syntax checks, production readiness good-env and dangerous-env checks, `git diff --check`, and independent review with no Critical/Important/Minor findings.
+- Started PR37 provider read execution contract.
+- Added strict shared provider read request/response schemas for `get_order` and `query_logistics`, including exact lookup requirements and a response contract that forbids provider payload data.
+- Added `POST /v2/provider-reads/execute` behind operator request context; body-supplied tenant/operator values are overwritten before policy evaluation.
+- Added provider read policy evaluation for `real_readonly` / `read_only` tenant-channel pairs, while accepted reads still return `networkExecution=not_implemented` and `providerDataReturned=false`.
+- Added `npm run verify:provider-read-contract` and connected PR37 into provider docs, production readiness, public API surface, launch runbook, and the task plan.
+- Addressed PR37 review feedback by adding body-spoofing, no-context, no-provider-call, unsupported-capability, strict-schema, and exact-response tests.
+- Final PR37 verification passed: API tests, Web tests, typecheck, lint, build, Prisma generate/migrate deploy, provider read contract/readonly/adapters verifiers, launch/alerting/channel/operator verifiers, production canary tests, script syntax checks, production readiness good-env and dangerous-env checks, `git diff --check`, and independent review with no Critical/Important/Minor findings.
