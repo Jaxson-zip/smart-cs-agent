@@ -4,6 +4,7 @@ import {
   ApiError,
   fetchApiReadiness,
   fetchChannelEvents,
+  fetchChannelEventOperationAudits,
   fetchChannelEventMetrics,
   fetchOperatorAccounts,
   ignoreChannelEvent,
@@ -176,6 +177,55 @@ describe("channel event API client", () => {
       recoveredBefore: "2026-06-06T07:15:00.000Z",
       eventIds: ["event_1", "event_2"],
     });
+  });
+
+  it("maps queue operation audits without leaking internal audit details", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    mockJsonResponse({
+      status: 200,
+      body: [
+        {
+          id: "audit_1",
+          type: "stale_processing_recovered",
+          operatorId: "admin_1",
+          recoveredCount: 2,
+          recoveredBefore: "2026-06-06T07:15:00.000Z",
+          queueHealthyAfter: true,
+          queueAfter: {
+            pendingCount: 4,
+            staleProcessingCount: 0,
+          },
+          createdAt: "2026-06-06T07:31:00.000Z",
+          tenantId: "must_not_leak",
+          eventIds: ["must_not_leak"],
+          details: { payload: "must_not_leak" },
+        },
+      ],
+      requests,
+    });
+
+    const audits = await fetchChannelEventOperationAudits();
+
+    assert.equal(
+      requests[0]?.url,
+      "/api/operator/channel-events/operation-audits",
+    );
+    assert.deepEqual(audits, [
+      {
+        id: "audit_1",
+        type: "stale_processing_recovered",
+        operatorId: "admin_1",
+        recoveredCount: 2,
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        queueHealthyAfter: true,
+        queueAfter: {
+          pendingCount: 4,
+          staleProcessingCount: 0,
+        },
+        createdAt: "2026-06-06T07:31:00.000Z",
+      },
+    ]);
+    assert.ok(!JSON.stringify(audits).includes("must_not_leak"));
   });
 
   it("rejects malformed channel event list responses", async () => {

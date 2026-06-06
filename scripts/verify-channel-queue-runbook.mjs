@@ -12,6 +12,7 @@ const files = {
   channelController: "apps/api/src/channels/channel-events.controller.ts",
   channelService: "apps/api/src/channels/channel-event-review.service.ts",
   webMetricsRoute: "apps/web/src/app/api/operator/channel-events/metrics/route.ts",
+  webOperationAuditsRoute: "apps/web/src/app/api/operator/channel-events/operation-audits/route.ts",
   webRecoverRoute: "apps/web/src/app/api/operator/channel-events/recover-stale/route.ts",
 };
 
@@ -70,8 +71,10 @@ function sliceBetween(label, haystack, startNeedle, endNeedle) {
 const endpoints = [
   "/health/ready",
   "/v1/channel-events/metrics",
+  "/v1/channel-events/operation-audits",
   "/v1/channel-events/recover-stale",
   "/api/operator/channel-events/metrics",
+  "/api/operator/channel-events/operation-audits",
   "/api/operator/channel-events/recover-stale",
 ];
 
@@ -121,6 +124,7 @@ mustContainAll("runbook operations", content.runbook, [
   "Check readiness",
   "Check queue metrics",
   "Recover stale processing claims",
+  "Review recent recovery records",
   "Recheck readiness",
 ]);
 
@@ -129,6 +133,7 @@ mustContainAll("public API surface endpoints", content.publicApi, endpoints);
 mustContainAll("public API surface safety", content.publicApi, [
   "Real-channel metrics are read-only",
   "Real-channel stale recovery is admin-only",
+  "Real-channel queue operation audits are admin-only",
   "Readiness may include aggregate real-channel queue health",
 ]);
 
@@ -136,11 +141,13 @@ mustContainAll("health controller env vars", content.healthController, envVars);
 mustContainAll("channel controller routes", content.channelController, [
   '@Controller("v1/channel-events")',
   '@Get("metrics")',
+  '@Get("operation-audits")',
   '@Post("recover-stale")',
 ]);
 mustContainAll("channel service degraded reasons", content.channelService, degradedReasons);
 mustContainAll("channel service recovery scope", content.channelService, [
   "recoverStaleProcessing",
+  "listQueueOperationAudits",
   "real_channel_event_processing_recovered",
   "reviewStatus: PROCESSING_REVIEW_STATUS",
   "reviewStatus: PENDING_REVIEW_STATUS",
@@ -155,7 +162,7 @@ const recoveryBody = sliceBetween(
 mustContainAll("channel service recovery body", recoveryBody, [
   "reviewedBy: null",
   "reviewedAt: null",
-  "real_channel_event_processing_recovered",
+  "action: RECOVERY_AUDIT_ACTION",
 ]);
 for (const forbidden of [
   "agentService.decide",
@@ -173,6 +180,13 @@ mustContainAll("web metrics BFF", content.webMetricsRoute, [
   "processingCount",
   "staleProcessingCount",
   "oldestPendingAgeSeconds",
+]);
+mustContainAll("web operation audits BFF", content.webOperationAuditsRoute, [
+  "sessionResult.session.role !== \"admin\"",
+  "/v1/channel-events/operation-audits",
+  "Channel event operation audits require admin permission",
+  "recoveredCount",
+  "queueHealthyAfter",
 ]);
 mustContainAll("web recover BFF", content.webRecoverRoute, [
   "sessionResult.session.role !== \"admin\"",

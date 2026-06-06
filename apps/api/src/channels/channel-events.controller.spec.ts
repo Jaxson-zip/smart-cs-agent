@@ -51,6 +51,86 @@ describe("ChannelEventsController", () => {
     assert.deepStrictEqual(calls, [{ tenantId: "tenant_1" }]);
   });
 
+  it("lets admin operators list sanitized queue operation audits", async () => {
+    const calls: unknown[] = [];
+    const controller = new ChannelEventsController({
+      listQueueOperationAudits: async (input: unknown) => {
+        calls.push(input);
+        return [
+          {
+            id: "audit_1",
+            type: "stale_processing_recovered",
+            operatorId: "admin_1",
+            recoveredCount: 2,
+            recoveredBefore: "2026-06-06T07:15:00.000Z",
+            queueHealthyAfter: true,
+            queueAfter: {
+              pendingCount: 4,
+              staleProcessingCount: 0,
+            },
+            createdAt: "2026-06-06T07:31:00.000Z",
+          },
+        ];
+      },
+    } as unknown as ChannelEventReviewService);
+
+    const result = await controller.operationAudits({
+      "x-tenant-id": "tenant_1",
+      "x-operator-id": "admin_1",
+    });
+
+    assert.deepStrictEqual(calls, [{ tenantId: "tenant_1" }]);
+    assert.deepStrictEqual(result, [
+      {
+        id: "audit_1",
+        type: "stale_processing_recovered",
+        operatorId: "admin_1",
+        recoveredCount: 2,
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        queueHealthyAfter: true,
+        queueAfter: {
+          pendingCount: 4,
+          staleProcessingCount: 0,
+        },
+        createdAt: "2026-06-06T07:31:00.000Z",
+      },
+    ]);
+  });
+
+  it("rejects non-admin queue operation audit requests", async () => {
+    const controller = new ChannelEventsController({
+      listQueueOperationAudits: async () => {
+        throw new Error("audit list should not be called");
+      },
+    } as unknown as ChannelEventReviewService);
+    const envValue = process.env.OPERATOR_API_KEYS;
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_api_key",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+
+    try {
+      await assert.rejects(
+        () =>
+          controller.operationAudits({
+            authorization: "Bearer operator_api_key",
+            "x-tenant-id": "tenant_1",
+          }),
+        ForbiddenException,
+      );
+    } finally {
+      if (envValue === undefined) {
+        delete process.env.OPERATOR_API_KEYS;
+      } else {
+        process.env.OPERATOR_API_KEYS = envValue;
+      }
+    }
+  });
+
   it("replays an event with the authenticated operator context", async () => {
     const calls: unknown[] = [];
     const controller = new ChannelEventsController({

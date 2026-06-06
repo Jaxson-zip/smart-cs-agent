@@ -15,6 +15,7 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 | `GET /v1/rules/:tenantId?` | Operator API | Same as `/v1/cases`; path tenant must match key tenant |
 | `GET /v1/channel-events` | Operator API | Operator key required; lists only `source=real_channel_webhook` pending normalized events for the key tenant |
 | `GET /v1/channel-events/metrics` | Operator API | Operator key required; returns tenant-scoped real-channel queue counts and age metrics without customer message details |
+| `GET /v1/channel-events/operation-audits` | Operator API admin | Admin operator key required; returns sanitized recent queue recovery audit records for the key tenant |
 | `POST /v1/channel-events/recover-stale` | Operator API admin | Admin operator key required; recovers stale `processing` real-channel review events for the key tenant back to `pending` and writes an audit record |
 | `POST /v1/channel-events/:id/replay` | Operator API | Operator key required; replays one pending normalized event into a human-reviewed after-sales case without executing actions or sending replies |
 | `POST /v1/channel-events/:id/ignore` | Operator API | Operator key required; marks one pending normalized event ignored for the key tenant |
@@ -42,6 +43,7 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 | `GET /api/operator/cases/:id` | Operator BFF | Same as `/api/operator/cases`; browser does not receive operator key |
 | `GET /api/operator/channel-events` | Operator BFF | Requires HttpOnly operator session; lists pending real-channel review messages through the server-side API key and returns only UI-safe fields |
 | `GET /api/operator/channel-events/metrics` | Operator BFF | Requires HttpOnly operator session; proxies queue metrics and strips tenant/source/internal fields before returning to the browser |
+| `GET /api/operator/channel-events/operation-audits` | Operator BFF admin | Requires HttpOnly admin session; proxies queue operation audit records and strips raw/internal fields before returning to the browser |
 | `POST /api/operator/channel-events/recover-stale` | Operator BFF admin | Requires HttpOnly admin session; proxies stale review recovery without exposing operator keys |
 | `POST /api/operator/channel-events/:id/replay` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; creates an internal human-reviewed case only |
 | `POST /api/operator/channel-events/:id/ignore` | Operator BFF | Requires HttpOnly operator/operator-admin session; viewer sessions are blocked before proxying; marks a pending review message not handled |
@@ -69,3 +71,4 @@ Operational runbook: `docs/deploy/channel-queue-runbook.md` covers channel queue
 - Real-channel metrics are read-only and tenant-scoped. They may expose counts, timestamps, and age seconds, but must not expose customer message text, tenant identifiers, source names, webhook payloads, external conversation IDs, or external message IDs to the browser.
 - Readiness may include aggregate real-channel queue health. It may report `degraded` when configured queue thresholds are exceeded, but it must not expose tenant identifiers, customer message text, payloads, external conversation IDs, or external message IDs.
 - Real-channel stale recovery is admin-only. It may move old `processing` events back to `pending` for the same tenant/source after a crash or interrupted replay, but it must not call AgentService, create cases, execute actions, or send customer replies.
+- Real-channel queue operation audits are admin-only and read-only. They may expose sanitized recovery counts, operator identity, timestamps, and queue-after counts, but must not expose raw audit JSON, tenant identifiers, event ID lists, normalized event IDs, source names, provider payloads, external conversation IDs, external message IDs, operator API keys, or secrets.

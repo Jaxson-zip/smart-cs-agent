@@ -13,6 +13,8 @@ Use these signals during deploy checks, incident triage, and daily operations:
 | `GET /health/ready` | Public readiness with database, webhook config, and source-wide aggregate channel queue health | No operator session required; no tenant data |
 | `GET /v1/channel-events/metrics` | Tenant-scoped real-channel queue metrics | Operator API key required |
 | `GET /api/operator/channel-events/metrics` | Same metrics through the Web BFF | Operator session required |
+| `GET /v1/channel-events/operation-audits` | Tenant-scoped recent queue recovery records | Admin operator API key required |
+| `GET /api/operator/channel-events/operation-audits` | Same recovery records through the Web BFF | Admin operator session required |
 | `POST /v1/channel-events/recover-stale` | Admin recovery for stale `processing` claims | Admin operator API key required |
 | `POST /api/operator/channel-events/recover-stale` | Same recovery through the Web BFF | Admin operator session required |
 
@@ -101,7 +103,37 @@ Expected result:
 
 Recovery moves old `processing` events back to `pending`, clears the processing claim, and writes an audit record.
 
-### 4. Recheck readiness
+### 4. Review recent recovery records
+
+Use this after recovery to confirm who ran it, how many claims were restored, and whether stale processing claims were cleared afterward.
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer <admin-operator-key>" \
+  http://localhost:4100/v1/channel-events/operation-audits
+```
+
+Expected result:
+
+```json
+[
+  {
+    "id": "audit_1",
+    "type": "stale_processing_recovered",
+    "operatorId": "admin_1",
+    "recoveredCount": 2,
+    "recoveredBefore": "2026-06-06T07:15:00.000Z",
+    "queueHealthyAfter": true,
+    "queueAfter": {
+      "pendingCount": 4,
+      "staleProcessingCount": 0
+    },
+    "createdAt": "2026-06-06T07:31:00.000Z"
+  }
+]
+```
+
+### 5. Recheck readiness
 
 ```bash
 curl -sS http://localhost:4100/health/ready
@@ -120,6 +152,8 @@ It must not call AgentService, must not create cases, must not execute actions, 
 Metrics and readiness must not expose tenant IDs, must not expose customer messages, must not expose provider payloads, must not expose external conversation IDs, must not expose external message IDs, must not expose operator API keys, and must not expose secrets.
 
 The Web BFF route may return tenant-scoped counts, timestamps, and age seconds to the browser. It must strip tenant/source/internal fields before responding.
+
+Queue operation audit records are admin-only and read-only. They may return sanitized recovery counts, operator identity, timestamps, and queue-after counts. They must not expose raw audit JSON, tenant IDs, event ID lists, normalized event IDs, source names, provider payloads, external conversation IDs, external message IDs, operator API keys, or secrets.
 
 ## Verification
 

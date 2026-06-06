@@ -85,3 +85,8 @@
 - Extended the Web API client to preserve degraded readiness queue details, fetch sanitized channel queue metrics, and call admin stale recovery through the BFF.
 - Added a compact operator workbench queue status panel showing pending intake, stuck processing claims, oldest wait time, and admin recovery for stuck messages.
 - Final PR22 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, browser checks at 1366x768 and 390x844 with no page-level overflow or internal terms, WeCom sandbox smoke, real-channel normalization smoke, and real-channel replay smoke.
+- Started PR23 queue operation audit records.
+- Added recovery audit enrichment so stale processing recovery records include recovery cutoff, recovered count, queue-after counts, and whether stale processing claims were cleared.
+- Added tenant-scoped `GET /v1/channel-events/operation-audits` and admin-only `GET /api/operator/channel-events/operation-audits` with sanitized response mapping.
+- Extended the Web API client and operator workbench queue panel to show compact admin-only recent recovery records without raw audit details.
+- Final PR23 verification passed: Prisma generate, Prisma migrate deploy, API tests, Web tests, full typecheck, lint, production build, runbook verifier, smoke script syntax checks, live WeCom sandbox smoke, live real-channel normalization smoke, live real-channel replay smoke, live operation-audits endpoint check, browser checks at 1366x768 and 390x844 with no page-level overflow or internal terms, and independent code review with no blocking findings.

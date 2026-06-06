@@ -25,6 +25,11 @@ type QueueMetricsInput = {
   now?: Date;
 };
 
+type QueueOperationAuditInput = {
+  tenantId: string;
+  limit?: number;
+};
+
 type QueueHealthInput = {
   staleAfterMinutes?: number;
   pendingWarnThreshold?: number;
@@ -37,6 +42,7 @@ const toJsonInput = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 const REAL_CHANNEL_EVENT_SOURCE = "real_channel_webhook";
+const RECOVERY_AUDIT_ACTION = "real_channel_event_processing_recovered";
 const PENDING_REVIEW_STATUS = "pending";
 const PROCESSING_REVIEW_STATUS = "processing";
 
@@ -274,17 +280,39 @@ export class ChannelEventReviewService {
           reviewNote: `Recovered stale processing claim by ${input.operatorId}`,
         },
       });
+      const [pendingCount, staleProcessingCount] = await Promise.all([
+        tx.normalizedChannelEvent.count({
+          where: {
+            merchantId: input.tenantId,
+            source: REAL_CHANNEL_EVENT_SOURCE,
+            reviewStatus: PENDING_REVIEW_STATUS,
+          },
+        }),
+        tx.normalizedChannelEvent.count({
+          where: {
+            merchantId: input.tenantId,
+            source: REAL_CHANNEL_EVENT_SOURCE,
+            reviewStatus: PROCESSING_REVIEW_STATUS,
+            reviewedAt: { lt: recoveredBefore },
+          },
+        }),
+      ]);
 
       await tx.auditLog.create({
         data: {
           caseId: null,
-          action: "real_channel_event_processing_recovered",
+          action: RECOVERY_AUDIT_ACTION,
           details: toJsonInput({
             tenantId: input.tenantId,
             operatorId: input.operatorId,
             recoveredBefore: recoveredBefore.toISOString(),
             recoveredCount: result.count,
             eventIds,
+            queueAfter: {
+              pendingCount,
+              staleProcessingCount,
+            },
+            queueHealthyAfter: staleProcessingCount === 0,
           }),
         },
       });
@@ -294,6 +322,41 @@ export class ChannelEventReviewService {
         recoveredCount: result.count,
         recoveredBefore,
         eventIds,
+      };
+    });
+  }
+
+  async listQueueOperationAudits(input: QueueOperationAuditInput) {
+    const limit = Math.min(Math.max(input.limit ?? 5, 1), 20);
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: {
+        action: { in: [RECOVERY_AUDIT_ACTION] },
+        details: { path: ["tenantId"], equals: input.tenantId },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    return auditLogs.map((log) => {
+      const details = isRecord(log.details) ? log.details : {};
+      const queueAfter = isRecord(details.queueAfter)
+        ? {
+            pendingCount: readFiniteNumber(details.queueAfter.pendingCount),
+            staleProcessingCount: readFiniteNumber(
+              details.queueAfter.staleProcessingCount,
+            ),
+          }
+        : null;
+
+      return {
+        id: log.id,
+        type: "stale_processing_recovered" as const,
+        operatorId: readString(details.operatorId),
+        recoveredCount: readFiniteNumber(details.recoveredCount),
+        recoveredBefore: readString(details.recoveredBefore),
+        queueHealthyAfter: details.queueHealthyAfter === true,
+        queueAfter,
+        createdAt: log.createdAt.toISOString(),
       };
     });
   }
@@ -470,4 +533,16 @@ async function assertPendingEventCanBeReviewed(
   }
 
   throw new ConflictException("Channel event has already been reviewed");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function readFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

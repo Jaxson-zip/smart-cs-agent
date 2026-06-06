@@ -5,6 +5,7 @@ import { GET as getCases } from "./cases/route";
 import { GET as getCaseDetails } from "./cases/[id]/route";
 import { GET as listChannelEvents } from "./channel-events/route";
 import { GET as getChannelEventMetrics } from "./channel-events/metrics/route";
+import { GET as listChannelEventOperations } from "./channel-events/operation-audits/route";
 import { POST as ignoreChannelEvent } from "./channel-events/[id]/ignore/route";
 import { POST as replayChannelEvent } from "./channel-events/[id]/replay/route";
 import { POST as recoverStaleChannelEvents } from "./channel-events/recover-stale/route";
@@ -797,6 +798,104 @@ describe("operator BFF routes", () => {
       staleAfterMinutes: 15,
       measuredAt: "2026-06-06T07:30:00.000Z",
     });
+  });
+
+  it("lets admin sessions list sanitized queue operation records through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json([
+        {
+          id: "audit_1",
+          type: "stale_processing_recovered",
+          operatorId: "admin_1",
+          recoveredCount: 2,
+          recoveredBefore: "2026-06-06T07:15:00.000Z",
+          queueHealthyAfter: true,
+          queueAfter: {
+            pendingCount: 4,
+            staleProcessingCount: 0,
+          },
+          createdAt: "2026-06-06T07:31:00.000Z",
+          tenantId: "must_not_leak",
+          eventIds: ["must_not_leak"],
+          source: "must_not_leak",
+          payload: { secret: true },
+        },
+      ]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listChannelEventOperations(
+      new Request("http://localhost/api/operator/channel-events/operation-audits", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v1/channel-events/operation-audits",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.deepStrictEqual(await response.json(), [
+      {
+        id: "audit_1",
+        type: "stale_processing_recovered",
+        operatorId: "admin_1",
+        recoveredCount: 2,
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        queueHealthyAfter: true,
+        queueAfter: {
+          pendingCount: 4,
+          staleProcessingCount: 0,
+        },
+        createdAt: "2026-06-06T07:31:00.000Z",
+      },
+    ]);
+  });
+
+  it("blocks non-admin sessions from listing queue operation records in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json([]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await listChannelEventOperations(
+      new Request("http://localhost/api/operator/channel-events/operation-audits", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Channel event operation audits require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("proxies real-channel event replay as a POST without exposing operator keys", async () => {

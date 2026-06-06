@@ -38,6 +38,20 @@ export type ChannelEventRecoveryResult = {
   eventIds: string[];
 };
 
+export type ChannelEventOperationAudit = {
+  id: string;
+  type: "stale_processing_recovered";
+  operatorId: string;
+  recoveredCount: number;
+  recoveredBefore: string;
+  queueHealthyAfter: boolean;
+  queueAfter: {
+    pendingCount: number;
+    staleProcessingCount: number;
+  } | null;
+  createdAt: string;
+};
+
 export type OperatorLoginResult = {
   operator: OperatorProfile;
 };
@@ -239,6 +253,25 @@ export async function recoverStaleChannelEvents(input: {
   return toChannelEventRecoveryResult(await res.json());
 }
 
+export async function fetchChannelEventOperationAudits(): Promise<
+  ChannelEventOperationAudit[]
+> {
+  const res = await fetchWithTimeout(
+    `${OPERATOR_BFF_URL}/channel-events/operation-audits`,
+  );
+
+  if (!res.ok) {
+    throw new ApiError("队列处理记录暂时无法同步", res.status);
+  }
+
+  const body: unknown = await res.json();
+  if (!Array.isArray(body)) {
+    throw new ApiError("队列处理记录数据格式异常", 502);
+  }
+
+  return body.map(toChannelEventOperationAudit);
+}
+
 export async function replayChannelEvent(
   eventId: string,
 ): Promise<ChannelEventReplayResult> {
@@ -414,6 +447,35 @@ function toChannelEventRecoveryResult(value: unknown): ChannelEventRecoveryResul
     eventIds: Array.isArray(value.eventIds)
       ? value.eventIds.filter((item): item is string => typeof item === "string")
       : [],
+  };
+}
+
+function toChannelEventOperationAudit(value: unknown): ChannelEventOperationAudit {
+  if (!isRecord(value)) {
+    throw new ApiError("队列处理记录数据格式异常", 502);
+  }
+
+  return {
+    id: readString(value, "id"),
+    type: readLiteral(
+      value.type,
+      "stale_processing_recovered",
+      "队列处理记录数据格式异常",
+    ),
+    operatorId: readString(value, "operatorId"),
+    recoveredCount: readFiniteNumber(value, "recoveredCount"),
+    recoveredBefore: readString(value, "recoveredBefore"),
+    queueHealthyAfter: value.queueHealthyAfter === true,
+    queueAfter: isRecord(value.queueAfter)
+      ? {
+          pendingCount: readFiniteNumber(value.queueAfter, "pendingCount"),
+          staleProcessingCount: readFiniteNumber(
+            value.queueAfter,
+            "staleProcessingCount",
+          ),
+        }
+      : null,
+    createdAt: readString(value, "createdAt"),
   };
 }
 

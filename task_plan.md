@@ -2,11 +2,11 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR22 - Operator Queue Operations Status
+## Current Stage: PR23 - Queue Operation Audit Records
 
 Status: verified
 
-PR22 brings the PR18-PR21 queue operations loop into the operator workbench. The goal is to show backlog/stuck-message status in product language, keep the API/BFF boundary sanitized, and let admin operators recover stale processing claims without leaving the workbench.
+PR23 adds admin-facing queue operation audit records. The goal is to let admins confirm who recovered stale processing claims, how many messages were restored, and whether the queue became healthy afterward, while keeping browser responses sanitized and the recovery path free of Agent/Action/customer-visible side effects.
 
 ### PR16 Scope
 
@@ -57,10 +57,11 @@ PR22 brings the PR18-PR21 queue operations loop into the operator workbench. The
 - [x] PR20 channel queue readiness thresholds.
 - [x] PR21 channel queue operations runbook and verifier.
 - [x] PR22 operator queue operations status.
+- [x] PR23 queue operation audit records.
 
 ## Verification Gate
 
-Do not claim PR22 operator queue operations status complete until these pass:
+Do not claim PR23 queue operation audit records complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -76,7 +77,7 @@ Do not claim PR22 operator queue operations status complete until these pass:
 - `npm.cmd run demo:smoke -- --api=http://localhost:4100 --operator-api-key=dev_operator_key --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --timeout-ms=5000`
 - `npm.cmd run demo:real-channel-smoke -- --api=http://localhost:4100 --channel=taobao --tenant=tenant_1 --secret=real_channel_secret_123 --replay --operator-api-key=tenant_1_operator_key --timeout-ms=5000`
-- Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; "待接入消息" and "生成工单" visible; no `webhook`, `normalized`, or `channel-events` terms visible in the operator UI.
+- Browser check at 1366x768 and 390x844: no page-level scroll or horizontal overflow; queue status remains visible; admin queue operation records do not expose `webhook`, `normalized`, `channel-events`, tenant IDs, payloads, event IDs, or API key terms in the operator UI.
 
 ## Errors Encountered
 

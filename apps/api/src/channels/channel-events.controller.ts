@@ -45,6 +45,15 @@ export class ChannelEventsController {
     return this.reviewService.getQueueMetrics({ tenantId: context.tenantId });
   }
 
+  @Get("operation-audits")
+  async operationAudits(@Headers() headers: RequestHeaders) {
+    const context = requireRequestContext(headers);
+    requireReviewRecoveryAccess(context);
+    return this.reviewService.listQueueOperationAudits({
+      tenantId: context.tenantId,
+    });
+  }
+
   @Post("recover-stale")
   async recoverStale(
     @Body() body: unknown,

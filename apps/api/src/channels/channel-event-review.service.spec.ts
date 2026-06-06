@@ -343,6 +343,7 @@ describe("ChannelEventReviewService", () => {
   it("recovers stale processing events for the request tenant and audits the operation", async () => {
     const findManyQueries: unknown[] = [];
     const updateManyQueries: unknown[] = [];
+    const countQueries: unknown[] = [];
     const auditLogs: unknown[] = [];
     const service = new ChannelEventReviewService(
       {
@@ -356,6 +357,10 @@ describe("ChannelEventReviewService", () => {
               updateMany: async (query: unknown) => {
                 updateManyQueries.push(query);
                 return { count: 2 };
+              },
+              count: async (query: unknown) => {
+                countQueries.push(query);
+                return [4, 0][countQueries.length - 1] ?? 0;
               },
             },
             auditLog: {
@@ -415,12 +420,113 @@ describe("ChannelEventReviewService", () => {
         },
       },
     ]);
+    assert.deepStrictEqual(countQueries, [
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "pending",
+        },
+      },
+      {
+        where: {
+          merchantId: "tenant_1",
+          source: "real_channel_webhook",
+          reviewStatus: "processing",
+          reviewedAt: { lt: recoveredBefore },
+        },
+      },
+    ]);
     assert.strictEqual(
       auditLogs.some((entry) =>
         JSON.stringify(entry).includes("real_channel_event_processing_recovered"),
       ),
       true,
     );
+    assert.deepStrictEqual(auditLogs[0], {
+      caseId: null,
+      action: "real_channel_event_processing_recovered",
+      details: {
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        recoveredCount: 2,
+        eventIds: ["event_1", "event_2"],
+        queueAfter: {
+          pendingCount: 4,
+          staleProcessingCount: 0,
+        },
+        queueHealthyAfter: true,
+      },
+    });
+  });
+
+  it("lists sanitized queue operation audits for the request tenant", async () => {
+    const findManyQueries: unknown[] = [];
+    const service = new ChannelEventReviewService(
+      {
+        auditLog: {
+          findMany: async (query: unknown) => {
+            findManyQueries.push(query);
+            return [
+              {
+                id: "audit_1",
+                action: "real_channel_event_processing_recovered",
+                createdAt: new Date("2026-06-06T07:31:00.000Z"),
+                details: {
+                  tenantId: "tenant_1",
+                  operatorId: "admin_1",
+                  recoveredBefore: "2026-06-06T07:15:00.000Z",
+                  recoveredCount: 2,
+                  eventIds: ["event_1", "event_2"],
+                  source: "real_channel_webhook",
+                  queueAfter: {
+                    pendingCount: 4,
+                    staleProcessingCount: 0,
+                  },
+                  queueHealthyAfter: true,
+                },
+              },
+            ];
+          },
+        },
+      } as unknown as PrismaService,
+      fakeAgent(),
+    );
+
+    const audits = await service.listQueueOperationAudits({
+      tenantId: "tenant_1",
+      limit: 10,
+    });
+
+    assert.deepStrictEqual(findManyQueries, [
+      {
+        where: {
+          action: { in: ["real_channel_event_processing_recovered"] },
+          details: { path: ["tenantId"], equals: "tenant_1" },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+    ]);
+    assert.deepStrictEqual(audits, [
+      {
+        id: "audit_1",
+        type: "stale_processing_recovered",
+        operatorId: "admin_1",
+        recoveredCount: 2,
+        recoveredBefore: "2026-06-06T07:15:00.000Z",
+        queueHealthyAfter: true,
+        queueAfter: {
+          pendingCount: 4,
+          staleProcessingCount: 0,
+        },
+        createdAt: "2026-06-06T07:31:00.000Z",
+      },
+    ]);
+    assert.ok(!JSON.stringify(audits).includes("tenant_1"));
+    assert.ok(!JSON.stringify(audits).includes("event_1"));
+    assert.ok(!JSON.stringify(audits).includes("real_channel_webhook"));
   });
 
   it("reports queue metrics without exposing customer event details", async () => {

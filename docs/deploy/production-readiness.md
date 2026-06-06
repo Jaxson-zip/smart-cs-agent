@@ -1,5 +1,11 @@
 # Production-Readiness Baseline
 
+## PR23 Queue Operation Audit Records
+
+Admin operators can now review recent queue recovery operations from the workbench through `GET /v1/channel-events/operation-audits` and the same-origin BFF route `GET /api/operator/channel-events/operation-audits`. Recovery audit entries include who ran the recovery, how many stale processing claims were restored, the cutoff timestamp, and whether the queue was healthy afterward.
+
+The audit response is tenant-scoped and sanitized. It must not expose tenant IDs, raw audit JSON, provider payloads, source names, normalized event IDs, event ID lists, external conversation IDs, external message IDs, operator API keys, or secrets. The Web BFF requires an admin session before proxying this endpoint.
+
 ## PR22 Operator Queue Operations Status
 
 The operator workbench now reads API readiness and real-channel queue metrics through the same-origin BFF. Operators see a compact product-language queue status for normal intake, backlog, unavailable queue status, and stale processing claims. Admin operators can recover stale processing claims from the workbench without exposing operator API keys or raw channel-event internals to the browser.

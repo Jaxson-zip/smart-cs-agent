@@ -31,6 +31,7 @@ import type { AfterSalesCategory, RiskLevel } from "@smart-cs-agent/shared";
 import {
   ApiError,
   fetchChannelEvents,
+  fetchChannelEventOperationAudits,
   fetchApiReadiness,
   fetchChannelEventMetrics,
   createOperatorAccount,
@@ -44,6 +45,7 @@ import {
   recoverStaleChannelEvents,
   updateOperatorAccount,
   type ApiReadiness,
+  type ChannelEventOperationAudit,
   type ChannelEventQueueMetrics,
   type ChannelEventSummary,
   type OperatorAccountSummary,
@@ -191,6 +193,9 @@ export default function OperatorWorkbench() {
   const [queueOpsError, setQueueOpsError] = useState("");
   const [queueRecoveryMessage, setQueueRecoveryMessage] = useState("");
   const [queueRecoveryLoading, setQueueRecoveryLoading] = useState(false);
+  const [queueOperationAudits, setQueueOperationAudits] = useState<
+    ChannelEventOperationAudit[]
+  >([]);
   const [selectedChannelEventId, setSelectedChannelEventId] = useState<string>();
   const [channelEventActionId, setChannelEventActionId] = useState("");
   const [channelEventActionError, setChannelEventActionError] = useState("");
@@ -208,7 +213,7 @@ export default function OperatorWorkbench() {
       .then(async (session) => {
         setChannelEventsLoading(true);
         setQueueOpsLoading(true);
-        const [data, eventResult, readinessResult, metricsResult] = await Promise.all([
+        const [data, eventResult, readinessResult, metricsResult, auditResult] = await Promise.all([
           fetchCases(),
           fetchChannelEvents()
             .then((events) => ({ ok: true as const, events }))
@@ -219,12 +224,18 @@ export default function OperatorWorkbench() {
           fetchChannelEventMetrics()
             .then((metrics) => ({ ok: true as const, metrics }))
             .catch((error: unknown) => ({ ok: false as const, error })),
+          session.operator.role === "admin"
+            ? fetchChannelEventOperationAudits()
+                .then((audits) => ({ ok: true as const, audits }))
+                .catch((error: unknown) => ({ ok: false as const, error }))
+            : Promise.resolve({ ok: true as const, audits: [] }),
         ]);
         return {
           data,
           eventResult,
           readinessResult,
           metricsResult,
+          auditResult,
           operator: session.operator,
         };
       })
@@ -267,6 +278,12 @@ export default function OperatorWorkbench() {
           );
         }
 
+        if (data.auditResult.ok) {
+          setQueueOperationAudits(data.auditResult.audits);
+        } else {
+          setQueueOperationAudits([]);
+        }
+
         if (data.data.length === 0 && (!data.eventResult.ok || data.eventResult.events.length === 0)) {
           setCases([]);
           setDataState("empty");
@@ -287,6 +304,7 @@ export default function OperatorWorkbench() {
           setOperator(undefined);
           setQueueReadiness(undefined);
           setQueueMetrics(undefined);
+          setQueueOperationAudits([]);
           setDataState("login");
           return;
         }
@@ -301,6 +319,7 @@ export default function OperatorWorkbench() {
         setChannelEvents([]);
         setQueueReadiness(undefined);
         setQueueMetrics(undefined);
+        setQueueOperationAudits([]);
         setSyncError(
           error instanceof Error
             ? error.message
@@ -596,6 +615,7 @@ export default function OperatorWorkbench() {
     setChannelEvents([]);
     setQueueReadiness(undefined);
     setQueueMetrics(undefined);
+    setQueueOperationAudits([]);
     setQueueOpsError("");
     setQueueRecoveryMessage("");
     setSelectedId(undefined);
@@ -863,6 +883,7 @@ export default function OperatorWorkbench() {
             <QueueOperationsPanel
               summary={queueOperations}
               autoResolvedCount={autoResolvedCases.length}
+              operationAudits={queueOperationAudits}
               recoveryMessage={queueRecoveryMessage}
               canRecover={canRecoverQueue}
               recovering={queueRecoveryLoading}
@@ -1243,6 +1264,7 @@ export default function OperatorWorkbench() {
 function QueueOperationsPanel({
   summary,
   autoResolvedCount,
+  operationAudits,
   recoveryMessage,
   canRecover,
   recovering,
@@ -1250,6 +1272,7 @@ function QueueOperationsPanel({
 }: {
   summary: QueueOperationsSummary;
   autoResolvedCount: number;
+  operationAudits: ChannelEventOperationAudit[];
   recoveryMessage: string;
   canRecover: boolean;
   recovering: boolean;
@@ -1312,6 +1335,27 @@ function QueueOperationsPanel({
 
       {recoveryMessage ? (
         <p className="text-xs leading-5 text-emerald-700">{recoveryMessage}</p>
+      ) : null}
+
+      {operationAudits.length > 0 ? (
+        <div className="space-y-1.5 border-t border-slate-100 pt-2">
+          <div className="text-xs font-semibold text-slate-500">最近处理记录</div>
+          {operationAudits.slice(0, 2).map((audit) => (
+            <div key={audit.id} className="text-xs leading-5 text-slate-600">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {audit.operatorId} 恢复 {audit.recoveredCount} 条卡住消息
+                </span>
+                <span className="shrink-0 text-slate-400">
+                  {formatShortTime(audit.createdAt)}
+                </span>
+              </div>
+              <div className="truncate text-slate-400">
+                {formatRecoveryAuditStatus(audit)}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -1844,6 +1888,17 @@ function formatShortTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatRecoveryAuditStatus(audit: ChannelEventOperationAudit) {
+  const recoveredBefore = formatShortTime(audit.recoveredBefore);
+  const staleCount = audit.queueAfter?.staleProcessingCount ?? 0;
+
+  if (audit.queueHealthyAfter || staleCount === 0) {
+    return `恢复至 ${recoveredBefore} 前 · 队列已恢复`;
+  }
+
+  return `恢复至 ${recoveredBefore} 前 · 仍有 ${staleCount} 条卡住`;
 }
 
 function formatDuration(seconds: number | null) {
