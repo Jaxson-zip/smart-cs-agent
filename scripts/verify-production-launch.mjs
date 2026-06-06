@@ -14,6 +14,7 @@ const files = {
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
+  providerReadAuditVerifier: "scripts/verify-provider-read-audit.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -37,6 +38,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-adapters",
   "verify:provider-readonly",
   "verify:provider-read-contract",
+  "verify:provider-read-audit",
   "verify:channel-runbook",
 ]);
 
@@ -71,6 +73,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-adapters",
   "npm run verify:provider-readonly",
   "npm run verify:provider-read-contract",
+  "npm run verify:provider-read-audit",
   "npm run verify:channel-runbook",
 ]);
 
@@ -118,6 +121,7 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "POST /v2/provider-reads/execute",
   "providerDataReturned=false",
   "networkExecution=not_implemented",
+  "ProviderReadRun",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -160,6 +164,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-adapters",
   "verify:provider-readonly",
   "verify:provider-read-contract",
+  "verify:provider-read-audit",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
@@ -173,6 +178,9 @@ mustContainAll("provider readonly verifier source", content.providerReadonlyVeri
 ]);
 mustContainAll("provider read contract verifier source", content.providerReadContractVerifier, [
   "verify:provider-read-contract",
+]);
+mustContainAll("provider read audit verifier source", content.providerReadAuditVerifier, [
+  "verify:provider-read-audit",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

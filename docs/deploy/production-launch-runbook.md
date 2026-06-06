@@ -6,6 +6,8 @@ It does not prove that real refunds, address changes, coupons, logistics edits, 
 
 `POST /v2/provider-reads/execute` is also contract-only in this launch track: accepted readonly policy responses must keep `networkExecution=not_implemented` and `providerDataReturned=false`, so the route does not prove live provider order or logistics reads.
 
+Provider read attempts may persist sanitized `ProviderReadRun` rows for audit and idempotency only after the case is verified inside the authenticated tenant. Launch evidence may reference run counts and hashes, but must not include raw order IDs, logistics IDs, provider payloads, provider responses, customer data, operator API keys, or provider tokens.
+
 ## Launch Decision
 
 Use this runbook before every production launch or gray release that changes real-channel intake, queue handling, identity, readiness, metrics, alerting, or operator review behavior.
@@ -20,6 +22,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
 - `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
 - `npm run verify:provider-read-contract` passes when `POST /v2/provider-reads/execute`, provider read policy, or readonly response shape changes.
+- `npm run verify:provider-read-audit` passes when provider read persistence, idempotency, or audit behavior changes.
 - Alert routes for API down, database down, real-channel misconfiguration, queue degradation, stale processing, and oldest pending age are enabled.
 - Alert routes for `SmartCsAgentApiDown`, `SmartCsAgentDatabaseDown`, `SmartCsAgentRealChannelMisconfigured`, `SmartCsAgentRealChannelKillSwitchEnabled`, `SmartCsAgentChannelQueueDegraded`, `SmartCsAgentStaleProcessingClaims`, and `SmartCsAgentOldestPendingTooOld` are enabled and have owners.
 - The first launch allowlist is intentionally small and every allowlisted pair has a matching webhook secret.
@@ -43,6 +46,7 @@ npm run verify:production-alerting
 npm run verify:provider-adapters
 npm run verify:provider-readonly
 npm run verify:provider-read-contract
+npm run verify:provider-read-audit
 npm run verify:channel-runbook
 ```
 
@@ -145,3 +149,5 @@ This checks that the launch runbook stays connected to readiness, canary, alerti
 Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAPTERS`, provider readonly config parsing, or `readCapabilities` changes.
 
 Run `npm run verify:provider-read-contract` alongside it when `POST /v2/provider-reads/execute`, provider read policy, or readonly response fields change.
+
+Run `npm run verify:provider-read-audit` alongside it when `ProviderReadRun`, provider read idempotency, lookup hashing, or sanitized audit behavior changes.

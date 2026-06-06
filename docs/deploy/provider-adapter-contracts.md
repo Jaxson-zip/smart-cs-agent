@@ -2,6 +2,31 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR38 Provider Read Audit And Idempotency
+
+PR38 persists a sanitized `ProviderReadRun` record for each new `POST /v2/provider-reads/execute` attempt when database persistence is available.
+
+Each run is tenant-scoped and idempotent on `tenantId + idempotencyKey`. Reusing the same idempotency key for the same request returns the existing run response. Reusing the same key for a different provider read fails closed before any provider network work can start.
+
+Persisted provider reads also require the requested `caseId` to belong to the authenticated tenant (`AfterSalesCase.id + merchantId`). A mismatch fails closed before `ProviderReadRun` creation and writes only a global sanitized audit entry, not a case-scoped audit entry.
+
+The record stores safe operational evidence only:
+
+- `lookupHash`: SHA-256 hash of the lookup object.
+- `lookupKeys`: booleans such as whether an order or logistics identifier was present.
+- `requestHash`: SHA-256 hash of the tenant/channel/case/capability/lookup boundary.
+- status, network execution state, read capability, channel, operator, and case references.
+
+It does not store raw order IDs, raw logistics IDs, provider payloads, provider responses, customer data, HMAC material, operator API keys, provider tokens, or live provider data. Audit entries for provider reads use the same sanitized hashes and summaries, including idempotency conflict attempts.
+
+Run:
+
+```bash
+npm run verify:provider-read-audit
+```
+
+This verifier checks the Prisma model and migration, service persistence, sanitized audit behavior, idempotency tests, docs, public API surface, launch runbook, and task plan.
+
 ## PR37 Provider Read Execution Contract
 
 PR37 adds the API contract for future non-mutating provider reads:

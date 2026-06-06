@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR38 Provider Read Audit And Idempotency
+
+Provider readonly execution now leaves a sanitized audit trail:
+
+- `ProviderReadRun`: persists one run per new `POST /v2/provider-reads/execute` attempt.
+- `tenantId + idempotencyKey`: prevents duplicate run creation for retries and fails closed if the key is reused for a different provider read.
+- `lookupHash`, `lookupKeys`, and `requestHash`: provide operational traceability without storing raw order IDs, raw logistics IDs, provider payloads, customer data, or provider responses.
+- Case ownership: the API verifies `caseId + merchantId` before persisted provider reads, so an operator cannot attach provider-read records or case-scoped audit logs to another tenant's case.
+- `AuditLog`: records sanitized provider read status and idempotency conflicts without raw lookup values. Case ownership failures are audited without attaching the supplied case ID.
+- `npm run verify:provider-read-audit`: checks that the model, migration, service logic, tests, docs, and launch runbook preserve the audit/idempotency/no-raw-data boundary.
+
+This does not enable live provider reads or real provider network execution. `networkExecution=not_implemented` and `providerDataReturned=false` remain the current launch boundary.
+
 ## PR37 Provider Read Execution Contract
 
 Provider readonly execution now has a checked API contract:

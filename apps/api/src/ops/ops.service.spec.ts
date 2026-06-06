@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { createHash } from "node:crypto";
 import { afterEach, describe, it } from "node:test";
 import {
   CommerceActionSchema,
@@ -11,6 +12,8 @@ import {
 import type { ProviderAdapterContract } from "../adapters/adapters.interface";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 import { MockTaobaoAdapter } from "../adapters/mock-taobao.adapter";
+import type { AuditService } from "../audit/audit.service";
+import type { PrismaService } from "../prisma/prisma.service";
 import { OpsService } from "./ops.service";
 
 describe("OpsService provider adapter contract", () => {
@@ -165,7 +168,7 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(response.retryable, true);
   });
 
-  it("blocks provider reads unless real readonly credentials are configured", () => {
+  it("blocks provider reads unless real readonly credentials are configured", async () => {
     const service = new OpsService(new ProviderAdapterRegistry());
     const request: ProviderReadRequest = {
       caseId: "case_1",
@@ -177,7 +180,7 @@ describe("OpsService provider adapter contract", () => {
       operatorId: "operator_1",
     };
 
-    const response = service.executeProviderRead(request);
+    const response = await service.executeProviderRead(request);
 
     assert.strictEqual(response.status, "blocked");
     assert.strictEqual(response.networkExecution, "not_started");
@@ -187,7 +190,7 @@ describe("OpsService provider adapter contract", () => {
     assert.match(response.operatorVisibleResult, /readonly credentials/i);
   });
 
-  it("accepts readonly provider reads by policy without returning provider data", () => {
+  it("accepts readonly provider reads by policy without returning provider data", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
         channel: "taobao",
@@ -197,7 +200,7 @@ describe("OpsService provider adapter contract", () => {
     ]);
     const service = new OpsService(new ProviderAdapterRegistry());
 
-    const response = service.executeProviderRead({
+    const response = await service.executeProviderRead({
       caseId: "case_1",
       tenantId: "tenant_1",
       channel: "taobao",
@@ -215,7 +218,7 @@ describe("OpsService provider adapter contract", () => {
     assert.match(response.operatorVisibleResult, /not implemented/i);
   });
 
-  it("does not allow provider reads through another tenant's readonly projection", () => {
+  it("does not allow provider reads through another tenant's readonly projection", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
         channel: "taobao",
@@ -225,7 +228,7 @@ describe("OpsService provider adapter contract", () => {
     ]);
     const service = new OpsService(new ProviderAdapterRegistry());
 
-    const response = service.executeProviderRead({
+    const response = await service.executeProviderRead({
       caseId: "case_1",
       tenantId: "tenant_2",
       channel: "taobao",
@@ -241,7 +244,7 @@ describe("OpsService provider adapter contract", () => {
     assert.match(response.operatorVisibleResult, /readonly credentials/i);
   });
 
-  it("does not call provider adapters when a readonly read is policy accepted", () => {
+  it("does not call provider adapters when a readonly read is policy accepted", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
         channel: "taobao",
@@ -252,7 +255,7 @@ describe("OpsService provider adapter contract", () => {
     const adapter = new PoisonTaobaoAdapter();
     const service = new OpsService(new ProviderAdapterRegistry(adapter));
 
-    const response = service.executeProviderRead({
+    const response = await service.executeProviderRead({
       caseId: "case_1",
       tenantId: "tenant_1",
       channel: "taobao",
@@ -268,12 +271,12 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(adapter.readCallCount, 0);
   });
 
-  it("blocks unsupported readonly capabilities even when an adapter is read-only", () => {
+  it("blocks unsupported readonly capabilities even when an adapter is read-only", async () => {
     const service = new OpsService(
       new ProviderAdapterRegistry(readonlyTaobaoContract(["get_order"])),
     );
 
-    const response = service.executeProviderRead({
+    const response = await service.executeProviderRead({
       caseId: "case_1",
       tenantId: "tenant_1",
       channel: "taobao",
@@ -289,7 +292,7 @@ describe("OpsService provider adapter contract", () => {
     assert.match(response.operatorVisibleResult, /does not expose/i);
   });
 
-  it("keeps provider read responses exact and free of provider payload fields", () => {
+  it("keeps provider read responses exact and free of provider payload fields", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
         channel: "taobao",
@@ -299,7 +302,7 @@ describe("OpsService provider adapter contract", () => {
     ]);
     const service = new OpsService(new ProviderAdapterRegistry());
 
-    const response = service.executeProviderRead({
+    const response = await service.executeProviderRead({
       caseId: "case_1",
       tenantId: "tenant_1",
       channel: "taobao",
@@ -377,19 +380,460 @@ describe("OpsService provider adapter contract", () => {
       }),
     );
   });
+
+  it("persists provider read runs and sanitized audit records", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_10",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(persistence.runs.length, 1);
+    assert.strictEqual(persistence.runs[0].id, response.readRunId);
+    assert.strictEqual(persistence.runs[0].tenantId, "tenant_1");
+    assert.strictEqual(persistence.runs[0].operatorId, "operator_1");
+    assert.strictEqual(persistence.runs[0].caseId, "case_1");
+    assert.strictEqual(persistence.runs[0].channel, "taobao");
+    assert.strictEqual(persistence.runs[0].readCapability, "get_order");
+    assert.strictEqual(persistence.runs[0].status, "policy_accepted");
+    assert.strictEqual(persistence.runs[0].networkExecution, "not_implemented");
+    assert.strictEqual(persistence.runs[0].providerDataReturned, false);
+    assert.deepStrictEqual(persistence.runs[0].lookupKeys, {
+      hasOrderId: true,
+      hasLogisticsId: false,
+    });
+    assert.match(persistence.runs[0].lookupHash, /^[a-f0-9]{64}$/);
+    assert.match(persistence.runs[0].requestHash, /^[a-f0-9]{64}$/);
+    assert.strictEqual(JSON.stringify(persistence.runs[0]).includes("order_1"), false);
+
+    assert.strictEqual(persistence.auditEntries.length, 1);
+    assert.strictEqual(persistence.auditEntries[0].caseId, "case_1");
+    assert.strictEqual(persistence.auditEntries[0].action, "provider_read.policy_accepted");
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[0]).includes("order_1"),
+      false,
+    );
+  });
+
+  it("blocks persisted provider reads for cases outside the authenticated tenant", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence({
+      cases: [{ id: "case_1", merchantId: "tenant_2" }],
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_cross_tenant",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "blocked");
+    assert.strictEqual(response.networkExecution, "not_started");
+    assert.strictEqual(response.providerDataReturned, false);
+    assert.strictEqual(response.requiresHuman, true);
+    assert.match(response.operatorVisibleResult, /authenticated tenant/i);
+    assert.strictEqual(persistence.runs.length, 0);
+    assert.strictEqual(persistence.auditEntries.length, 1);
+    assert.strictEqual(persistence.auditEntries[0].caseId, null);
+    assert.strictEqual(persistence.auditEntries[0].action, "provider_read.blocked");
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[0]).includes("case_1"),
+      false,
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[0]).includes("order_1"),
+      false,
+    );
+  });
+
+  it("reuses the same provider read run for duplicate idempotency keys", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+    const request: ProviderReadRequest = {
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_11",
+      operatorId: "operator_1",
+    };
+
+    const first = await service.executeProviderRead(request);
+    const second = await service.executeProviderRead(request);
+
+    assert.strictEqual(first.readRunId, second.readRunId);
+    assert.strictEqual(first.status, "policy_accepted");
+    assert.strictEqual(second.status, "policy_accepted");
+    assert.strictEqual(persistence.runs.length, 1);
+    assert.strictEqual(persistence.auditEntries.length, 1);
+  });
+
+  it("fails closed when an idempotency key is reused for a different provider read", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_12",
+      operatorId: "operator_1",
+    });
+    const conflict = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_2" },
+      idempotencyKey: "read_12",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(conflict.status, "failed");
+    assert.strictEqual(conflict.networkExecution, "not_started");
+    assert.strictEqual(conflict.providerDataReturned, false);
+    assert.strictEqual(conflict.requiresHuman, true);
+    assert.match(conflict.operatorVisibleResult, /idempotency/i);
+    assert.strictEqual(persistence.runs.length, 1);
+    assert.strictEqual(persistence.auditEntries.length, 2);
+    assert.strictEqual(persistence.auditEntries[1].caseId, "case_1");
+    assert.strictEqual(persistence.auditEntries[1].action, "provider_read.failed");
+    assert.strictEqual(JSON.stringify(conflict).includes("order_2"), false);
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[1]).includes("order_2"),
+      false,
+    );
+  });
+
+  it("re-reads provider read runs after a duplicate idempotency race", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence({
+      failNextCreateWithDuplicate: true,
+      seedRunOnDuplicate: {
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        caseId: "case_1",
+        channel: "taobao",
+        readCapability: "get_order",
+        idempotencyKey: "read_13",
+        lookup: { orderId: "order_1" },
+        status: "policy_accepted",
+        networkExecution: "not_implemented",
+        operatorVisibleResult:
+          "Readonly provider read accepted by policy; provider network execution is not implemented in this build.",
+      },
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_13",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.readRunId, "provider_read_run_seeded");
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(response.providerDataReturned, false);
+    assert.strictEqual(persistence.runs.length, 1);
+  });
+
+  it("audits sanitized idempotency conflicts after a duplicate race", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence({
+      failNextCreateWithDuplicate: true,
+      seedRunOnDuplicate: {
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        caseId: "case_1",
+        channel: "taobao",
+        readCapability: "get_order",
+        idempotencyKey: "read_14",
+        lookup: { orderId: "order_1" },
+        status: "policy_accepted",
+        networkExecution: "not_implemented",
+        operatorVisibleResult:
+          "Readonly provider read accepted by policy; provider network execution is not implemented in this build.",
+      },
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_2" },
+      idempotencyKey: "read_14",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "failed");
+    assert.strictEqual(response.networkExecution, "not_started");
+    assert.strictEqual(response.providerDataReturned, false);
+    assert.strictEqual(persistence.runs.length, 1);
+    assert.strictEqual(persistence.auditEntries.length, 1);
+    assert.strictEqual(persistence.auditEntries[0].caseId, "case_1");
+    assert.strictEqual(persistence.auditEntries[0].action, "provider_read.failed");
+    assert.strictEqual(JSON.stringify(response).includes("order_2"), false);
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[0]).includes("order_2"),
+      false,
+    );
+  });
 });
+
+type ProviderReadRunRecord = {
+  id: string;
+  tenantId: string;
+  operatorId: string | null;
+  caseId: string;
+  channel: string;
+  readCapability: string;
+  idempotencyKey: string;
+  lookupHash: string;
+  lookupKeys: unknown;
+  requestHash: string;
+  status: string;
+  networkExecution: string;
+  providerDataReturned: boolean;
+  operatorVisibleResult: string;
+  policyReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type ProviderReadCaseRecord = {
+  id: string;
+  merchantId: string;
+};
+
+type SeedProviderReadRunInput = {
+  tenantId: string;
+  operatorId: string;
+  caseId: string;
+  channel: string;
+  readCapability: string;
+  idempotencyKey: string;
+  lookup: { orderId?: string; logisticsId?: string };
+  status: string;
+  networkExecution: string;
+  operatorVisibleResult: string;
+};
+
+function createProviderReadPersistence(
+  options: {
+    failNextCreateWithDuplicate?: boolean;
+    cases?: ProviderReadCaseRecord[];
+    seedRunOnDuplicate?: SeedProviderReadRunInput;
+  } = {},
+) {
+  const runs: ProviderReadRunRecord[] = [];
+  const cases = options.cases ?? [{ id: "case_1", merchantId: "tenant_1" }];
+  const auditEntries: Array<{
+    caseId: string | null;
+    action: string;
+    details: unknown;
+  }> = [];
+  let failNextCreateWithDuplicate = Boolean(options.failNextCreateWithDuplicate);
+
+  const seedRun = (input: SeedProviderReadRunInput) => {
+    const lookupHash = testSha256(stableTestJson(input.lookup));
+    runs.push({
+      id: "provider_read_run_seeded",
+      tenantId: input.tenantId,
+      operatorId: input.operatorId,
+      caseId: input.caseId,
+      channel: input.channel,
+      readCapability: input.readCapability,
+      idempotencyKey: input.idempotencyKey,
+      lookupHash,
+      lookupKeys: {
+        hasOrderId: Boolean(input.lookup.orderId),
+        hasLogisticsId: Boolean(input.lookup.logisticsId),
+      },
+      requestHash: testSha256(
+        stableTestJson({
+          caseId: input.caseId,
+          tenantId: input.tenantId,
+          channel: input.channel,
+          readCapability: input.readCapability,
+          lookupHash,
+        }),
+      ),
+      status: input.status,
+      networkExecution: input.networkExecution,
+      providerDataReturned: false,
+      operatorVisibleResult: input.operatorVisibleResult,
+      policyReason: null,
+      createdAt: new Date("2026-06-06T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+    });
+  };
+
+  const persistence = {
+    runs,
+    auditEntries,
+    prisma: {
+      afterSalesCase: {
+        findFirst: async ({
+          where,
+        }: {
+          where: { id: string; merchantId: string };
+        }) => {
+          const match = cases.find(
+            (item) =>
+              item.id === where.id && item.merchantId === where.merchantId,
+          );
+          return match ? { id: match.id } : null;
+        },
+      },
+      providerReadRun: {
+        findUnique: async ({
+          where,
+        }: {
+          where: {
+            tenantId_idempotencyKey: { tenantId: string; idempotencyKey: string };
+          };
+        }) =>
+          runs.find(
+            (item) =>
+              item.tenantId === where.tenantId_idempotencyKey.tenantId &&
+              item.idempotencyKey ===
+                where.tenantId_idempotencyKey.idempotencyKey,
+          ) ?? null,
+        create: async ({
+          data,
+        }: {
+          data: Omit<ProviderReadRunRecord, "id" | "createdAt" | "updatedAt">;
+        }) => {
+          if (failNextCreateWithDuplicate) {
+            failNextCreateWithDuplicate = false;
+            if (options.seedRunOnDuplicate) seedRun(options.seedRunOnDuplicate);
+            const error = new Error("Unique constraint failed");
+            Object.assign(error, { code: "P2002" });
+            throw error;
+          }
+          const existing = runs.find(
+            (item) =>
+              item.tenantId === data.tenantId &&
+              item.idempotencyKey === data.idempotencyKey,
+          );
+          if (existing) {
+            throw new Error("duplicate provider read run");
+          }
+          const row = {
+            id: `provider_read_run_${runs.length + 1}`,
+            ...data,
+            createdAt: new Date("2026-06-06T00:00:00.000Z"),
+            updatedAt: new Date("2026-06-06T00:00:00.000Z"),
+          };
+          runs.push(row);
+          return row;
+        },
+      },
+    } as unknown as PrismaService,
+    audit: {
+      log: async (caseId: string | null, action: string, details: unknown) => {
+        auditEntries.push({ caseId, action, details });
+      },
+    } as unknown as AuditService,
+    seedRun,
+  };
+  return persistence;
+}
 
 class PoisonTaobaoAdapter extends MockTaobaoAdapter {
   readCallCount = 0;
 
-  override async getOrder(_orderId: string): Promise<null> {
+  override async getOrder(): Promise<null> {
     this.readCallCount += 1;
     throw new Error("provider getOrder must not be called");
   }
 
-  override async queryLogistics(
-    _orderId: string,
-  ): Promise<{ status: string; detail: string } | null> {
+  override async queryLogistics(): Promise<{ status: string; detail: string } | null> {
     this.readCallCount += 1;
     throw new Error("provider queryLogistics must not be called");
   }
@@ -426,4 +870,24 @@ function readonlyTaobaoContract(
       throw new Error("provider sendMessage must not be called");
     },
   } as unknown as MockTaobaoAdapter;
+}
+
+function testSha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function stableTestJson(value: unknown): string {
+  return JSON.stringify(sortTestJson(value));
+}
+
+function sortTestJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortTestJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, sortTestJson(item)]),
+    );
+  }
+  return value;
 }

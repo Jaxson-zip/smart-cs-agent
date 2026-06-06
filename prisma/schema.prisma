@@ -128,6 +128,30 @@ model ChannelWebhookReceipt {
   @@index([receivedAt])
 }
 
+model ProviderReadRun {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  operatorId           String?
+  caseId               String
+  channel              String
+  readCapability       String
+  idempotencyKey       String
+  lookupHash           String
+  lookupKeys           Json
+  requestHash          String
+  status               String
+  networkExecution     String
+  providerDataReturned Boolean  @default(false)
+  operatorVisibleResult String
+  policyReason         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, channel, createdAt])
+  @@index([tenantId, caseId, createdAt])
+}
+
 model CaseMessage {
   id         String         @id @default(cuid())
   caseId     String

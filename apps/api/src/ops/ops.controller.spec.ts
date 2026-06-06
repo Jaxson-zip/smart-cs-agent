@@ -100,7 +100,7 @@ describe("OpsController", () => {
     assert.strictEqual(capturedTenantId, "demo_tenant");
   });
 
-  it("uses request operator context for provider read execution", () => {
+  it("uses request operator context for provider read execution", async () => {
     let capturedRequest: ProviderReadRequest | undefined;
     const controller = new OpsController({
       executeProviderRead: (request: ProviderReadRequest) => {
@@ -117,7 +117,7 @@ describe("OpsController", () => {
       },
     } as unknown as OpsService);
 
-    controller.executeProviderRead(
+    await controller.executeProviderRead(
       {
         "x-tenant-id": "demo_tenant",
         "x-operator-id": "operator_from_context",
@@ -164,7 +164,7 @@ describe("OpsController", () => {
     );
   });
 
-  it("blocks provider read body tenant spoofing through the real service", () => {
+  it("blocks provider read body tenant spoofing through the real service", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
         channel: "taobao",
@@ -176,7 +176,7 @@ describe("OpsController", () => {
       new OpsService(new ProviderAdapterRegistry()),
     );
 
-    const response = controller.executeProviderRead(
+    const response = await controller.executeProviderRead(
       {
         "x-tenant-id": "tenant_2",
         "x-operator-id": "operator_2",

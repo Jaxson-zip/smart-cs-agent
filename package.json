@@ -27,6 +27,7 @@
     "verify:provider-adapters": "node scripts/verify-provider-adapters.mjs",
     "verify:provider-readonly": "node scripts/verify-provider-readonly.mjs",
     "verify:provider-read-contract": "node scripts/verify-provider-read-contract.mjs",
+    "verify:provider-read-audit": "node scripts/verify-provider-read-audit.mjs",
     "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "operator:bootstrap-admin": "node scripts/bootstrap-operator-admin.mjs"
   },

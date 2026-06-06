@@ -2,28 +2,31 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR37 - Provider Read Execution Contract
+## Current Stage: PR38 - Provider Read Audit And Idempotency
 
 Status: verified
 
-Previous Stage: PR36 - Real Provider Readonly Foundation was verified.
+Previous Stage: PR37 - Provider Read Execution Contract was verified.
+
+Readonly Stage: PR36 - Real Provider Readonly Foundation was verified and must stay connected to provider readonly checks.
 
 Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified and must stay connected to provider adapter checks.
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR37 adds the checked API contract for future provider readonly execution. It allows the system to evaluate whether a tenant/channel is allowed to attempt `get_order` or `query_logistics`, but this stage still returns `networkExecution=not_implemented` and `providerDataReturned=false`.
+PR38 persists sanitized provider read run records and audit entries for future readonly provider calls. It adds idempotency for `POST /v2/provider-reads/execute` without storing raw order IDs, logistics IDs, provider payloads, customer data, or live provider responses.
 
-### PR37 Scope
+### PR38 Scope
 
-- Add shared provider read request/response schemas for `get_order` and `query_logistics`.
-- Add `POST /v2/provider-reads/execute` behind operator request context.
-- Keep tenant/operator identity derived from request context, not body-supplied fields.
-- Add provider read policy evaluation for `real_readonly` / `read_only` tenant-channel pairs.
-- Return `policy_accepted` only as a policy result; do not call provider networks or return provider payloads.
-- Add verifier coverage so provider read contract drift fails before launch.
+- Add a `ProviderReadRun` table with tenant-scoped idempotency on `tenantId + idempotencyKey`.
+- Persist provider read status, network execution state, safe lookup hash, lookup key summary, and request hash.
+- Reuse identical idempotency keys for identical requests and fail closed when the same key is reused for a different request.
+- Verify persisted provider reads against `caseId + authenticated tenant` before creating run records or case-scoped audit logs.
+- Write sanitized audit records for new provider read attempts and idempotency conflicts.
+- Keep raw order IDs, logistics IDs, provider payloads, customer data, and provider responses out of persisted records and audit details.
+- Add verifier coverage so provider read audit/idempotency drift fails before launch.
 
-### Out Of Scope For PR37
+### Out Of Scope For PR38
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
@@ -81,10 +84,11 @@ PR37 adds the checked API contract for future provider readonly execution. It al
 - [x] PR35 provider adapter contract package.
 - [x] PR36 real provider readonly foundation.
 - [x] PR37 provider read execution contract.
+- [x] PR38 provider read audit and idempotency.
 
 ## Verification Gate
 
-Do not claim PR37 provider read execution contract complete until these pass:
+Do not claim PR38 provider read audit and idempotency complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -97,9 +101,11 @@ Do not claim PR37 provider read execution contract complete until these pass:
 - `node --check scripts/verify-provider-adapters.mjs`
 - `node --check scripts/verify-provider-readonly.mjs`
 - `node --check scripts/verify-provider-read-contract.mjs`
+- `node --check scripts/verify-provider-read-audit.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
+- `npm.cmd run verify:provider-read-audit`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`
