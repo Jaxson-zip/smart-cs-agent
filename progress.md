@@ -187,3 +187,10 @@
 - Addressed independent review findings by rejecting the legacy insecure `x-tenant-id` header fallback for direct provider read operations visibility, requiring a real admin operator API key, and widening verifier leak sentinels for provider responses, raw lookup values, operator API key fields, and customer data.
 - Added `npm run verify:provider-read-operations` and connected PR39 into provider docs, production readiness, public API surface, launch runbook, and the task plan.
 - Final PR39 verification passed: provider read operations verifier, production launch verifier, API tests, Web tests, typecheck, lint, build, and `git diff --check`.
+- Started PR40 provider credential resolution boundary.
+- Added `ProviderCredentialResolverService` as the no-secret/no-network boundary for future readonly provider credentials, returning only `status=not_implemented`, `credentialRefFingerprint`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Extended `ProviderAdapterRegistry` with exact tenant/channel `credentialRef` lookup while keeping `GET /v2/integrations` free of full refs and secret manager paths.
+- Wired `OpsService.executeProviderRead` so credentials resolve only after case ownership, idempotency checks, readonly policy acceptance, and successful `ProviderReadRun` creation; blocked reads, case mismatches, idempotency replays/conflicts, and raced duplicate creates do not resolve credentials.
+- Added `npm run verify:provider-credential-boundary` and connected PR40 into provider docs, production readiness, public API surface, launch runbook, production launch verifier, and the task plan.
+- Addressed independent review P1 by moving resolver invocation after the unique-key run create succeeds and adding the raced-idempotency regression test.
+- Final PR40 verification passed: API tests, Web tests, db generate/migrate deploy, provider credential/read-only/read-contract/read-audit/read-operations/adapter verifiers, production launch verifier, typecheck, lint, build, and `git diff --check`; independent follow-up review reported no P0/P1/P2 findings.

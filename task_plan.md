@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR39 - Provider Read Operations Visibility
+## Current Stage: PR40 - Provider Credential Resolution Boundary
 
 Status: verified
 
-Previous Stage: PR38 - Provider Read Audit And Idempotency was verified.
+Previous Stage: PR39 - Provider Read Operations Visibility was verified.
+
+Provider Read Audit Stage: PR38 - Provider Read Audit And Idempotency was verified and must stay connected to provider read audit checks.
 
 Provider Read Contract Stage: PR37 - Provider Read Execution Contract was verified and must stay connected to provider read checks.
 
@@ -18,21 +20,23 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR39 adds admin-only operations visibility for provider read runs. It lets launch/support operators inspect recent sanitized provider read attempts and aggregate counts without exposing raw lookup values, full hashes, provider payloads, customer data, operator API keys, provider tokens, or live provider responses.
+PR40 adds a no-secret credential resolution boundary for future real provider readonly clients. It lets the backend pass configured `credentialRef` values to a resolver only after case ownership, idempotency, and readonly policy checks, while keeping real secret loading, provider network execution, and provider data return disabled.
 
-### PR39 Scope
+### PR40 Scope
 
-- Add admin-only API routes for provider read run listing and 24-hour summary.
-- Add Web BFF admin routes for the same data without exposing operator API keys to the browser.
-- Return fingerprints and aggregate counts only; do not expose full lookup hashes, request hashes, idempotency keys, raw lookup values, provider payloads, customer data, or provider responses.
-- Keep this out of the normal客服工作台; this is launch/support visibility only.
-- Add verifier coverage so provider read operations visibility drift fails before launch.
+- Add `ProviderCredentialResolverService` as the single provider credential resolution boundary.
+- Keep the default resolver no-secret and no-network: `status=not_implemented`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Add exact tenant/channel lookup for readonly `credentialRef` without exposing it in `GET /v2/integrations`, provider read responses, `ProviderReadRun`, Web BFF responses, or public APIs.
+- Audit only sanitized resolver metadata such as `credentialRefFingerprint`; never audit full refs, secret manager paths, tokens, or provider responses.
+- Add verifier coverage so provider credential boundary drift fails before launch.
 
-### Out Of Scope For PR39
+### Out Of Scope For PR40
 
 - Multi-channel production rollout.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
+- Real secret manager or vault reads.
+- Persisting or returning full `credentialRef` values.
 - Real payment/refund/coupon execution.
 - Full OIDC/SSO implementation, IAM, SCIM, persisted permission policies, and billing.
 - Production Taobao/Douyin irreversible actions.
@@ -88,10 +92,11 @@ PR39 adds admin-only operations visibility for provider read runs. It lets launc
 - [x] PR37 provider read execution contract.
 - [x] PR38 provider read audit and idempotency.
 - [x] PR39 provider read operations visibility.
+- [x] PR40 provider credential resolution boundary.
 
 ## Verification Gate
 
-Do not claim PR39 provider read operations visibility complete until these pass:
+Do not claim PR40 provider credential resolution boundary complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -106,11 +111,13 @@ Do not claim PR39 provider read operations visibility complete until these pass:
 - `node --check scripts/verify-provider-read-contract.mjs`
 - `node --check scripts/verify-provider-read-audit.mjs`
 - `node --check scripts/verify-provider-read-operations.mjs`
+- `node --check scripts/verify-provider-credential-boundary.mjs`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
 - `npm.cmd run verify:provider-read-audit`
 - `npm.cmd run verify:provider-read-operations`
+- `npm.cmd run verify:provider-credential-boundary`
 - `npm.cmd run verify:production-alerting`
 - `npm.cmd run verify:production-launch`
 - `npm.cmd run typecheck --workspaces --if-present -- --pretty false`

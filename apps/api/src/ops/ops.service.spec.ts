@@ -11,6 +11,7 @@ import {
 } from "@smart-cs-agent/shared";
 import type { ProviderAdapterContract } from "../adapters/adapters.interface";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
+import type { ProviderCredentialResolverService } from "../adapters/provider-credential-resolver.service";
 import { MockTaobaoAdapter } from "../adapters/mock-taobao.adapter";
 import type { AuditService } from "../audit/audit.service";
 import type { PrismaService } from "../prisma/prisma.service";
@@ -102,6 +103,42 @@ describe("OpsService provider adapter contract", () => {
     assert.ok(tenantTwoTaobao);
     assert.strictEqual(tenantTwoTaobao.adapterMode, "sandbox_mock");
     assert.strictEqual(tenantTwoTaobao.writePolicy, "sandbox_only");
+  });
+
+  it("keeps readonly credential refs scoped to exact tenant and channel", () => {
+    const credentialRef =
+      "secret://smartcs/taobao/tenant_1/credential_ref_must_not_leak";
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef,
+      },
+    ]);
+    const registry = new ProviderAdapterRegistry();
+
+    assert.strictEqual(
+      registry.getReadonlyCredentialRef("taobao", "tenant_1"),
+      credentialRef,
+    );
+    assert.strictEqual(
+      registry.getReadonlyCredentialRef("taobao", "tenant_2"),
+      undefined,
+    );
+    assert.strictEqual(
+      registry.getReadonlyCredentialRef("douyin", "tenant_1"),
+      undefined,
+    );
+    assert.strictEqual(
+      JSON.stringify(registry.listIntegrations("tenant_1")).includes(
+        "credential_ref_must_not_leak",
+      ),
+      false,
+    );
+    assert.strictEqual(
+      JSON.stringify(registry.listIntegrations("tenant_1")).includes("secret://"),
+      false,
+    );
   });
 
   it("blocks commerce write actions until a real provider write policy exists", () => {
@@ -434,6 +471,92 @@ describe("OpsService provider adapter contract", () => {
     );
   });
 
+  it("passes readonly credential references through a no-secret resolver without leaking them", async () => {
+    const credentialRef =
+      "secret://smartcs/taobao/tenant_1/credential_ref_must_not_leak";
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef,
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const credentialResolver = new RecordingCredentialResolver();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      credentialResolver as unknown as ProviderCredentialResolverService,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_credential_boundary",
+      operatorId: "operator_1",
+    });
+
+    assert.deepStrictEqual(credentialResolver.calls, [
+      {
+        tenantId: "tenant_1",
+        channel: "taobao",
+        credentialRef,
+      },
+    ]);
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(response.networkExecution, "not_implemented");
+    assert.strictEqual(response.providerDataReturned, false);
+    const serializedEvidence = JSON.stringify({
+      response,
+      runs: persistence.runs,
+      auditEntries: persistence.auditEntries,
+    });
+    assert.strictEqual(
+      serializedEvidence.includes("credential_ref_must_not_leak"),
+      false,
+    );
+    assert.strictEqual(serializedEvidence.includes("secret://"), false);
+    assert.strictEqual(serializedEvidence.includes("actual_provider_token"), false);
+    assert.strictEqual(
+      serializedEvidence.includes("credential_ref_fingerprint_123"),
+      true,
+    );
+  });
+
+  it("does not resolve credentials for blocked provider reads", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const resolver = new RecordingCredentialResolver();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      undefined,
+      undefined,
+      resolver as unknown as ProviderCredentialResolverService,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_2",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_blocked_no_resolve",
+      operatorId: "operator_2",
+    });
+
+    assert.strictEqual(response.status, "blocked");
+    assert.strictEqual(resolver.calls.length, 0);
+  });
+
   it("blocks persisted provider reads for cases outside the authenticated tenant", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
@@ -480,6 +603,39 @@ describe("OpsService provider adapter contract", () => {
     );
   });
 
+  it("does not resolve credentials before case tenant ownership is verified", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence({
+      cases: [{ id: "case_1", merchantId: "tenant_2" }],
+    });
+    const resolver = new RecordingCredentialResolver();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      resolver as unknown as ProviderCredentialResolverService,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_case_mismatch_no_resolve",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "blocked");
+    assert.strictEqual(resolver.calls.length, 0);
+  });
+
   it("reuses the same provider read run for duplicate idempotency keys", async () => {
     process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
       {
@@ -512,6 +668,102 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(second.status, "policy_accepted");
     assert.strictEqual(persistence.runs.length, 1);
     assert.strictEqual(persistence.auditEntries.length, 1);
+  });
+
+  it("does not resolve credentials again for idempotency replays or conflicts", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence();
+    const resolver = new RecordingCredentialResolver();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      resolver as unknown as ProviderCredentialResolverService,
+    );
+
+    await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_idempotency_no_second_resolve",
+      operatorId: "operator_1",
+    });
+    await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_idempotency_no_second_resolve",
+      operatorId: "operator_1",
+    });
+    const conflict = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_2" },
+      idempotencyKey: "read_idempotency_no_second_resolve",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(conflict.status, "failed");
+    assert.strictEqual(resolver.calls.length, 1);
+  });
+
+  it("does not resolve credentials before a raced idempotency create is confirmed", async () => {
+    process.env.PROVIDER_READONLY_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+    ]);
+    const persistence = createProviderReadPersistence({
+      failNextCreateWithDuplicate: true,
+      seedRunOnDuplicate: {
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        caseId: "case_1",
+        channel: "taobao",
+        readCapability: "get_order",
+        idempotencyKey: "read_raced_duplicate_no_resolve",
+        lookup: { orderId: "order_1" },
+        status: "policy_accepted",
+        networkExecution: "not_implemented",
+        operatorVisibleResult:
+          "Readonly provider read accepted by policy; provider network execution is not implemented in this build.",
+      },
+    });
+    const resolver = new RecordingCredentialResolver();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+      resolver as unknown as ProviderCredentialResolverService,
+    );
+
+    const response = await service.executeProviderRead({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      readCapability: "get_order",
+      lookup: { orderId: "order_1" },
+      idempotencyKey: "read_raced_duplicate_no_resolve",
+      operatorId: "operator_1",
+    });
+
+    assert.strictEqual(response.status, "policy_accepted");
+    assert.strictEqual(response.readRunId, "provider_read_run_seeded");
+    assert.strictEqual(resolver.calls.length, 0);
   });
 
   it("fails closed when an idempotency key is reused for a different provider read", async () => {
@@ -989,6 +1241,30 @@ class PoisonTaobaoAdapter extends MockTaobaoAdapter {
   override async queryLogistics(): Promise<{ status: string; detail: string } | null> {
     this.readCallCount += 1;
     throw new Error("provider queryLogistics must not be called");
+  }
+}
+
+class RecordingCredentialResolver {
+  calls: Array<{
+    tenantId: string;
+    channel: string;
+    credentialRef: string;
+  }> = [];
+
+  async resolve(input: {
+    tenantId: string;
+    channel: string;
+    credentialRef: string;
+  }) {
+    this.calls.push(input);
+    return {
+      status: "not_implemented",
+      source: "secret",
+      credentialRefFingerprint: "credential_ref_fingerprint_123",
+      credentialMaterialLoaded: false,
+      secretValueReturned: false,
+      reason: "test credential resolver does not return secret material",
+    };
   }
 }
 

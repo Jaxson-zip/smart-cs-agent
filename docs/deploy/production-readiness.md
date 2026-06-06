@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR40 Provider Credential Resolution Boundary
+
+Provider readonly credentials now have a checked no-secret resolution boundary:
+
+- `ProviderCredentialResolverService`: receives `{ tenantId, channel, credentialRef }` only after case ownership, idempotency, and readonly policy checks pass.
+- Current implementation returns `status=not_implemented`, `credentialRefFingerprint`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- It does not read a real secret manager, does not return credential material, does not call Taobao/Douyin/other provider APIs, and does not change `networkExecution=not_implemented` or `providerDataReturned=false`.
+- `npm run verify:provider-credential-boundary`: checks that resolver metadata, tests, docs, and launch guidance preserve the no-secret/no-provider-network boundary.
+
+This is still not a live provider connector. It is the safety seam that future real readonly clients must pass through before any provider-specific implementation is considered.
+
 ## PR39 Provider Read Operations Visibility
 
 Provider readonly attempts now have admin-only operations visibility:

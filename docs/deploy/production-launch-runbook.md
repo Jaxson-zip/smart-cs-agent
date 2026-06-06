@@ -10,6 +10,8 @@ Provider read attempts may persist sanitized `ProviderReadRun` rows for audit an
 
 Admin-only provider read operations routes may be used during launch support to inspect recent run status and aggregate counts. Direct `/v2/provider-reads/*` routes require an authenticated admin operator API key and reject the legacy insecure `x-tenant-id` header fallback. They must expose only fingerprints and counts, never raw lookup values, provider payloads, provider responses, operator API keys, provider tokens, or tenant secrets.
 
+Provider credential resolution is still a no-secret, no-network boundary in this launch track. `ProviderCredentialResolverService` may produce `credentialRefFingerprint`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`, but launch evidence must not include full credential references, secret manager paths, access tokens, client secrets, provider tokens, or provider responses.
+
 ## Launch Decision
 
 Use this runbook before every production launch or gray release that changes real-channel intake, queue handling, identity, readiness, metrics, alerting, or operator review behavior.
@@ -26,6 +28,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-read-contract` passes when `POST /v2/provider-reads/execute`, provider read policy, or readonly response shape changes.
 - `npm run verify:provider-read-audit` passes when provider read persistence, idempotency, or audit behavior changes.
 - `npm run verify:provider-read-operations` passes when provider read operations visibility, BFF mapping, or sanitized response behavior changes.
+- `npm run verify:provider-credential-boundary` passes when provider credential resolution, `credentialRef` handling, or future readonly connector setup changes.
 - Alert routes for API down, database down, real-channel misconfiguration, queue degradation, stale processing, and oldest pending age are enabled.
 - Alert routes for `SmartCsAgentApiDown`, `SmartCsAgentDatabaseDown`, `SmartCsAgentRealChannelMisconfigured`, `SmartCsAgentRealChannelKillSwitchEnabled`, `SmartCsAgentChannelQueueDegraded`, `SmartCsAgentStaleProcessingClaims`, and `SmartCsAgentOldestPendingTooOld` are enabled and have owners.
 - The first launch allowlist is intentionally small and every allowlisted pair has a matching webhook secret.
@@ -51,6 +54,7 @@ npm run verify:provider-readonly
 npm run verify:provider-read-contract
 npm run verify:provider-read-audit
 npm run verify:provider-read-operations
+npm run verify:provider-credential-boundary
 npm run verify:channel-runbook
 ```
 
@@ -157,3 +161,5 @@ Run `npm run verify:provider-read-contract` alongside it when `POST /v2/provider
 Run `npm run verify:provider-read-audit` alongside it when `ProviderReadRun`, provider read idempotency, lookup hashing, or sanitized audit behavior changes.
 
 Run `npm run verify:provider-read-operations` alongside it when provider read operations visibility, admin-only BFF routes, or sanitized run summaries change.
+
+Run `npm run verify:provider-credential-boundary` alongside it when provider credential resolution, credential reference handling, or future readonly connector setup changes.

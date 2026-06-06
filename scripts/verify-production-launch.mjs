@@ -16,6 +16,8 @@ const files = {
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
   providerReadAuditVerifier: "scripts/verify-provider-read-audit.mjs",
   providerReadOperationsVerifier: "scripts/verify-provider-read-operations.mjs",
+  providerCredentialBoundaryVerifier:
+    "scripts/verify-provider-credential-boundary.mjs",
   productionCanary: "scripts/verify-production-canary.mjs",
   productionReadinessVerifier: "scripts/verify-production-readiness.mjs",
   channelRunbookVerifier: "scripts/verify-channel-queue-runbook.mjs",
@@ -41,6 +43,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-read-contract",
   "verify:provider-read-audit",
   "verify:provider-read-operations",
+  "verify:provider-credential-boundary",
   "verify:channel-runbook",
 ]);
 
@@ -77,6 +80,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-read-contract",
   "npm run verify:provider-read-audit",
   "npm run verify:provider-read-operations",
+  "npm run verify:provider-credential-boundary",
   "npm run verify:channel-runbook",
 ]);
 
@@ -126,6 +130,8 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "networkExecution=not_implemented",
   "ProviderReadRun",
   "provider read operations",
+  "ProviderCredentialResolverService",
+  "secretValueReturned=false",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -170,6 +176,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-read-contract",
   "verify:provider-read-audit",
   "verify:provider-read-operations",
+  "verify:provider-credential-boundary",
   "verify:channel-runbook",
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
@@ -189,6 +196,9 @@ mustContainAll("provider read audit verifier source", content.providerReadAuditV
 ]);
 mustContainAll("provider read operations verifier source", content.providerReadOperationsVerifier, [
   "verify:provider-read-operations",
+]);
+mustContainAll("provider credential boundary verifier source", content.providerCredentialBoundaryVerifier, [
+  "verify:provider-credential-boundary",
 ]);
 mustContainAll("production canary source", content.productionCanary, [
   "/health/ready",

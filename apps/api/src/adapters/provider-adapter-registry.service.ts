@@ -7,7 +7,10 @@ import type {
   ProviderReadRequest,
   ProviderReadCapability,
 } from "@smart-cs-agent/shared";
-import { loadProviderReadonlyAdapterConfigs } from "../config/api-config";
+import {
+  loadProviderReadonlyAdapterConfigs,
+  type ProviderReadonlyAdapterConfig,
+} from "../config/api-config";
 import type { ProviderAdapterContract } from "./adapters.interface";
 import { MockDouyinAdapter } from "./mock-douyin.adapter";
 import { MockTaobaoAdapter } from "./mock-taobao.adapter";
@@ -38,16 +41,16 @@ const READ_CAPABILITIES: ProviderReadCapability[] = [
 @Injectable()
 export class ProviderAdapterRegistry {
   private readonly contracts: ProviderAdapterContract[];
+  private readonly readonlyConfigs: ProviderReadonlyAdapterConfig[];
   private readonly readonlyContractKeys: Set<string>;
 
   constructor(
     taobaoAdapter: MockTaobaoAdapter = new MockTaobaoAdapter(),
     douyinAdapter: MockDouyinAdapter = new MockDouyinAdapter(),
   ) {
+    this.readonlyConfigs = loadProviderReadonlyAdapterConfigs();
     this.readonlyContractKeys = new Set(
-      loadProviderReadonlyAdapterConfigs().map((item) =>
-        contractKey(item.tenantId, item.channel),
-      ),
+      this.readonlyConfigs.map((item) => contractKey(item.tenantId, item.channel)),
     );
     this.contracts = [
       taobaoAdapter,
@@ -147,6 +150,15 @@ export class ProviderAdapterRegistry {
     }
 
     return { allowed: true };
+  }
+
+  getReadonlyCredentialRef(
+    channel: CommerceChannel,
+    tenantId: string,
+  ): string | undefined {
+    return this.readonlyConfigs.find(
+      (item) => item.channel === channel && item.tenantId === tenantId,
+    )?.credentialRef;
   }
 
   private contractForTenant(

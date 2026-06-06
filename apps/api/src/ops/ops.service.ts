@@ -14,6 +14,10 @@ import {
   type ProviderReadResponse,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
+import {
+  ProviderCredentialResolverService,
+  type ProviderCredentialResolution,
+} from "../adapters/provider-credential-resolver.service";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -23,6 +27,8 @@ export class OpsService {
     private readonly providerAdapters: ProviderAdapterRegistry,
     @Optional() private readonly prisma?: PrismaService,
     @Optional() private readonly auditService?: AuditService,
+    @Optional()
+    private readonly credentialResolver?: ProviderCredentialResolverService,
   ) {}
 
   listIntegrations(tenantId: string): IntegrationStatus[] {
@@ -285,6 +291,10 @@ export class OpsService {
       );
       return conflictResponse;
     }
+    const credentialResolution =
+      response.status === "policy_accepted"
+        ? await this.resolveProviderReadCredential(request)
+        : undefined;
     await this.auditProviderRead(
       request.caseId,
       request,
@@ -292,6 +302,7 @@ export class OpsService {
       metadata,
       policyReason,
       created.id,
+      credentialResolution,
     );
     return ProviderReadResponseSchema.parse({
       ...response,
@@ -314,6 +325,24 @@ export class OpsService {
     return Boolean(caseItem);
   }
 
+  private async resolveProviderReadCredential(
+    request: ProviderReadRequest,
+  ): Promise<ProviderReadCredentialAuditMetadata | undefined> {
+    if (!request.tenantId || !this.credentialResolver) return undefined;
+    const credentialRef = this.providerAdapters.getReadonlyCredentialRef(
+      request.channel,
+      request.tenantId,
+    );
+    if (!credentialRef) return undefined;
+
+    const resolution = await this.credentialResolver.resolve({
+      tenantId: request.tenantId,
+      channel: request.channel,
+      credentialRef,
+    });
+    return toProviderReadCredentialAuditMetadata(resolution);
+  }
+
   private async auditProviderRead(
     caseId: string | null,
     request: ProviderReadRequest,
@@ -321,9 +350,11 @@ export class OpsService {
     metadata: ProviderReadMetadata,
     policyReason: string | null,
     providerReadRunId?: string,
+    credentialResolution?: ProviderReadCredentialAuditMetadata,
   ) {
     await this.auditService?.log(caseId, `provider_read.${response.status}`, {
       ...(providerReadRunId ? { providerReadRunId } : {}),
+      ...(credentialResolution ? { credentialResolution } : {}),
       tenantId: request.tenantId ?? null,
       operatorId: request.operatorId ?? null,
       channel: request.channel,
@@ -390,6 +421,14 @@ type ProviderReadMetadata = {
   lookupHash: string;
   lookupKeys: { hasOrderId: boolean; hasLogisticsId: boolean };
   requestHash: string;
+};
+
+type ProviderReadCredentialAuditMetadata = {
+  credentialResolutionStatus: ProviderCredentialResolution["status"];
+  credentialSource: ProviderCredentialResolution["source"];
+  credentialRefFingerprint: string;
+  credentialMaterialLoaded: false;
+  secretValueReturned: false;
 };
 
 type ProviderReadRunRecord = {
@@ -482,6 +521,18 @@ function sortJson(value: unknown): unknown {
 function isUniqueConstraintError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   return "code" in error && (error as { code?: unknown }).code === "P2002";
+}
+
+function toProviderReadCredentialAuditMetadata(
+  resolution: ProviderCredentialResolution,
+): ProviderReadCredentialAuditMetadata {
+  return {
+    credentialResolutionStatus: resolution.status,
+    credentialSource: resolution.source,
+    credentialRefFingerprint: resolution.credentialRefFingerprint,
+    credentialMaterialLoaded: false,
+    secretValueReturned: false,
+  };
 }
 
 function toSanitizedProviderReadRun(run: ProviderReadRunRecord) {

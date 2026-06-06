@@ -2,6 +2,23 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR40 Provider Credential Resolution Boundary
+
+PR40 adds a no-secret credential resolution boundary for future real readonly provider clients:
+
+- `ProviderCredentialResolverService`: accepts `{ tenantId, channel, credentialRef }` only after provider read policy is accepted.
+- Current resolver status is `not_implemented`; it does not call a secret manager, does not load credential material, and does not call provider APIs.
+- Safe audit metadata may include `credentialRefFingerprint`, `credentialResolutionStatus`, `credentialMaterialLoaded=false`, and `secretValueReturned=false`.
+- Responses, `ProviderReadRun` records, public API responses, and Web BFF responses must not include full `credentialRef`, secret manager paths, access tokens, client secrets, provider payloads, provider responses, customer data, or raw lookup values.
+
+Run:
+
+```bash
+npm run verify:provider-credential-boundary
+```
+
+This verifier checks the resolver boundary, exact tenant/channel credential lookup, no-secret metadata, no network/provider calls, docs, launch runbook, and task plan.
+
 ## PR39 Provider Read Operations Visibility
 
 PR39 adds admin-only visibility for provider read audit records:
