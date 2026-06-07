@@ -53,5 +53,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-release-provenance-artifacts
-          path: production-release-provenance-artifacts
+          path: production-release-provenance-artifacts/release-provenance.json
           if-no-files-found: error

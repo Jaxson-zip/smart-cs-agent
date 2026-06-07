@@ -1,10 +1,14 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const failures = [];
 const MAX_EVIDENCE_BYTES = 256 * 1024;
+const EVIDENCE_ARTIFACT_DIR = resolve(
+  repoRoot,
+  "production-release-provenance-artifacts",
+);
 let args;
 let content;
 
@@ -178,6 +182,7 @@ function verifyStaticArtifacts() {
     "production release provenance verifier accepts sanitized pass evidence from safe env mode",
     "production release provenance verifier rejects mutable or unsigned evidence when pass is required",
     "production release provenance verifier rejects sensitive evidence without echoing values",
+    "production release provenance verifier rejects evidence paths outside the artifact directory",
     "production release provenance verifier redacts unknown argument values",
     "assertNoSecretMarkers",
   ]);
@@ -571,9 +576,15 @@ function readSafeEvidencePath(value) {
   if (
     hasValue(value) &&
     !/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) &&
-    !/[^/\s\\]+:[^/\s\\]+@/.test(value)
+    !/[^/\s\\]+:[^/\s\\]+@/.test(value) &&
+    !/^\\\\/.test(value)
   ) {
-    return resolve(value);
+    const resolved = resolve(repoRoot, value);
+    if (isPathInside(EVIDENCE_ARTIFACT_DIR, resolved)) {
+      return resolved;
+    }
+    failures.push("--evidence must be inside production-release-provenance-artifacts");
+    return undefined;
   }
   failures.push("--evidence must be a safe local path");
   return undefined;
@@ -586,6 +597,14 @@ function readBoolean(value, label) {
   if (["0", "false", "no"].includes(normalized)) return false;
   failures.push(`${label} must be true or false`);
   return false;
+}
+
+function isPathInside(parent, child) {
+  const relativePath = relative(parent, child);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
 }
 
 function redactArgument(value) {

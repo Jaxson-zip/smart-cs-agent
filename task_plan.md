@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR51 - Production Release Provenance And Promotion Boundary
+## Current Stage: PR52 - Production Release Evidence Archive
 
 Status: verified
 
-Previous Stage: PR50 - Production Image Security Evidence Gate was verified.
+Previous Stage: PR51 - Production Release Provenance And Promotion Boundary was verified.
+
+Release Provenance Stage: PR51 - Production Release Provenance And Promotion Boundary was verified with `production-release-provenance.yml.example` and must stay connected to production launch and release evidence checks.
 
 Image Security Stage: PR50 - Production Image Security Evidence Gate was verified with `production-image-security.yml.example` and must stay connected to production launch and release provenance checks.
 
@@ -42,22 +44,22 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR51 adds a production release provenance and promotion boundary. It gives release owners a static release-provenance verifier, a safe env-mode verifier for sanitized provenance bundles, and a GitHub Actions example that checks image digest, signing/provenance/SBOM-attestation facts, prior image gates, and promotion approval without publishing images or reading secrets.
+PR52 adds a production release evidence archive. It gives release owners a static release-evidence verifier, a safe env-mode verifier for sanitized post-deploy release evidence bundles, and a GitHub Actions example that binds release provenance, launch manifest, production readiness, production canary, rollback ownership, operator coverage, and safety facts without calling production services or reading secrets.
 
-### PR51 Scope
+### PR52 Scope
 
-- Add `npm run verify:production-release-provenance` for static release-provenance and promotion-boundary checks.
-- Add `npm run verify:production-release-provenance:safe` to verify sanitized `smart-cs-agent.release-provenance.v1` evidence from `SMARTCS_RELEASE_PROVENANCE_FILE`.
-- Add `docs/deploy/production-release-provenance.md`.
-- Add `docs/deploy/production-release-provenance.yml.example` as a build-smoke-scan-provenance GitHub Actions template.
-- Connect release provenance checks into production readiness, deployment artifact docs, image security docs, launch runbook, and `verify:production-launch`.
-- Keep the release provenance gate evidence-only: no registry login, no image push, no GitHub secrets, no registry credentials, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in release provenance commands or CI examples.
+- Add `npm run verify:production-release-evidence` for static post-deploy evidence archive checks.
+- Add `npm run verify:production-release-evidence:safe` to verify sanitized `smart-cs-agent.production-release-evidence.v1` evidence from `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE`.
+- Add `docs/deploy/production-release-evidence.md`.
+- Add `docs/deploy/production-release-evidence.yml.example` as a release-evidence GitHub Actions template.
+- Connect release evidence checks into production readiness, release provenance docs, launch runbook, and `verify:production-launch`.
+- Keep the release evidence gate archive-only: no API calls, no database calls, no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in release evidence commands or CI examples.
 
-### Out Of Scope For PR51
+### Out Of Scope For PR52
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
-- Performing real image signing, SBOM attestation upload, provenance signing, registry publish, vulnerability waiver approval, or deployment promotion.
+- Performing real image signing, SBOM attestation upload, provenance signing, registry publish, vulnerability waiver approval, deployment promotion, or production traffic changes.
 - Choosing a final cloud vendor, Kubernetes chart, Terraform stack, or managed secret store.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
@@ -134,10 +136,11 @@ PR51 adds a production release provenance and promotion boundary. It gives relea
 - [x] PR49 production container runtime smoke gate.
 - [x] PR50 production image security evidence gate.
 - [x] PR51 production release provenance and promotion boundary.
+- [x] PR52 production release evidence archive.
 
 ## Verification Gate
 
-Do not claim PR51 production release provenance and promotion boundary complete until these pass:
+Do not claim PR52 production release evidence archive complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -180,6 +183,9 @@ Do not claim PR51 production release provenance and promotion boundary complete 
 - `node --check scripts/verify-production-release-provenance.mjs`
 - `node --test scripts/verify-production-release-provenance.test.mjs`
 - `npm.cmd run verify:production-release-provenance`
+- `node --check scripts/verify-production-release-evidence.mjs`
+- `node --test scripts/verify-production-release-evidence.test.mjs`
+- `npm.cmd run verify:production-release-evidence`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

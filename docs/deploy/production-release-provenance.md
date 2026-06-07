@@ -13,12 +13,12 @@ npm run verify:production-release-provenance
 Run the safe evidence gate after CI has produced a sanitized release provenance bundle:
 
 ```bash
-SMARTCS_RELEASE_PROVENANCE_FILE=<release-provenance-json> \
+SMARTCS_RELEASE_PROVENANCE_FILE=production-release-provenance-artifacts/release-provenance.json \
 SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true \
 npm run verify:production-release-provenance:safe
 ```
 
-The evidence file must use schema `smart-cs-agent.release-provenance.v1`. The verifier checks image digests, signed provenance facts, SBOM attestation facts, prior image gates, and promotion approval without printing file paths, image digests, registry credentials, or scanner output.
+The evidence file must use schema `smart-cs-agent.release-provenance.v1` and must live under `production-release-provenance-artifacts/`. The verifier checks image digests, signed provenance facts, SBOM attestation facts, prior image gates, and promotion approval without printing file paths, image digests, registry credentials, or scanner output.
 
 ## Required Evidence Shape
 
@@ -47,7 +47,7 @@ The verifier rejects unsupported fields such as `tenantId`, `webhookSecret`, `pr
 
 ## Workflow Placement
 
-`docs/deploy/production-release-provenance.yml.example` assumes the release system has already exported a sanitized provenance bundle to `production-release-provenance-artifacts/release-provenance.json`. The verifier consumes that file only after the image build, container smoke, and image security gates have run.
+`docs/deploy/production-release-provenance.yml.example` assumes the release system has already exported a sanitized provenance bundle to `production-release-provenance-artifacts/release-provenance.json`. The verifier consumes that file only after the image build, container smoke, and image security gates have run. The upload step uses an explicit file allowlist, not a whole-directory artifact upload.
 
 Run this gate after:
 
@@ -72,7 +72,10 @@ Run:
 
 ```bash
 npm run verify:production-release-provenance
+npm run verify:production-release-evidence
 npm run verify:production-launch
 ```
 
 Use `npm run verify:production-release-provenance:safe` in release CI or a launch terminal after the sanitized provenance file has been injected through `SMARTCS_RELEASE_PROVENANCE_FILE` and `SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true`.
+
+After production readiness, canary, launch manifest, and rollback owner evidence have been exported, run `npm run verify:production-release-evidence:safe`. See `docs/deploy/production-release-evidence.md` and `docs/deploy/production-release-evidence.yml.example`.

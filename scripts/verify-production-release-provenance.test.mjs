@@ -1,12 +1,13 @@
 import assert from "node:assert";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const artifactRoot = join(process.cwd(), "production-release-provenance-artifacts");
 
 test("production release provenance verifier passes static checks without evidence", async () => {
   const result = await execVerifier([]);
@@ -90,6 +91,24 @@ test("production release provenance verifier rejects sensitive evidence without 
   );
 });
 
+test("production release provenance verifier rejects evidence paths outside the artifact directory", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "smartcs-release-provenance-outside-"));
+  const evidenceFile = join(dir, "release-provenance.json");
+  await writeFile(evidenceFile, JSON.stringify(validEvidence(), null, 2), "utf8");
+
+  try {
+    const failed = await execVerifierFailure([
+      `--evidence=${evidenceFile}`,
+      "--require-pass",
+    ]);
+
+    assert.match(failed.stderr, /--evidence must be inside production-release-provenance-artifacts/);
+    assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("production release provenance verifier redacts unknown argument values", async () => {
   const failed = await execVerifierFailure([
     "--unknown=actual_provider_token_must_not_leak",
@@ -103,7 +122,8 @@ test("production release provenance verifier redacts unknown argument values", a
 });
 
 async function withEvidenceFixture(callback, overrides = {}) {
-  const dir = await mkdtemp(join(tmpdir(), "smartcs-release-provenance-"));
+  await mkdir(artifactRoot, { recursive: true });
+  const dir = await mkdtemp(join(artifactRoot, "fixture-"));
   const evidenceFile = join(dir, "release-provenance.json");
 
   try {

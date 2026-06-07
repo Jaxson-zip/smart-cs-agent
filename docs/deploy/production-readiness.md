@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR52 Production Release Evidence Archive
+
+Production release evidence is now checked by:
+
+```bash
+npm run verify:production-release-evidence
+npm run verify:production-release-evidence:safe
+```
+
+The default command validates the release evidence archive gate, docs, workflow example, and launch references. The safe command reads a sanitized `smart-cs-agent.production-release-evidence.v1` archive from `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE` and can require passing provenance, launch manifest, readiness, canary, alerting, rollback owner, operator coverage, and safety facts through `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS=true`. Use `docs/deploy/production-release-evidence.yml.example` after release provenance, launch manifest, readiness, and canary evidence have been exported. This gate still does not call the API, connect to a database, publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR51 Production Release Provenance And Promotion Boundary
 
 Production release provenance is now checked by:

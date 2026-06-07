@@ -1,0 +1,51 @@
+name: smart-cs-agent production release evidence
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-evidence:
+    name: Verify production release evidence archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify release provenance boundary
+        env:
+          SMARTCS_RELEASE_PROVENANCE_FILE: production-release-provenance-artifacts/release-provenance.json
+          SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS: "true"
+        run: npm run verify:production-release-provenance:safe
+
+      - name: Verify production release evidence static boundary
+        run: npm run verify:production-release-evidence
+
+      - name: Import sanitized production release evidence
+        env:
+          SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE: production-release-evidence-artifacts/production-release-evidence.json
+        run: test -f "$SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE"
+
+      - name: Verify sanitized production release evidence
+        env:
+          SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE: production-release-evidence-artifacts/production-release-evidence.json
+          SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS: "true"
+        run: npm run verify:production-release-evidence:safe
+
+      - name: Upload production release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-release-evidence-artifacts
+          path: production-release-evidence-artifacts/production-release-evidence.json
+          if-no-files-found: error
