@@ -5,6 +5,7 @@ import {
   loadProviderCredentialRefs,
   providerWriteExecutionKillSwitchEnabled,
   providerWriteLiveExecutorEnabled,
+  providerWriteLiveExecutorStatus,
   providerWritePayloadEscrowMode,
   loadProviderWriteReviewAdapterConfigs,
   loadWebOrigin,
@@ -34,6 +35,22 @@ describe("loadApiConfig", () => {
       providerWriteDryRunRehearsalSha256: "",
       providerWriteApprovalSha256: "",
       providerWritePayloadEscrowMode: "disabled",
+      providerWriteLiveExecutorStatus: {
+        liveExecutorEnabled: false,
+        startupMode: "disabled",
+        startupGuardSatisfied: false,
+        dryRunRehearsalEvidenceConfigured: false,
+        providerWriteApprovalEvidenceConfigured: false,
+        executionKillSwitchEnabled: true,
+        payloadEscrowMode: "disabled",
+        reviewAdapterCount: 0,
+        credentialRefCount: 0,
+        missingStartupGates: [],
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+      },
       providerReadTimeoutMs: 5000,
       providerReadMaxRetries: 0,
     });
@@ -282,6 +299,19 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.providerWritePayloadEscrowMode, "sealed_metadata");
     assert.strictEqual(config.providerWriteDryRunRehearsalSha256, "a".repeat(64));
     assert.strictEqual(config.providerWriteApprovalSha256, "b".repeat(64));
+    assert.strictEqual(
+      config.providerWriteLiveExecutorStatus.startupMode,
+      "guarded_ready",
+    );
+    assert.strictEqual(
+      config.providerWriteLiveExecutorStatus.dryRunRehearsalEvidenceConfigured,
+      true,
+    );
+    assert.strictEqual(
+      config.providerWriteLiveExecutorStatus.providerWriteApprovalEvidenceConfigured,
+      true,
+    );
+    assert.strictEqual(config.providerWriteLiveExecutorStatus.credentialRefCount, 1);
     assert.deepStrictEqual(config.providerWriteReviewAdapters, [
       {
         channel: "taobao",
@@ -289,6 +319,65 @@ describe("loadApiConfig", () => {
         allowedActions: ["issue_coupon"],
       },
     ]);
+  });
+
+  it("reports provider write live executor control-plane status without leaking evidence or credential refs", () => {
+    const disabled = providerWriteLiveExecutorStatus({});
+
+    assert.strictEqual(disabled.liveExecutorEnabled, false);
+    assert.strictEqual(disabled.startupMode, "disabled");
+    assert.strictEqual(disabled.startupGuardSatisfied, false);
+    assert.deepStrictEqual(disabled.missingStartupGates, []);
+    assert.strictEqual(disabled.networkExecution, "not_started");
+    assert.strictEqual(disabled.providerMutationExecuted, false);
+    assert.strictEqual(disabled.customerVisibleMessageSent, false);
+    assert.strictEqual(disabled.payloadEscrowOpened, false);
+
+    const blocked = providerWriteLiveExecutorStatus({
+      PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "true",
+    });
+    assert.strictEqual(blocked.startupMode, "blocked");
+    assert.deepStrictEqual(blocked.missingStartupGates, [
+      "dry_run_rehearsal_evidence",
+      "provider_write_approval_evidence",
+      "payload_escrow_sealed_metadata",
+      "provider_write_review_allowlist",
+      "provider_credentials_ref",
+    ]);
+
+    const guarded = providerWriteLiveExecutorStatus({
+      PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "true",
+      PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+      PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+      PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+      PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+      PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+          allowedActions: ["issue_coupon"],
+        },
+      ]),
+      PROVIDER_CREDENTIALS: JSON.stringify([
+        { credentialRef: "secret://smartcs/taobao/tenant_1" },
+      ]),
+    });
+
+    assert.strictEqual(guarded.startupMode, "guarded_ready");
+    assert.strictEqual(guarded.startupGuardSatisfied, true);
+    assert.strictEqual(guarded.dryRunRehearsalEvidenceConfigured, true);
+    assert.strictEqual(guarded.providerWriteApprovalEvidenceConfigured, true);
+    assert.strictEqual(guarded.executionKillSwitchEnabled, true);
+    assert.strictEqual(guarded.payloadEscrowMode, "sealed_metadata");
+    assert.strictEqual(guarded.reviewAdapterCount, 1);
+    assert.strictEqual(guarded.credentialRefCount, 1);
+    assert.deepStrictEqual(guarded.missingStartupGates, []);
+
+    const serialized = JSON.stringify(guarded);
+    assert.strictEqual(serialized.includes("aaaaaaaa"), false);
+    assert.strictEqual(serialized.includes("bbbbbbbb"), false);
+    assert.strictEqual(serialized.includes("secret://"), false);
+    assert.strictEqual(serialized.includes("tenant_1"), false);
   });
 
   it("lets explicit environment values override local .env defaults", () => {

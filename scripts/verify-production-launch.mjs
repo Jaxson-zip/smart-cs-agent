@@ -60,6 +60,8 @@ const files = {
     "scripts/verify-provider-write-dry-run-rehearsal.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
+  providerWriteLiveExecutorControlPlaneVerifier:
+    "scripts/verify-provider-write-live-executor-control-plane.mjs",
   providerWriteRequestsVerifier:
     "scripts/verify-provider-write-requests.mjs",
   providerWriteApprovalStateVerifier:
@@ -131,6 +133,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-dry-run-rehearsal",
   "verify:provider-write-dry-run-rehearsal:safe",
   "verify:provider-write-live-executor-startup-guard",
+  "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
@@ -201,6 +204,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-dry-run-rehearsal:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
+  "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
@@ -394,6 +398,15 @@ mustContainAll("Provider write live executor startup guard", content.launchRunbo
   "does not execute provider writes",
 ]);
 
+mustContainAll("Provider write live executor control plane", content.launchRunbook, [
+  "Provider write live executor control plane",
+  "GET /v2/provider-writes/live-executor/status",
+  "GET /api/operator/provider-writes/live-executor/status",
+  "npm run verify:provider-write-live-executor-control-plane",
+  "does not expose evidence hashes",
+  "does not expose credential refs",
+]);
+
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
   "Do not put operator API keys",
   "webhook secrets",
@@ -525,6 +538,12 @@ mustContainAll("production readiness references provider write live executor sta
   "PR64 Provider Write Live Executor Startup Guard",
   "npm run verify:provider-write-live-executor-startup-guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
+]);
+
+mustContainAll("production readiness references provider write live executor control plane", content.productionReadiness, [
+  "PR65 Provider Write Live Executor Control Plane",
+  "npm run verify:provider-write-live-executor-control-plane",
+  "ProviderWriteLiveExecutorStatusSchema",
 ]);
 
 mustContainAll("channel runbook references launch", content.channelRunbook, [
@@ -712,6 +731,12 @@ mustContainAll("provider write live executor startup guard verifier source", con
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
   "execution boundary no live provider writes",
+]);
+mustContainAll("provider write live executor control-plane verifier source", content.providerWriteLiveExecutorControlPlaneVerifier, [
+  "verify:provider-write-live-executor-control-plane",
+  "ProviderWriteLiveExecutorStatusSchema",
+  "GET /v2/provider-writes/live-executor/status",
+  "control-plane execution boundary no live provider writes",
 ]);
 mustContainAll("provider write requests verifier source", content.providerWriteRequestsVerifier, [
   "verify:provider-write-requests",
@@ -1025,6 +1050,12 @@ mustContainAll("provider write live executor startup guard docs reference", cont
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
   "npm run verify:provider-write-live-executor-startup-guard",
 ]);
+mustContainAll("provider write live executor control-plane docs reference", content.providerWriteRequests, [
+  "PR65 Provider Write Live Executor Control Plane",
+  "GET /v2/provider-writes/live-executor/status",
+  "GET /api/operator/provider-writes/live-executor/status",
+  "npm run verify:provider-write-live-executor-control-plane",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
@@ -1032,15 +1063,18 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/requests/:id/reject",
   "POST /v2/provider-writes/requests/:id/execution-attempts",
   "GET /v2/provider-writes/execution-attempts",
+  "GET /v2/provider-writes/live-executor/status",
   "POST /api/operator/provider-writes/requests",
   "GET /api/operator/provider-writes/requests",
   "POST /api/operator/provider-writes/requests/:id/approve",
   "POST /api/operator/provider-writes/requests/:id/reject",
   "POST /api/operator/provider-writes/requests/:id/execution-attempts",
   "GET /api/operator/provider-writes/execution-attempts",
+  "GET /api/operator/provider-writes/live-executor/status",
   "ProviderWriteRequest",
   "ProviderWriteExecutionAttempt",
   "ProviderWriteExecutionAttemptListItem",
+  "ProviderWriteLiveExecutorStatusSchema",
   "idempotencyKeyHash",
   "payloadEscrowOpened=false",
   "providerMutationExecuted=false",
@@ -1063,6 +1097,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-payload-escrow-boundary",
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-live-executor-startup-guard",
+  "npm run verify:provider-write-live-executor-control-plane",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

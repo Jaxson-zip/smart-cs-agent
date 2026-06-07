@@ -9,6 +9,7 @@ import {
   ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptRequestSchema,
   ProviderWriteExecutionAttemptResponseSchema,
+  ProviderWriteLiveExecutorStatusSchema,
   ProviderWriteRequestSchema,
   ProviderWriteRejectionRequestSchema,
   ProviderWriteResponseSchema,
@@ -24,6 +25,8 @@ import { ProviderCredentialStoreService } from "../adapters/provider-credential-
 import { ProviderReadonlyClientHarnessService } from "../adapters/provider-readonly-client-harness.service";
 import { MockTaobaoAdapter } from "../adapters/mock-taobao.adapter";
 import type { AuditService } from "../audit/audit.service";
+import { loadApiConfig } from "../config/api-config";
+import { ApiConfigService } from "../config/api-config.service";
 import type { PrismaService } from "../prisma/prisma.service";
 import { OpsService } from "./ops.service";
 
@@ -35,6 +38,13 @@ describe("OpsService provider adapter contract", () => {
     process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
   const originalProviderWritePayloadEscrowMode =
     process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE;
+  const originalProviderWriteLiveExecutorEnabled =
+    process.env.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED;
+  const originalProviderWriteDryRunRehearsalSha256 =
+    process.env.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256;
+  const originalProviderWriteApprovalSha256 =
+    process.env.PROVIDER_WRITE_APPROVAL_SHA256;
+  const originalProviderCredentials = process.env.PROVIDER_CREDENTIALS;
 
   afterEach(() => {
     if (originalProviderReadonlyAdapters === undefined) {
@@ -59,6 +69,29 @@ describe("OpsService provider adapter contract", () => {
     } else {
       process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE =
         originalProviderWritePayloadEscrowMode;
+    }
+    if (originalProviderWriteLiveExecutorEnabled === undefined) {
+      delete process.env.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED;
+    } else {
+      process.env.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED =
+        originalProviderWriteLiveExecutorEnabled;
+    }
+    if (originalProviderWriteDryRunRehearsalSha256 === undefined) {
+      delete process.env.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256;
+    } else {
+      process.env.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256 =
+        originalProviderWriteDryRunRehearsalSha256;
+    }
+    if (originalProviderWriteApprovalSha256 === undefined) {
+      delete process.env.PROVIDER_WRITE_APPROVAL_SHA256;
+    } else {
+      process.env.PROVIDER_WRITE_APPROVAL_SHA256 =
+        originalProviderWriteApprovalSha256;
+    }
+    if (originalProviderCredentials === undefined) {
+      delete process.env.PROVIDER_CREDENTIALS;
+    } else {
+      process.env.PROVIDER_CREDENTIALS = originalProviderCredentials;
     }
   });
 
@@ -536,6 +569,132 @@ describe("OpsService provider adapter contract", () => {
         operatorApiKey: "secret_key",
       }),
     );
+    assert.throws(() =>
+      ProviderWriteLiveExecutorStatusSchema.parse({
+        liveExecutorEnabled: true,
+        startupMode: "guarded_ready",
+        startupGuardSatisfied: true,
+        dryRunRehearsalEvidenceConfigured: true,
+        providerWriteApprovalEvidenceConfigured: true,
+        executionKillSwitchEnabled: true,
+        payloadEscrowMode: "sealed_metadata",
+        reviewAdapterCount: 1,
+        credentialRefCount: 1,
+        missingStartupGates: [],
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        evidenceHash: "a".repeat(64),
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      }),
+    );
+  });
+
+  it("reports live executor control-plane status without provider writes or secret material", () => {
+    const apiConfigService = new ApiConfigService(
+      loadApiConfig(
+        {
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+          PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "true",
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+          PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+          PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+          PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+          PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+            {
+              channel: "taobao",
+              tenantId: "tenant_1",
+              allowedActions: ["issue_coupon"],
+            },
+          ]),
+          PROVIDER_CREDENTIALS: JSON.stringify([
+            { credentialRef: "secret://smartcs/taobao/tenant_1" },
+          ]),
+        },
+        { includeDotEnv: false },
+      ),
+    );
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      apiConfigService,
+    );
+
+    const status = service.getProviderWriteLiveExecutorStatus();
+
+    assert.strictEqual(status.liveExecutorEnabled, true);
+    assert.strictEqual(status.startupMode, "guarded_ready");
+    assert.strictEqual(status.startupGuardSatisfied, true);
+    assert.strictEqual(status.networkExecution, "not_started");
+    assert.strictEqual(status.providerMutationExecuted, false);
+    assert.strictEqual(status.customerVisibleMessageSent, false);
+    assert.strictEqual(status.payloadEscrowOpened, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    const serialized = JSON.stringify(status);
+    assert.strictEqual(serialized.includes("secret://"), false);
+    assert.strictEqual(serialized.includes("tenant_1"), false);
+    assert.strictEqual(serialized.includes("aaaaaaaa"), false);
+    assert.strictEqual(serialized.includes("bbbbbbbb"), false);
+  });
+
+  it("reports live executor control-plane status from the startup snapshot instead of the current env", () => {
+    const apiConfigService = new ApiConfigService(
+      loadApiConfig(
+        {
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+          PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "false",
+        },
+        { includeDotEnv: false },
+      ),
+    );
+    process.env.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED = "true";
+    process.env.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256 = "a".repeat(64);
+    process.env.PROVIDER_WRITE_APPROVAL_SHA256 = "b".repeat(64);
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "true";
+    process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE = "sealed_metadata";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    process.env.PROVIDER_CREDENTIALS = JSON.stringify([
+      { credentialRef: "secret://smartcs/taobao/tenant_1" },
+    ]);
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      apiConfigService,
+    );
+
+    const status = service.getProviderWriteLiveExecutorStatus();
+
+    assert.strictEqual(status.liveExecutorEnabled, false);
+    assert.strictEqual(status.startupMode, "disabled");
+    assert.strictEqual(status.startupGuardSatisfied, false);
+    assert.deepStrictEqual(status.missingStartupGates, []);
+    assert.strictEqual(status.reviewAdapterCount, 0);
+    assert.strictEqual(status.credentialRefCount, 0);
+    assert.strictEqual(status.networkExecution, "not_started");
+    assert.strictEqual(status.providerMutationExecuted, false);
+    assert.strictEqual(status.customerVisibleMessageSent, false);
+    assert.strictEqual(status.payloadEscrowOpened, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    const serialized = JSON.stringify(status);
+    assert.strictEqual(serialized.includes("secret://"), false);
+    assert.strictEqual(serialized.includes("tenant_1"), false);
+    assert.strictEqual(serialized.includes("aaaaaaaa"), false);
+    assert.strictEqual(serialized.includes("bbbbbbbb"), false);
   });
 
   it("reuses provider write requests for duplicate idempotency keys", async () => {

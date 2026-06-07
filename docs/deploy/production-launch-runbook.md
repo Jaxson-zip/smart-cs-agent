@@ -24,6 +24,8 @@ Provider write dry-run rehearsal evidence is still no-network in this launch tra
 
 Provider write live executor startup guard is still closed in this launch track. `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` must remain `false` unless a future launch explicitly enables a live executor after dry-run evidence, provider write approval evidence, sealed metadata readiness, review allowlists, credential refs, and kill-switch ownership are all present. The startup guard does not call provider APIs, does not execute provider writes, does not read credential material, does not open or decrypt payload escrow, does not store raw provider/customer payloads, and does not send customer-visible replies.
 
+Provider write live executor control plane is read-only in this launch track. Admins may inspect `ProviderWriteLiveExecutorStatusSchema` through `GET /v2/provider-writes/live-executor/status` or `GET /api/operator/provider-writes/live-executor/status`, but the status surface does not execute provider writes, does not expose evidence hashes, does not expose credential refs, and does not expose provider payloads, provider responses, raw order IDs, logistics IDs, addresses, idempotency keys, operator API keys, provider tokens, webhook secrets, tenant secrets, or customer messages.
+
 Provider write execution attempt visibility is support-only in this launch track. Admins may inspect sanitized `ProviderWriteExecutionAttemptListItem` rows through `GET /v2/provider-writes/execution-attempts` or `GET /api/operator/provider-writes/execution-attempts`, but these routes must remain read-only and must not expose raw hashes, raw order IDs, logistics IDs, addresses, provider payloads, provider responses, customer messages, operator API keys, provider tokens, webhook secrets, or tenant secrets. Provider write execution attempt visibility does not prove that any real provider write has run.
 
 ## Launch Decision
@@ -41,6 +43,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-write-payload-escrow-boundary` passes when `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE`, request-only escrow metadata, payload escrow fingerprints, execution-attempt escrow blocking, or escrow docs change.
 - `npm run verify:provider-write-dry-run-rehearsal:safe` passes before any real provider write pilot approval is accepted, with sanitized dry-run evidence bound by `dryRunRehearsalSha256`.
 - `npm run verify:provider-write-live-executor-startup-guard` passes when `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`, live executor evidence hashes, sealed metadata startup gating, review allowlists, credential ref requirements, or live executor docs change.
+- `npm run verify:provider-write-live-executor-control-plane` passes when `ProviderWriteLiveExecutorStatusSchema`, API/BFF live executor status routes, admin-only status visibility, or live executor control-plane docs change.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
 - `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.

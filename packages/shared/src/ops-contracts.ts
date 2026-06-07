@@ -320,6 +320,34 @@ export const ProviderWriteExecutionAttemptListItemSchema = z
   })
   .strict();
 
+export const ProviderWriteLiveExecutorMissingGateSchema = z.enum([
+  "dry_run_rehearsal_evidence",
+  "provider_write_approval_evidence",
+  "execution_kill_switch",
+  "payload_escrow_sealed_metadata",
+  "provider_write_review_allowlist",
+  "provider_credentials_ref",
+]);
+
+export const ProviderWriteLiveExecutorStatusSchema = z
+  .object({
+    liveExecutorEnabled: z.boolean(),
+    startupMode: z.enum(["disabled", "blocked", "guarded_ready"]),
+    startupGuardSatisfied: z.boolean(),
+    dryRunRehearsalEvidenceConfigured: z.boolean(),
+    providerWriteApprovalEvidenceConfigured: z.boolean(),
+    executionKillSwitchEnabled: z.boolean(),
+    payloadEscrowMode: z.enum(["disabled", "sealed_metadata"]),
+    reviewAdapterCount: z.number().int().min(0),
+    credentialRefCount: z.number().int().min(0),
+    missingStartupGates: z.array(ProviderWriteLiveExecutorMissingGateSchema),
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+    payloadEscrowOpened: z.literal(false),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -408,6 +436,12 @@ export type ProviderWriteExecutionAttemptResponse = z.infer<
 >;
 export type ProviderWriteExecutionAttemptListItem = z.infer<
   typeof ProviderWriteExecutionAttemptListItemSchema
+>;
+export type ProviderWriteLiveExecutorMissingGate = z.infer<
+  typeof ProviderWriteLiveExecutorMissingGateSchema
+>;
+export type ProviderWriteLiveExecutorStatus = z.infer<
+  typeof ProviderWriteLiveExecutorStatusSchema
 >;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema

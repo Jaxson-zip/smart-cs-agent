@@ -125,8 +125,8 @@ test("provider write execution attempt verifier rejects credential access in hel
     await writeFile(
       opsServicePath,
       opsService.replace(
-        "payloadEscrowOpened: false,",
-        "payloadEscrowOpened: false,\n        decrypt();",
+        "kind: \"provider_write_execution_attempt\",\n        providerWriteRequestId",
+        "decrypt();\n        kind: \"provider_write_execution_attempt\",\n        providerWriteRequestId",
       ),
       "utf8",
     );

@@ -2,11 +2,32 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR64 - Provider Write Live Executor Startup Guard
+## Current Stage: PR65 - Provider Write Live Executor Control Plane
 
-Status: verified locally
+Status: verified locally; local commit pending. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR63 - Provider Write Dry-Run Rehearsal Evidence Gate was verified locally and committed as `0983f94`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR64 - Provider Write Live Executor Startup Guard was verified locally and committed as `3ff08c0`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR65 adds a read-only control-plane status surface for any future live provider write executor. Admins may inspect safe booleans, counts, missing startup gate names, and no-network invariants through API and Web BFF routes. PR65 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose evidence hashes, expose credential refs, store raw provider/customer payloads, or send customer-visible replies.
+
+### PR65 Scope
+
+- Add `ProviderWriteLiveExecutorStatusSchema` and missing-gate enum to shared contracts.
+- Add a sanitized provider write live executor startup status snapshot and expose it at runtime through `ApiConfigService` without re-reading evidence hashes, credential refs, tenant IDs, order IDs, provider payloads, or raw values on the control-plane request path.
+- Add admin-only `GET /v2/provider-writes/live-executor/status`.
+- Add admin-only `GET /api/operator/provider-writes/live-executor/status` with strict Web BFF response parsing.
+- Add `npm run verify:provider-write-live-executor-control-plane` and connect it to static CI, production launch, provider write docs, production readiness, public API surface, task tracking, and progress notes.
+- Keep PR65 read-only/no-network: no provider API calls, no provider writes, no provider credentials, no payload escrow opening, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR65
+
+- Live Taobao/Douyin provider write clients.
+- Runtime toggling of `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Runtime toggling of the execution kill switch.
+- Reading credential material from a vault or secret manager.
+- Opening, decrypting, or releasing payload escrow.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR64 adds a production startup guard for any future live provider write executor. `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` defaults to `false`; if production sets it to `true`, startup requires dry-run rehearsal and provider write approval evidence hashes, sealed metadata readiness, a review allowlist, credential ref records, and the execution kill switch still enabled. PR64 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, store raw provider/customer payloads, or send customer-visible replies.
 
@@ -250,10 +271,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR62 - Provider Write Payload Escrow Boundary.
 - [x] PR63 - Provider Write Dry-Run Rehearsal Evidence Gate.
 - [x] PR64 - Provider Write Live Executor Startup Guard.
+- [x] PR65 - Provider Write Live Executor Control Plane.
 
 ## Verification Gate
 
-PR64 provider write live executor startup guard is tracked against this gate inventory:
+PR65 provider write live executor control plane is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -336,6 +358,9 @@ PR64 provider write live executor startup guard is tracked against this gate inv
 - `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
 - `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-startup-guard`
+- `node --check scripts/verify-provider-write-live-executor-control-plane.mjs`
+- `node --test scripts/verify-provider-write-live-executor-control-plane.test.mjs`
+- `npm.cmd run verify:provider-write-live-executor-control-plane`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -402,6 +427,18 @@ PR64 provider write live executor startup guard is tracked against this gate inv
 - `git diff --check` passed with CRLF warnings only.
 - Read-only security review and read-only launch/static CI review found no P0/P1/P2/P3 findings.
 - PR64 remains config-only/no-network: `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` defaults to `false`; production startup fails closed without dry-run and approval evidence hashes, sealed metadata readiness, review allowlists, credential refs, and the execution kill switch still enabled. No provider API calls, provider writes, credential material reads, payload escrow opening/decrypting, raw provider/customer payload storage, or customer-visible replies have been enabled.
+
+### PR65 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 204 tests when rerun alone from the repository cwd. An earlier broad parallel run hit the known Codex sandbox cwd / `experimentalDecorators` false failure and is not counted as a pass.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 77 tests.
+- `node --check scripts/verify-provider-write-live-executor-control-plane.mjs`, `node --test scripts/verify-provider-write-live-executor-control-plane.test.mjs`, `npm.cmd run verify:provider-write-live-executor-control-plane`, `npm.cmd run verify:provider-write-live-executor-startup-guard`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 127 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only launch/static CI review found no P0/P1/P2 findings; its P3 checklist consistency finding was fixed by adding `node --check scripts/verify-provider-write-live-executor-control-plane.mjs` to the PR65 gate inventory.
+- Read-only security review found no P0; its P1 runtime env-read finding was fixed by serving live executor status from an `ApiConfigService` startup snapshot instead of re-reading evidence hashes or credential refs on the control-plane request path.
+- PR65 remains read-only/no-network: no provider API calls, no provider writes, no provider credential material reads, no payload escrow opening/decrypting, no raw provider/customer payload storage, and no customer-visible replies have been enabled.
 
 ### PR60 Final Verification Notes
 

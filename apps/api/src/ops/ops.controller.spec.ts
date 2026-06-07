@@ -414,6 +414,97 @@ describe("OpsController", () => {
     );
   });
 
+  it("lets admin operators read provider write live executor status", () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    let serviceCalled = false;
+    const controller = new OpsController({
+      getProviderWriteLiveExecutorStatus: () => {
+        serviceCalled = true;
+        return {
+          liveExecutorEnabled: false,
+          startupMode: "disabled",
+          startupGuardSatisfied: false,
+          dryRunRehearsalEvidenceConfigured: false,
+          providerWriteApprovalEvidenceConfigured: false,
+          executionKillSwitchEnabled: true,
+          payloadEscrowMode: "disabled",
+          reviewAdapterCount: 0,
+          credentialRefCount: 0,
+          missingStartupGates: [],
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadEscrowOpened: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    const response = controller.getProviderWriteLiveExecutorStatus({
+      authorization: "Bearer admin_key_123",
+    });
+
+    assert.strictEqual(serviceCalled, true);
+    assert.strictEqual(response.networkExecution, "not_started");
+    assert.strictEqual("credentialRef" in response, false);
+  });
+
+  it("rejects non-admin provider write live executor status visibility", () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      getProviderWriteLiveExecutorStatus: () => {
+        throw new Error("must not read live executor status");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.getProviderWriteLiveExecutorStatus({
+          authorization: "Bearer operator_key_123",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
+  it("rejects insecure header fallback for provider write live executor status visibility", () => {
+    delete process.env.OPERATOR_API_KEYS;
+    const controller = new OpsController({
+      getProviderWriteLiveExecutorStatus: () => {
+        throw new Error("must not read live executor status from insecure headers");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.getProviderWriteLiveExecutorStatus({
+          "x-tenant-id": "tenant_1",
+          "x-operator-id": "operator_1",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+  });
+
   it("uses request operator context for provider write requests", async () => {
     process.env.OPERATOR_API_KEYS = JSON.stringify([
       {

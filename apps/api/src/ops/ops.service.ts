@@ -20,6 +20,7 @@ import {
   type ProviderWriteExecutionAttemptListItem,
   type ProviderWriteExecutionAttemptResponse,
   type ProviderWriteExecutionAttemptStatus,
+  type ProviderWriteLiveExecutorStatus,
   type ProviderWriteRequest,
   type ProviderWriteRejectionRequest,
   type ProviderWriteResponse,
@@ -39,7 +40,25 @@ import {
   providerWriteExecutionKillSwitchEnabled,
   providerWritePayloadEscrowMode,
 } from "../config/api-config";
+import { ApiConfigService } from "../config/api-config.service";
 import { PrismaService } from "../prisma/prisma.service";
+
+const DISABLED_PROVIDER_WRITE_LIVE_EXECUTOR_STATUS: ProviderWriteLiveExecutorStatus = {
+  liveExecutorEnabled: false,
+  startupMode: "disabled",
+  startupGuardSatisfied: false,
+  dryRunRehearsalEvidenceConfigured: false,
+  providerWriteApprovalEvidenceConfigured: false,
+  executionKillSwitchEnabled: true,
+  payloadEscrowMode: "disabled",
+  reviewAdapterCount: 0,
+  credentialRefCount: 0,
+  missingStartupGates: [],
+  networkExecution: "not_started",
+  providerMutationExecuted: false,
+  customerVisibleMessageSent: false,
+  payloadEscrowOpened: false,
+};
 
 @Injectable()
 export class OpsService {
@@ -51,10 +70,19 @@ export class OpsService {
     private readonly credentialResolver?: ProviderCredentialResolverService,
     @Optional()
     private readonly providerReadHarness?: ProviderReadonlyClientHarnessService,
+    @Optional()
+    private readonly apiConfig?: ApiConfigService,
   ) {}
 
   listIntegrations(tenantId: string): IntegrationStatus[] {
     return this.providerAdapters.listIntegrations(tenantId);
+  }
+
+  getProviderWriteLiveExecutorStatus(): ProviderWriteLiveExecutorStatus {
+    return (
+      this.apiConfig?.getProviderWriteLiveExecutorStatus() ??
+      DISABLED_PROVIDER_WRITE_LIVE_EXECUTOR_STATUS
+    );
   }
 
   async listProviderReadRuns(input: ListProviderReadRunsInput) {

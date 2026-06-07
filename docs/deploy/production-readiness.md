@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR65 Provider Write Live Executor Control Plane
+
+Provider write live executor control-plane visibility is now checked by:
+
+```bash
+npm run verify:provider-write-live-executor-control-plane
+```
+
+`ProviderWriteLiveExecutorStatusSchema` is the only allowed response shape for live executor status. Admin operators may see safe booleans, counts, missing gate names, and no-network invariants through `GET /v2/provider-writes/live-executor/status` and `GET /api/operator/provider-writes/live-executor/status`, but the response must not expose evidence hashes, credential refs, provider payloads, provider responses, raw order/logistics/address data, idempotency keys, operator API keys, tokens, webhook secrets, tenant secrets, or customer messages. This control plane is read-only, is served from the sanitized startup config snapshot instead of re-reading hash/ref env values during requests, and still does not call provider APIs, execute provider writes, open or decrypt payload escrow, or send customer-visible replies.
+
 ## PR64 Provider Write Live Executor Startup Guard
 
 Provider write live executor startup safety is now checked by:

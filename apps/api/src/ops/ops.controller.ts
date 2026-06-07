@@ -157,6 +157,13 @@ export class OpsController {
     });
   }
 
+  @Get("provider-writes/live-executor/status")
+  getProviderWriteLiveExecutorStatus(@Headers() headers: RequestHeaders) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    return this.opsService.getProviderWriteLiveExecutorStatus();
+  }
+
   @Post("channel-events")
   ingestMessage(
     @Headers() headers: RequestHeaders,

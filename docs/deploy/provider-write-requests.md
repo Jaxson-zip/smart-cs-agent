@@ -2,6 +2,25 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR65 Provider Write Live Executor Control Plane
+
+PR65 adds read-only status visibility for the future live provider write executor. It still does not call provider APIs, does not execute provider writes, does not read credential material, does not open payload escrow, and does not send customer-visible replies. Runtime status responses are served from the sanitized startup config snapshot rather than re-reading evidence hash or credential-ref environment values on each request.
+
+New read routes:
+
+- `GET /v2/provider-writes/live-executor/status`: admin-only API route that returns `ProviderWriteLiveExecutorStatusSchema`.
+- `GET /api/operator/provider-writes/live-executor/status`: Web BFF admin route that uses the HttpOnly admin session and keeps operator API keys server-side.
+
+The response may show only safe control-plane facts: whether the live executor flag is enabled, whether startup gates are satisfied, safe missing gate names, evidence-present booleans, review allowlist count, credential ref count, payload escrow mode, kill-switch state, and no-network invariants. It does not expose evidence hashes, credential refs, provider payloads, provider responses, tenant IDs, order IDs, logistics IDs, addresses, idempotency keys, operator API keys, tokens, webhook secrets, or customer messages.
+
+Run:
+
+```bash
+npm run verify:provider-write-live-executor-control-plane
+```
+
+This verifier checks the shared status contract, config status helper, admin-only API route, Web BFF route, docs, static CI wiring, and production launch references. It keeps the control plane read-only and checks that it does not execute provider writes, decrypt/open payload escrow, expose evidence hashes, expose credential refs, or send customer-visible replies.
+
 ## PR64 Provider Write Live Executor Startup Guard
 
 PR64 adds a production startup guard for any future live provider write executor. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.

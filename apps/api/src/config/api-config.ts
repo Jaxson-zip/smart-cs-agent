@@ -5,6 +5,9 @@ import {
   type CommerceChannel,
   ProviderWriteActionSchema,
   type ProviderWriteAction,
+  ProviderWriteLiveExecutorStatusSchema,
+  type ProviderWriteLiveExecutorMissingGate,
+  type ProviderWriteLiveExecutorStatus,
 } from "@smart-cs-agent/shared";
 import { z } from "zod";
 
@@ -232,6 +235,7 @@ export type ApiConfig = {
   providerWriteDryRunRehearsalSha256: string;
   providerWriteApprovalSha256: string;
   providerWritePayloadEscrowMode: ProviderWritePayloadEscrowMode;
+  providerWriteLiveExecutorStatus: ProviderWriteLiveExecutorStatus;
   providerReadTimeoutMs: number;
   providerReadMaxRetries: number;
 };
@@ -290,6 +294,8 @@ export function loadApiConfig(
     throw new Error(`Invalid API configuration: ${details}`);
   }
 
+  const providerWriteLiveExecutorStatusSnapshot =
+    providerWriteLiveExecutorStatus(mergedEnv);
   const productionGateIssues = [
     ...productionRealChannelIntakeIssues(mergedEnv),
     ...productionProviderWriteLiveExecutorIssues(parsed.data, mergedEnv),
@@ -325,6 +331,7 @@ export function loadApiConfig(
       parsed.data.PROVIDER_WRITE_APPROVAL_SHA256,
     providerWritePayloadEscrowMode:
       parsed.data.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE,
+    providerWriteLiveExecutorStatus: providerWriteLiveExecutorStatusSnapshot,
     providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
     providerReadMaxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
@@ -350,6 +357,73 @@ export function providerWriteLiveExecutorEnabled(
 
   if (!parsed.success) return false;
   return parsed.data.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED;
+}
+
+export function providerWriteLiveExecutorStatus(
+  env: Record<string, string | undefined>,
+): ProviderWriteLiveExecutorStatus {
+  const liveExecutorEnabled =
+    env.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED === "true";
+  const dryRunRehearsalEvidenceConfigured = evidenceHashConfigured(
+    env.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256,
+  );
+  const providerWriteApprovalEvidenceConfigured = evidenceHashConfigured(
+    env.PROVIDER_WRITE_APPROVAL_SHA256,
+  );
+  const executionKillSwitchEnabled =
+    env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH === undefined
+      ? true
+      : env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH === "true";
+  const payloadEscrowMode = providerWritePayloadEscrowMode(env);
+  const reviewAdapterCount = safeProviderWriteReviewAdapterCount(env);
+  const credentialRefCount = safeProviderCredentialRefCount(env);
+  const missingStartupGates: ProviderWriteLiveExecutorMissingGate[] = [];
+
+  if (liveExecutorEnabled) {
+    if (!dryRunRehearsalEvidenceConfigured) {
+      missingStartupGates.push("dry_run_rehearsal_evidence");
+    }
+    if (!providerWriteApprovalEvidenceConfigured) {
+      missingStartupGates.push("provider_write_approval_evidence");
+    }
+    if (!executionKillSwitchEnabled) {
+      missingStartupGates.push("execution_kill_switch");
+    }
+    if (payloadEscrowMode !== "sealed_metadata") {
+      missingStartupGates.push("payload_escrow_sealed_metadata");
+    }
+    if (reviewAdapterCount === 0) {
+      missingStartupGates.push("provider_write_review_allowlist");
+    }
+    if (credentialRefCount === 0) {
+      missingStartupGates.push("provider_credentials_ref");
+    }
+  }
+
+  const startupGuardSatisfied =
+    liveExecutorEnabled && missingStartupGates.length === 0;
+  const startupMode = !liveExecutorEnabled
+    ? "disabled"
+    : startupGuardSatisfied
+      ? "guarded_ready"
+      : "blocked";
+
+  return ProviderWriteLiveExecutorStatusSchema.parse({
+    liveExecutorEnabled,
+    startupMode,
+    startupGuardSatisfied,
+    dryRunRehearsalEvidenceConfigured,
+    providerWriteApprovalEvidenceConfigured,
+    executionKillSwitchEnabled,
+    payloadEscrowMode,
+    reviewAdapterCount,
+    credentialRefCount,
+    missingStartupGates,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    payloadEscrowOpened: false,
+  });
 }
 
 export function providerWritePayloadEscrowMode(
@@ -490,6 +564,29 @@ function invalidProviderCredentialRefs(): ProviderCredentialRefLoadResult {
     message:
       "PROVIDER_CREDENTIALS must be a unique JSON array of credentialRef records without inline secrets",
   };
+}
+
+function evidenceHashConfigured(value: string | undefined): boolean {
+  return (
+    typeof value === "string" &&
+    /^[a-f0-9]{64}$/.test(value) &&
+    !/^0+$/.test(value)
+  );
+}
+
+function safeProviderWriteReviewAdapterCount(
+  env: NodeJS.ProcessEnv,
+): number {
+  try {
+    return loadProviderWriteReviewAdapterConfigs(env).length;
+  } catch {
+    return 0;
+  }
+}
+
+function safeProviderCredentialRefCount(env: NodeJS.ProcessEnv): number {
+  const result = loadProviderCredentialRefs(env);
+  return result.status === "configured" ? result.records.length : 0;
 }
 
 function productionRealChannelIntakeIssues(

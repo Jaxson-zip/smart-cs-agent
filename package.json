@@ -57,6 +57,7 @@
     "verify:provider-write-dry-run-rehearsal": "node scripts/verify-provider-write-dry-run-rehearsal.mjs",
     "verify:provider-write-dry-run-rehearsal:safe": "node scripts/verify-provider-write-dry-run-rehearsal.mjs --from-env --require-pass",
     "verify:provider-write-live-executor-startup-guard": "node scripts/verify-provider-write-live-executor-startup-guard.mjs",
+    "verify:provider-write-live-executor-control-plane": "node scripts/verify-provider-write-live-executor-control-plane.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

@@ -16,6 +16,7 @@ import { GET as getOperatorMe } from "./me/route";
 import { GET as listProviderReadRuns } from "./provider-reads/runs/route";
 import { GET as getProviderReadSummary } from "./provider-reads/summary/route";
 import { GET as listProviderWriteExecutionAttempts } from "./provider-writes/execution-attempts/route";
+import { GET as getProviderWriteLiveExecutorStatus } from "./provider-writes/live-executor/status/route";
 import {
   GET as listProviderWriteRequests,
   POST as requestProviderWrite,
@@ -1843,6 +1844,124 @@ describe("operator BFF routes", () => {
     assert.strictEqual(unsafe.status, 502);
     assert.deepStrictEqual(await unsafe.json(), {
       error: "Provider write execution attempt response is invalid",
+    });
+  });
+
+  it("lets admin sessions read provider write live executor status through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json({
+        liveExecutorEnabled: false,
+        startupMode: "disabled",
+        startupGuardSatisfied: false,
+        dryRunRehearsalEvidenceConfigured: false,
+        providerWriteApprovalEvidenceConfigured: false,
+        executionKillSwitchEnabled: true,
+        payloadEscrowMode: "disabled",
+        reviewAdapterCount: 0,
+        credentialRefCount: 0,
+        missingStartupGates: [],
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await getProviderWriteLiveExecutorStatus(
+      new Request("http://localhost/api/operator/provider-writes/live-executor/status", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/live-executor/status",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    const body = await response.json();
+    assert.strictEqual(body.networkExecution, "not_started");
+    assert.strictEqual(JSON.stringify(body).includes("admin_api_key"), false);
+  });
+
+  it("rejects unsafe provider write live executor status and blocks non-admin sessions", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"},{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({
+        liveExecutorEnabled: true,
+        startupMode: "guarded_ready",
+        startupGuardSatisfied: true,
+        dryRunRehearsalEvidenceConfigured: true,
+        providerWriteApprovalEvidenceConfigured: true,
+        executionKillSwitchEnabled: true,
+        payloadEscrowMode: "sealed_metadata",
+        reviewAdapterCount: 1,
+        credentialRefCount: 1,
+        missingStartupGates: [],
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        evidenceHash: "a".repeat(64),
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+        providerPayload: { secret: true },
+      });
+    };
+
+    const agentLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const blocked = await getProviderWriteLiveExecutorStatus(
+      new Request("http://localhost/api/operator/provider-writes/live-executor/status", {
+        headers: { cookie: agentLogin.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(blocked.status, 403);
+    assert.deepStrictEqual(await blocked.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+
+    const adminLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const unsafe = await getProviderWriteLiveExecutorStatus(
+      new Request("http://localhost/api/operator/provider-writes/live-executor/status", {
+        headers: { cookie: adminLogin.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(unsafe.status, 502);
+    assert.deepStrictEqual(await unsafe.json(), {
+      error: "Provider write live executor status response is invalid",
     });
   });
 
