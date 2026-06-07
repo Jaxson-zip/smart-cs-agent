@@ -2,11 +2,31 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR61 - Provider Write Execution Attempt Invariants And Visibility
+## Current Stage: PR62 - Provider Write Payload Escrow Boundary
 
-Status: locally verified, ready for local commit
+Status: verified locally; push remains blocked until GitHub OAuth has workflow scope.
 
-Previous Stage: PR60 - Provider Write Execution Attempt Safety was verified locally and committed as `a77d7da`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR61 - Provider Write Execution Attempt Invariants And Visibility was verified locally and committed as `4db00db`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR62 adds a default-off provider write payload escrow readiness boundary. `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE` defaults to `disabled`; when explicitly set to `sealed_metadata`, `ProviderWriteRequest` may store only request-scoped sealed metadata fingerprints for future executor readiness. PR62 must not store raw order IDs, logistics IDs, addresses, provider payloads, ciphertext bodies, provider responses, customer messages, credentials, tokens, operator API keys, or secret material. PR62 also must not execute provider writes, open/decrypt payload escrow, call provider write adapters, read credential material, or send customer-visible replies. `ProviderWriteExecutionAttempt` rows remain protected by the PR61 database invariant: `payloadEscrowStatus=not_stored`, `payloadEscrowOpened=false`, `networkExecution=not_started`, `providerMutationExecuted=false`, and `customerVisibleMessageSent=false`.
+
+### PR62 Scope
+
+- Add `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE` with default `disabled` and explicit safe `sealed_metadata`.
+- Add request-only payload escrow metadata/fingerprints for future write executor readiness.
+- Preserve request escrow metadata through human approve/reject review.
+- Block sealed escrow execution attempts without opening/decrypting escrow or persisting unsafe attempt escrow state.
+- Add `npm run verify:provider-write-payload-escrow-boundary` and connect it to docs, public API surface, production launch, and static CI.
+- Keep PR62 no-network/no-escrow-open: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR62
+
+- Live Taobao/Douyin provider write clients.
+- Persisting sealed ciphertext bodies.
+- Opening, decrypting, or releasing payload escrow.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Replacing the provider write execution kill switch with live executor behavior.
+- Production canary coverage for provider write execution.
 
 Provider Write Execution Attempt Safety Stage: PR60 - Provider Write Execution Attempt Safety was verified with no-network execution-attempt records, default-on `PROVIDER_WRITE_EXECUTION_KILL_SWITCH`, dry-run-only recording, `payloadEscrowOpened=false`, no provider/customer-visible execution, request/attempt fingerprints, and fail-closed Web BFF response parsing. It must stay connected to PR61 DB invariants, sanitized visibility, launch checks, and static CI.
 
@@ -189,10 +209,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR59 provider write approval state machine.
 - [x] PR60 provider write execution attempt safety.
 - [x] PR61 - Provider Write Execution Attempt Invariants And Visibility.
+- [x] PR62 - Provider Write Payload Escrow Boundary.
 
 ## Verification Gate
 
-PR61 provider write execution attempt invariants and visibility is tracked against this gate inventory:
+PR62 provider write payload escrow boundary is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -264,6 +285,9 @@ PR61 provider write execution attempt invariants and visibility is tracked again
 - `node --check scripts/verify-provider-write-execution-attempt-visibility.mjs`
 - `node --test scripts/verify-provider-write-execution-attempt-visibility.test.mjs`
 - `npm.cmd run verify:provider-write-execution-attempt-visibility`
+- `node --check scripts/verify-provider-write-payload-escrow-boundary.mjs`
+- `node --test scripts/verify-provider-write-payload-escrow-boundary.test.mjs`
+- `npm.cmd run verify:provider-write-payload-escrow-boundary`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -292,6 +316,19 @@ PR61 provider write execution attempt invariants and visibility is tracked again
 - `npm.cmd run verify:operator-bootstrap`
 - Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
 - Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
+
+### PR62 Final Verification Notes
+
+- `npm.cmd run db:generate` passed.
+- `npm.cmd run db:migrate:deploy` passed after applying `20260608013000_pr62_provider_write_payload_escrow_boundary` and `20260608013500_pr62_provider_write_payload_escrow_cross_field_constraints`; the final run reported no pending migrations across 15 migrations.
+- `node --test scripts\verify-provider-write-payload-escrow-boundary.test.mjs` passed with 5 tests.
+- `npm.cmd run verify:provider-write-payload-escrow-boundary`, `npm.cmd run verify:provider-write-execution-attempts`, `npm.cmd run verify:provider-write-execution-attempt-visibility`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 194 tests when rerun alone from the repository cwd. An earlier broad parallel run failed from a Codex sandbox temp cwd with the known `experimentalDecorators`/tsx project-path issue, then passed immediately from `G:\vibe-coding\smart-cs-agent`.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 75 tests.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 112 pass / 1 skipped. The skipped test is the existing Windows symlink-permission case.
+- `git diff --check` passed with CRLF warnings only.
+- PR62 remains a default-off readiness boundary only: no payload escrow opening/decrypting, no provider credential reads, no real Taobao/Douyin mutation, no provider write adapter call, no raw provider/customer payload storage, and no customer-visible message send has been enabled. Independent read-only review found no P0/P1 blocker; its P2 database consistency finding was fixed by adding `ProviderWriteRequest_payload_escrow_consistency_chk`, which rejects mismatched `payloadEscrowStatus` / `payloadEscrowMode` / envelope metadata combinations.
 
 ### PR60 Final Verification Notes
 

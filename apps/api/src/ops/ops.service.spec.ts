@@ -33,6 +33,8 @@ describe("OpsService provider adapter contract", () => {
     process.env.PROVIDER_WRITE_REVIEW_ADAPTERS;
   const originalProviderWriteExecutionKillSwitch =
     process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
+  const originalProviderWritePayloadEscrowMode =
+    process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE;
 
   afterEach(() => {
     if (originalProviderReadonlyAdapters === undefined) {
@@ -51,6 +53,12 @@ describe("OpsService provider adapter contract", () => {
     } else {
       process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH =
         originalProviderWriteExecutionKillSwitch;
+    }
+    if (originalProviderWritePayloadEscrowMode === undefined) {
+      delete process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE;
+    } else {
+      process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE =
+        originalProviderWritePayloadEscrowMode;
     }
   });
 
@@ -337,6 +345,89 @@ describe("OpsService provider adapter contract", () => {
       JSON.stringify(persistence.writeRequests).includes("secret_order_1"),
       false,
     );
+  });
+
+  it("keeps provider write payload escrow disabled by default", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address"],
+      },
+    ]);
+    delete process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE;
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "modify_address",
+      payload: {
+        orderId: "secret_order_pr62_default",
+        addressFingerprint: "address_fp_pr62_default",
+      },
+      idempotencyKey: "secret_idem_pr62_default",
+      operatorId: "operator_1",
+    });
+
+    const row = persistence.writeRequests[0];
+    assert.strictEqual(row.payloadEscrowStatus, "not_stored");
+    assert.strictEqual(row.payloadEscrowMode, "disabled");
+    assert.strictEqual(row.payloadEscrowEnvelopeFingerprint, null);
+    assert.strictEqual(row.payloadEscrowCreatedAt, null);
+    assert.match(row.payloadEscrowFingerprint ?? "", /^[a-f0-9]{64}$/);
+    assert.strictEqual(JSON.stringify(row).includes("secret_order_pr62_default"), false);
+    assert.strictEqual(JSON.stringify(row).includes("address_fp_pr62_default"), false);
+    assert.strictEqual(JSON.stringify(row).includes("secret_idem_pr62_default"), false);
+  });
+
+  it("records sealed metadata fingerprints without raw provider write payloads", async () => {
+    process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE = "sealed_metadata";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "modify_address",
+      payload: {
+        orderId: "secret_order_pr62_sealed",
+        addressFingerprint: "address_fp_pr62_sealed",
+      },
+      idempotencyKey: "secret_idem_pr62_sealed",
+      operatorId: "operator_1",
+    });
+
+    const row = persistence.writeRequests[0];
+    assert.strictEqual(row.payloadEscrowStatus, "sealed_metadata");
+    assert.strictEqual(row.payloadEscrowMode, "sealed_metadata");
+    assert.match(row.payloadEscrowFingerprint ?? "", /^[a-f0-9]{64}$/);
+    assert.match(row.payloadEscrowEnvelopeFingerprint ?? "", /^[a-f0-9]{64}$/);
+    assert.ok(row.payloadEscrowCreatedAt instanceof Date);
+    assert.strictEqual(JSON.stringify(row).includes("secret_order_pr62_sealed"), false);
+    assert.strictEqual(JSON.stringify(row).includes("address_fp_pr62_sealed"), false);
+    assert.strictEqual(JSON.stringify(row).includes("secret_idem_pr62_sealed"), false);
+    assert.strictEqual(JSON.stringify(row).includes("providerPayload"), false);
+    assert.strictEqual(JSON.stringify(row).includes("secret://"), false);
+    assert.strictEqual(JSON.stringify(row).includes("vault://"), false);
   });
 
   it("rejects unsafe provider write request and response shapes", () => {
@@ -653,6 +744,56 @@ describe("OpsService provider adapter contract", () => {
     );
   });
 
+  it("preserves sealed payload escrow metadata through human review", async () => {
+    process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE = "sealed_metadata";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const requested = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: {
+        orderId: "secret_order_pr62_review",
+        couponAmountCents: 2000,
+      },
+      idempotencyKey: "secret_idem_pr62_review",
+      operatorId: "operator_1",
+    });
+    const originalFingerprint = persistence.writeRequests[0].payloadEscrowFingerprint;
+    const originalEnvelope =
+      persistence.writeRequests[0].payloadEscrowEnvelopeFingerprint;
+    const originalMode = persistence.writeRequests[0].payloadEscrowMode;
+    const originalCreatedAt = persistence.writeRequests[0].payloadEscrowCreatedAt;
+
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: requested.writeRequestId,
+      reviewerOperatorId: "admin_1",
+      reasonCode: "policy_verified",
+    });
+
+    const row = persistence.writeRequests[0];
+    assert.strictEqual(row.payloadEscrowStatus, "sealed_metadata");
+    assert.strictEqual(row.payloadEscrowFingerprint, originalFingerprint);
+    assert.strictEqual(row.payloadEscrowEnvelopeFingerprint, originalEnvelope);
+    assert.strictEqual(row.payloadEscrowMode, originalMode);
+    assert.strictEqual(row.payloadEscrowCreatedAt, originalCreatedAt);
+    assert.strictEqual(JSON.stringify(row).includes("secret_order_pr62_review"), false);
+  });
+
   it("blocks provider write self-approval and leaves the request pending", async () => {
     process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
       {
@@ -954,6 +1095,89 @@ describe("OpsService provider adapter contract", () => {
     );
     assert.strictEqual(
       JSON.stringify(persistence).includes("secret_execution_attempt_dry_run"),
+      false,
+    );
+  });
+
+  it("blocks sealed escrow execution attempts without opening escrow or violating attempt invariants", async () => {
+    process.env.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE = "sealed_metadata";
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const requested = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: {
+        orderId: "secret_order_pr62_exec",
+        couponAmountCents: 2000,
+      },
+      idempotencyKey: "secret_idem_pr62_exec_request",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: requested.writeRequestId,
+      reviewerOperatorId: "admin_1",
+      reasonCode: "policy_verified",
+    });
+
+    const attempt = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: requested.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_idem_pr62_exec_attempt",
+    });
+
+    assert.strictEqual(attempt.status, "blocked");
+    assert.match(attempt.operatorVisibleResult, /payload escrow/i);
+    assert.strictEqual(attempt.networkExecution, "not_started");
+    assert.strictEqual(attempt.payloadEscrowOpened, false);
+    assert.strictEqual(attempt.providerMutationExecuted, false);
+    assert.strictEqual(attempt.customerVisibleMessageSent, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].payloadEscrowStatus,
+      "not_stored",
+    );
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].payloadEscrowOpened,
+      false,
+    );
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].networkExecution,
+      "not_started",
+    );
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].providerMutationExecuted,
+      false,
+    );
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].customerVisibleMessageSent,
+      false,
+    );
+    assert.strictEqual(
+      persistence.auditEntries.at(-1)?.action,
+      "provider_write_execution.blocked",
+    );
+    assert.strictEqual(JSON.stringify(persistence).includes("secret_order_pr62_exec"), false);
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_idem_pr62_exec_attempt"),
       false,
     );
   });
@@ -2261,6 +2485,9 @@ type ProviderWriteRequestRecord = {
   reviewFingerprint: string | null;
   payloadEscrowStatus: string;
   payloadEscrowFingerprint: string | null;
+  payloadEscrowEnvelopeFingerprint: string | null;
+  payloadEscrowMode: string | null;
+  payloadEscrowCreatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

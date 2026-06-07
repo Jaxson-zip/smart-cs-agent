@@ -123,6 +123,11 @@ const providerWriteReviewAdaptersEnvSchema = z
     }
   });
 
+const providerWritePayloadEscrowModeEnvSchema = z
+  .enum(["disabled", "sealed_metadata"])
+  .optional()
+  .default("disabled");
+
 const apiConfigSchema = z.object({
   NODE_ENV: z.string().optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
@@ -178,6 +183,7 @@ const apiConfigSchema = z.object({
     .optional()
     .default("true")
     .transform((value) => value === "true"),
+  PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: providerWritePayloadEscrowModeEnvSchema,
 });
 
 const webOriginSchema = z.string().url().default("http://localhost:3000");
@@ -196,6 +202,7 @@ export type ApiConfig = {
   providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
   providerWriteReviewAdapters: ProviderWriteReviewAdapterConfig[];
   providerWriteExecutionKillSwitch: boolean;
+  providerWritePayloadEscrowMode: ProviderWritePayloadEscrowMode;
   providerReadTimeoutMs: number;
   providerReadMaxRetries: number;
 };
@@ -211,6 +218,8 @@ export type ProviderWriteReviewAdapterConfig = {
   tenantId: string;
   allowedActions: ProviderWriteAction[];
 };
+
+export type ProviderWritePayloadEscrowMode = "disabled" | "sealed_metadata";
 
 export type ProviderCredentialRefRecord = {
   credentialRef: string;
@@ -276,6 +285,8 @@ export function loadApiConfig(
     providerWriteReviewAdapters: parsed.data.PROVIDER_WRITE_REVIEW_ADAPTERS,
     providerWriteExecutionKillSwitch:
       parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH,
+    providerWritePayloadEscrowMode:
+      parsed.data.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE,
     providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
     providerReadMaxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
@@ -290,6 +301,17 @@ export function providerWriteExecutionKillSwitchEnabled(
 
   if (!parsed.success) return true;
   return parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
+}
+
+export function providerWritePayloadEscrowMode(
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderWritePayloadEscrowMode {
+  const parsed = apiConfigSchema.pick({
+    PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: true,
+  }).safeParse(env);
+
+  if (!parsed.success) return "disabled";
+  return parsed.data.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE;
 }
 
 export function loadProviderReadonlyAdapterConfigs(

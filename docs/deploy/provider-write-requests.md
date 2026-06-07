@@ -2,6 +2,28 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR62 Provider Write Payload Escrow Boundary
+
+PR62 adds a default-off payload escrow readiness boundary for future provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not decrypt payloads, and does not send customer-visible replies.
+
+Configure the boundary with:
+
+```bash
+PROVIDER_WRITE_PAYLOAD_ESCROW_MODE=disabled
+```
+
+The default `disabled` mode keeps `ProviderWriteRequest.payloadEscrowStatus=not_stored`. If `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE=sealed_metadata` is explicitly set, a `ProviderWriteRequest` may store only request-scoped metadata such as `payloadEscrowStatus=sealed_metadata`, `payloadEscrowFingerprint`, `payloadEscrowEnvelopeFingerprint`, `payloadEscrowMode`, and `payloadEscrowCreatedAt`. These fields are readiness evidence for a future reviewed executor, not an executable payload. They must not include raw order IDs, logistics IDs, addresses, provider payloads, ciphertext bodies, provider responses, customer messages, operator API keys, provider tokens, credential refs, webhook secrets, or tenant secrets.
+
+Human review preserves the request escrow metadata, but execution attempts still do not open payload escrow. `ProviderWriteExecutionAttempt` rows remain constrained by the PR61 database boundary: `payloadEscrowStatus=not_stored`, `payloadEscrowOpened=false`, `networkExecution=not_started`, `providerMutationExecuted=false`, and `customerVisibleMessageSent=false`. A sealed request therefore blocks execution attempts in this build with a payload-escrow policy reason instead of executing a provider mutation.
+
+Run:
+
+```bash
+npm run verify:provider-write-payload-escrow-boundary
+```
+
+This verifier checks default-off config, request-only escrow metadata, no raw payload storage, preserved PR61 execution-attempt constraints, no provider/decrypt/credential calls, docs, static CI wiring, production launch references, and task plan references.
+
 ## PR61 Provider Write Execution Attempt Invariants And Visibility
 
 PR61 adds database invariants and admin-only sanitized visibility for provider write execution attempts. It does not add a live executor, payload escrow opening, provider credential reads, provider mutations, or customer-visible sends.

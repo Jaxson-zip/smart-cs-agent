@@ -4,6 +4,7 @@ import {
   loadApiConfig,
   loadProviderCredentialRefs,
   providerWriteExecutionKillSwitchEnabled,
+  providerWritePayloadEscrowMode,
   loadProviderWriteReviewAdapterConfigs,
   loadWebOrigin,
 } from "./api-config";
@@ -28,6 +29,7 @@ describe("loadApiConfig", () => {
       providerReadonlyAdapters: [],
       providerWriteReviewAdapters: [],
       providerWriteExecutionKillSwitch: true,
+      providerWritePayloadEscrowMode: "disabled",
       providerReadTimeoutMs: 5000,
       providerReadMaxRetries: 0,
     });
@@ -55,6 +57,54 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.providerWriteExecutionKillSwitch, false);
     assert.strictEqual(config.providerReadTimeoutMs, 2500);
     assert.strictEqual(config.providerReadMaxRetries, 2);
+  });
+
+  it("keeps provider write payload escrow disabled unless explicitly configured", () => {
+    assert.strictEqual(providerWritePayloadEscrowMode({}), "disabled");
+    assert.strictEqual(
+      providerWritePayloadEscrowMode({
+        PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "disabled",
+      }),
+      "disabled",
+    );
+
+    const config = loadApiConfig(
+      {
+        DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+        PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+      },
+      { includeDotEnv: false },
+    );
+
+    assert.strictEqual(config.providerWritePayloadEscrowMode, "sealed_metadata");
+    assert.strictEqual(
+      providerWritePayloadEscrowMode({
+        PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+      }),
+      "sealed_metadata",
+    );
+  });
+
+  it("rejects invalid provider write payload escrow configuration", () => {
+    for (const value of [
+      "true",
+      "sealed_metadata:secret://provider-token",
+      "sealed_metadata:vault://provider-token",
+      "sealed_metadata:{\"ciphertext\":\"abc\"}",
+    ]) {
+      assert.throws(
+        () =>
+          loadApiConfig(
+            {
+              DATABASE_URL:
+                "postgresql://user:pass@localhost:5432/smart_cs_agent",
+              PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: value,
+            },
+            { includeDotEnv: false },
+          ),
+        /PROVIDER_WRITE_PAYLOAD_ESCROW_MODE/,
+      );
+    }
   });
 
   it("keeps provider write execution kill switch enabled unless explicitly disabled", () => {

@@ -2,6 +2,20 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR62 Provider Write Payload Escrow Boundary
+
+PR62 adds request-only payload escrow readiness metadata for future provider write executors. `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE` defaults to `disabled`; only the explicit `sealed_metadata` mode may store sanitized fingerprints such as `payloadEscrowEnvelopeFingerprint` on `ProviderWriteRequest`.
+
+This boundary does not open payload escrow, decrypt payloads, read credentials, call provider APIs, execute provider writes, or send customer-visible replies. `ProviderWriteExecutionAttempt` remains locked to `payloadEscrowStatus=not_stored`, `payloadEscrowOpened=false`, and no-network flags.
+
+Run:
+
+```bash
+npm run verify:provider-write-payload-escrow-boundary
+```
+
+This verifier checks that escrow readiness stays request-only and that future adapter work cannot bypass the no-real-write boundary by storing raw payloads or opening escrow in execution attempts.
+
 ## PR61 Provider Write Execution Attempt Invariants And Visibility
 
 PR61 adds database check constraints and admin-only sanitized list visibility for no-network `ProviderWriteExecutionAttempt` rows:

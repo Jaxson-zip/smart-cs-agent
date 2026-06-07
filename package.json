@@ -53,6 +53,7 @@
     "verify:provider-write-approval-state": "node scripts/verify-provider-write-approval-state.mjs",
     "verify:provider-write-execution-attempts": "node scripts/verify-provider-write-execution-attempts.mjs",
     "verify:provider-write-execution-attempt-visibility": "node scripts/verify-provider-write-execution-attempt-visibility.mjs",
+    "verify:provider-write-payload-escrow-boundary": "node scripts/verify-provider-write-payload-escrow-boundary.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

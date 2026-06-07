@@ -175,6 +175,9 @@ model ProviderWriteRequest {
   reviewFingerprint          String?
   payloadEscrowStatus        String   @default("not_stored")
   payloadEscrowFingerprint   String?
+  payloadEscrowEnvelopeFingerprint String?
+  payloadEscrowMode          String   @default("disabled")
+  payloadEscrowCreatedAt     DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 

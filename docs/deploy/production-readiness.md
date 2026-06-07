@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR62 Provider Write Payload Escrow Boundary
+
+Provider write payload escrow readiness is now checked by:
+
+```bash
+npm run verify:provider-write-payload-escrow-boundary
+```
+
+This gate keeps `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE` defaulted to `disabled` and allows only explicit `sealed_metadata` request metadata. It may store `payloadEscrowEnvelopeFingerprint` and related fingerprints on `ProviderWriteRequest`, but it must not store raw order IDs, logistics IDs, addresses, provider payloads, ciphertext bodies, provider responses, customer messages, credentials, tokens, operator API keys, webhook secrets, or tenant secrets. It also preserves the PR61 execution-attempt invariant: no payload escrow opening, no provider write execution, no credential/decrypt access, and no customer-visible sends.
+
 ## PR61 Provider Write Execution Attempt Invariants And Visibility
 
 Provider write execution attempt invariants and visibility are now checked by:

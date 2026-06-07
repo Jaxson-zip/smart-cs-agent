@@ -222,11 +222,7 @@ function toProviderWriteRequest(value: unknown) {
     reviewedAt: readNullableString(value, "reviewedAt"),
     reviewReasonCode: readNullableString(value, "reviewReasonCode"),
     reviewFingerprint: readString(value, "reviewFingerprint"),
-    payloadEscrowStatus: readLiteralString(
-      value,
-      "payloadEscrowStatus",
-      "not_stored",
-    ),
+    payloadEscrowStatus: readProviderWritePayloadEscrowStatus(value),
     payloadEscrowFingerprint: readString(value, "payloadEscrowFingerprint"),
     policyReason: readNullableString(value, "policyReason"),
     createdAt: readString(value, "createdAt"),
@@ -272,6 +268,14 @@ function readProviderWriteStatus(
   const status = readString(value, "status");
   if (!allowedStatuses.includes(status)) {
     throw new Error("Invalid provider write status");
+  }
+  return status;
+}
+
+function readProviderWritePayloadEscrowStatus(value: Record<string, unknown>) {
+  const status = readString(value, "payloadEscrowStatus");
+  if (!["not_stored", "sealed_metadata"].includes(status)) {
+    throw new Error("Invalid provider write payload escrow status");
   }
   return status;
 }

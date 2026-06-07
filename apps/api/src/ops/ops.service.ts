@@ -35,7 +35,10 @@ import {
   type ProviderReadonlyClientHarnessResult,
 } from "../adapters/provider-readonly-client-harness.service";
 import { AuditService } from "../audit/audit.service";
-import { providerWriteExecutionKillSwitchEnabled } from "../config/api-config";
+import {
+  providerWriteExecutionKillSwitchEnabled,
+  providerWritePayloadEscrowMode,
+} from "../config/api-config";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -592,9 +595,7 @@ export class OpsService {
       decision,
       reviewedAt,
     );
-    const payloadEscrowFingerprint =
-      request.payloadEscrowFingerprint ??
-      providerWritePayloadEscrowFingerprint(request.requestHash);
+    const payloadEscrowFields = providerWriteReviewPayloadEscrowFields(request);
     const operatorVisibleResult =
       decision === "approved"
         ? "Provider write approved for a future executor; provider network execution is disabled in this build."
@@ -616,8 +617,12 @@ export class OpsService {
         reviewedAt,
         reviewReasonCode: input.reasonCode,
         reviewFingerprint,
-        payloadEscrowStatus: "not_stored",
-        payloadEscrowFingerprint,
+        payloadEscrowStatus: payloadEscrowFields.payloadEscrowStatus,
+        payloadEscrowFingerprint: payloadEscrowFields.payloadEscrowFingerprint,
+        payloadEscrowEnvelopeFingerprint:
+          payloadEscrowFields.payloadEscrowEnvelopeFingerprint,
+        payloadEscrowMode: payloadEscrowFields.payloadEscrowMode,
+        payloadEscrowCreatedAt: payloadEscrowFields.payloadEscrowCreatedAt,
       },
     });
 
@@ -652,8 +657,12 @@ export class OpsService {
         reviewedAt,
         reviewReasonCode: input.reasonCode,
         reviewFingerprint,
-        payloadEscrowStatus: "not_stored",
-        payloadEscrowFingerprint,
+        payloadEscrowStatus: payloadEscrowFields.payloadEscrowStatus,
+        payloadEscrowFingerprint: payloadEscrowFields.payloadEscrowFingerprint,
+        payloadEscrowEnvelopeFingerprint:
+          payloadEscrowFields.payloadEscrowEnvelopeFingerprint,
+        payloadEscrowMode: payloadEscrowFields.payloadEscrowMode,
+        payloadEscrowCreatedAt: payloadEscrowFields.payloadEscrowCreatedAt,
       };
     const response = providerWriteResponseFromRequest(updated);
     await this.auditProviderWriteReview(
@@ -754,6 +763,10 @@ export class OpsService {
     policyReason: string | null,
   ): Promise<ProviderWriteResponse> {
     if (!this.prisma || !request.tenantId) return response;
+    const payloadEscrowFields = providerWritePayloadEscrowMetadata(
+      metadata.requestHash,
+      metadata.payloadHash,
+    );
     let created: ProviderWriteRequestRecord;
     try {
       created = (await this.prisma.providerWriteRequest.create({
@@ -777,10 +790,12 @@ export class OpsService {
           reviewedAt: null,
           reviewReasonCode: null,
           reviewFingerprint: null,
-          payloadEscrowStatus: "not_stored",
-          payloadEscrowFingerprint: providerWritePayloadEscrowFingerprint(
-            metadata.requestHash,
-          ),
+          payloadEscrowStatus: payloadEscrowFields.payloadEscrowStatus,
+          payloadEscrowFingerprint: payloadEscrowFields.payloadEscrowFingerprint,
+          payloadEscrowEnvelopeFingerprint:
+            payloadEscrowFields.payloadEscrowEnvelopeFingerprint,
+          payloadEscrowMode: payloadEscrowFields.payloadEscrowMode,
+          payloadEscrowCreatedAt: payloadEscrowFields.payloadEscrowCreatedAt,
         },
       })) as ProviderWriteRequestRecord;
     } catch (error) {
@@ -849,7 +864,7 @@ export class OpsService {
           idempotencyKeyHash: metadata.idempotencyKeyHash,
           requestHash: metadata.requestHash,
           attemptFingerprint: metadata.attemptFingerprint,
-          payloadEscrowStatus: request.payloadEscrowStatus ?? "not_stored",
+          payloadEscrowStatus: "not_stored",
           payloadEscrowOpened: false,
           networkExecution: "not_started",
           providerMutationExecuted: false,
@@ -1044,6 +1059,11 @@ export class OpsService {
       reviewFingerprint: request?.reviewFingerprint ?? null,
       payloadEscrowStatus: request?.payloadEscrowStatus ?? "not_stored",
       payloadEscrowFingerprint: request?.payloadEscrowFingerprint ?? null,
+      payloadEscrowEnvelopeFingerprint:
+        request?.payloadEscrowEnvelopeFingerprint ?? null,
+      payloadEscrowMode: request?.payloadEscrowMode ?? null,
+      payloadEscrowCreatedAt:
+        request?.payloadEscrowCreatedAt?.toISOString() ?? null,
       status: response.status,
       networkExecution: "not_started",
       providerMutationExecuted: false,
@@ -1077,6 +1097,12 @@ export class OpsService {
         payloadEscrowFingerprint: fingerprint(
           request?.payloadEscrowFingerprint ?? undefined,
         ),
+        payloadEscrowEnvelopeFingerprint: fingerprint(
+          request?.payloadEscrowEnvelopeFingerprint ?? undefined,
+        ),
+        payloadEscrowMode: request?.payloadEscrowMode ?? null,
+        payloadEscrowCreatedAt:
+          request?.payloadEscrowCreatedAt?.toISOString() ?? null,
         idempotencyKeyFingerprint: fingerprint(attempt?.idempotencyKeyHash),
         requestFingerprint: fingerprint(attempt?.requestHash),
         attemptFingerprint: fingerprint(attempt?.attemptFingerprint),
@@ -1240,6 +1266,9 @@ type ProviderWriteRequestRecord = {
   reviewFingerprint?: string | null;
   payloadEscrowStatus?: string;
   payloadEscrowFingerprint?: string | null;
+  payloadEscrowEnvelopeFingerprint?: string | null;
+  payloadEscrowMode?: string | null;
+  payloadEscrowCreatedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -1352,6 +1381,83 @@ function providerWritePayloadEscrowFingerprint(requestHash: string) {
       requestHash,
     }),
   );
+}
+
+type ProviderWritePayloadEscrowMetadata = {
+  payloadEscrowStatus: "not_stored" | "sealed_metadata";
+  payloadEscrowFingerprint: string;
+  payloadEscrowEnvelopeFingerprint: string | null;
+  payloadEscrowMode: "disabled" | "sealed_metadata";
+  payloadEscrowCreatedAt: Date | null;
+};
+
+function providerWritePayloadEscrowMetadata(
+  requestHash: string,
+  payloadHash: string,
+): ProviderWritePayloadEscrowMetadata {
+  if (providerWritePayloadEscrowMode() !== "sealed_metadata") {
+    return {
+      payloadEscrowStatus: "not_stored",
+      payloadEscrowFingerprint: providerWritePayloadEscrowFingerprint(requestHash),
+      payloadEscrowEnvelopeFingerprint: null,
+      payloadEscrowMode: "disabled",
+      payloadEscrowCreatedAt: null,
+    };
+  }
+
+  return {
+    payloadEscrowStatus: "sealed_metadata",
+    payloadEscrowFingerprint: sha256(
+      stableJson({
+        kind: "provider_write_payload_escrow_sealed_metadata",
+        payloadEscrowStatus: "sealed_metadata",
+        requestHash,
+      }),
+    ),
+    payloadEscrowEnvelopeFingerprint: sha256(
+      stableJson({
+        kind: "provider_write_payload_escrow_envelope_metadata",
+        payloadEscrowMode: "sealed_metadata",
+        payloadHash,
+        requestHash,
+      }),
+    ),
+    payloadEscrowMode: "sealed_metadata",
+    payloadEscrowCreatedAt: new Date(),
+  };
+}
+
+function providerWriteReviewPayloadEscrowFields(
+  request: ProviderWriteRequestRecord,
+): ProviderWritePayloadEscrowMetadata {
+  if (request.payloadEscrowStatus === "sealed_metadata") {
+    return {
+      payloadEscrowStatus: "sealed_metadata",
+      payloadEscrowFingerprint:
+        request.payloadEscrowFingerprint ??
+        sha256(
+          stableJson({
+            kind: "provider_write_payload_escrow_sealed_metadata",
+            payloadEscrowStatus: "sealed_metadata",
+            requestHash: request.requestHash,
+          }),
+        ),
+      payloadEscrowEnvelopeFingerprint:
+        request.payloadEscrowEnvelopeFingerprint ?? null,
+      payloadEscrowMode: "sealed_metadata",
+      payloadEscrowCreatedAt: request.payloadEscrowCreatedAt ?? null,
+    };
+  }
+
+  return {
+    payloadEscrowStatus: "not_stored",
+    payloadEscrowFingerprint:
+      request.payloadEscrowFingerprint ??
+      providerWritePayloadEscrowFingerprint(request.requestHash),
+    payloadEscrowEnvelopeFingerprint: null,
+    payloadEscrowMode: "disabled",
+    payloadEscrowCreatedAt: null,
+  };
 }
 
 function providerWriteReviewFingerprint(
@@ -1646,6 +1752,12 @@ function toSanitizedProviderWriteRequest(run: ProviderWriteRequestRecord) {
     payloadEscrowFingerprint: fingerprint(
       run.payloadEscrowFingerprint ?? undefined,
     ),
+    payloadEscrowEnvelopeFingerprint: fingerprint(
+      run.payloadEscrowEnvelopeFingerprint ?? undefined,
+    ),
+    payloadEscrowMode: run.payloadEscrowMode ?? "disabled",
+    payloadEscrowCreatedAt:
+      run.payloadEscrowCreatedAt?.toISOString() ?? null,
     policyReason: run.policyReason ?? null,
     createdAt: run.createdAt?.toISOString() ?? "",
     updatedAt: run.updatedAt?.toISOString() ?? "",

@@ -62,6 +62,8 @@ const files = {
     "scripts/verify-provider-write-execution-attempts.mjs",
   providerWriteExecutionAttemptVisibilityVerifier:
     "scripts/verify-provider-write-execution-attempt-visibility.mjs",
+  providerWritePayloadEscrowBoundaryVerifier:
+    "scripts/verify-provider-write-payload-escrow-boundary.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -124,6 +126,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
   "verify:provider-write-execution-attempt-visibility",
+  "verify:provider-write-payload-escrow-boundary",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -188,6 +191,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-provider-write-approval:safe",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-execution-attempt-visibility",
+  "npm run verify:provider-write-payload-escrow-boundary",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -470,6 +474,11 @@ mustContainAll("production readiness references provider write execution attempt
   "npm run verify:provider-write-execution-attempt-visibility",
 ]);
 
+mustContainAll("production readiness references provider write payload escrow boundary", content.productionReadiness, [
+  "PR62 Provider Write Payload Escrow Boundary",
+  "npm run verify:provider-write-payload-escrow-boundary",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -572,6 +581,11 @@ mustContainAll("task plan references PR61", content.taskPlan, [
   "verify:provider-write-execution-attempt-visibility",
 ]);
 
+mustContainAll("task plan references PR62", content.taskPlan, [
+  "PR62 - Provider Write Payload Escrow Boundary",
+  "verify:provider-write-payload-escrow-boundary",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -581,6 +595,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-requests",
   "verify:provider-write-execution-attempts",
   "verify:provider-write-execution-attempt-visibility",
+  "verify:provider-write-payload-escrow-boundary",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -663,6 +678,12 @@ mustContainAll("provider write execution attempt visibility verifier source", co
   "GET /v2/provider-writes/execution-attempts",
   "GET /api/operator/provider-writes/execution-attempts",
   "provider write execution attempt visibility",
+]);
+mustContainAll("provider write payload escrow boundary verifier source", content.providerWritePayloadEscrowBoundaryVerifier, [
+  "verify:provider-write-payload-escrow-boundary",
+  "PROVIDER_WRITE_PAYLOAD_ESCROW_MODE",
+  "payloadEscrowEnvelopeFingerprint",
+  "provider write payload escrow boundary",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -910,6 +931,13 @@ mustContainAll("provider write execution attempt visibility docs", content.provi
   "ProviderWriteExecutionAttemptListItem",
   "npm run verify:provider-write-execution-attempt-visibility",
 ]);
+mustContainAll("provider write payload escrow boundary docs", content.providerWriteRequests, [
+  "PR62 Provider Write Payload Escrow Boundary",
+  "PROVIDER_WRITE_PAYLOAD_ESCROW_MODE",
+  "sealed_metadata",
+  "payloadEscrowEnvelopeFingerprint",
+  "npm run verify:provider-write-payload-escrow-boundary",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
@@ -945,6 +973,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-approval-state",
   "npm run verify:provider-write-execution-attempts",
   "npm run verify:provider-write-execution-attempt-visibility",
+  "npm run verify:provider-write-payload-escrow-boundary",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
