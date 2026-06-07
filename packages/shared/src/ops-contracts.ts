@@ -272,6 +272,33 @@ export const ProviderWriteRejectionRequestSchema = z
   })
   .strict();
 
+export const ProviderWriteExecutionAttemptStatusSchema = z.enum([
+  "dry_run_recorded",
+  "blocked",
+  "failed",
+]);
+
+export const ProviderWriteExecutionAttemptRequestSchema = z
+  .object({
+    idempotencyKey: z.string().min(1),
+  })
+  .strict();
+
+export const ProviderWriteExecutionAttemptResponseSchema = z
+  .object({
+    attemptId: z.string(),
+    writeRequestId: z.string(),
+    status: ProviderWriteExecutionAttemptStatusSchema,
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+    payloadEscrowOpened: z.literal(false),
+    operatorVisibleResult: z.string(),
+    requiresHuman: z.literal(true),
+    retryable: z.boolean(),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -348,6 +375,15 @@ export type ProviderWriteApprovalRequest = z.infer<
 >;
 export type ProviderWriteRejectionRequest = z.infer<
   typeof ProviderWriteRejectionRequestSchema
+>;
+export type ProviderWriteExecutionAttemptStatus = z.infer<
+  typeof ProviderWriteExecutionAttemptStatusSchema
+>;
+export type ProviderWriteExecutionAttemptRequest = z.infer<
+  typeof ProviderWriteExecutionAttemptRequestSchema
+>;
+export type ProviderWriteExecutionAttemptResponse = z.infer<
+  typeof ProviderWriteExecutionAttemptResponseSchema
 >;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema

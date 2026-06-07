@@ -186,6 +186,32 @@ model ProviderWriteRequest {
   @@index([tenantId, reviewerOperatorId, reviewedAt])
 }
 
+model ProviderWriteExecutionAttempt {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  providerWriteRequestId     String
+  operatorId                 String?
+  channel                    String
+  action                     String
+  status                     String
+  idempotencyKeyHash         String
+  requestHash                String
+  attemptFingerprint         String
+  payloadEscrowStatus        String   @default("not_stored")
+  payloadEscrowOpened        Boolean  @default(false)
+  networkExecution           String
+  providerMutationExecuted   Boolean  @default(false)
+  customerVisibleMessageSent Boolean  @default(false)
+  operatorVisibleResult      String
+  policyReason               String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([tenantId, providerWriteRequestId, idempotencyKeyHash])
+  @@index([tenantId, providerWriteRequestId, createdAt])
+  @@index([tenantId, status, createdAt])
+}
+
 model CaseMessage {
   id         String         @id @default(cuid())
   caseId     String

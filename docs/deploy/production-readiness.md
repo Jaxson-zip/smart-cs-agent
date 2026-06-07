@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR60 Provider Write Execution Attempt Safety
+
+Provider write execution attempts are now checked by:
+
+```bash
+npm run verify:provider-write-execution-attempts
+```
+
+This gate records no-network execution attempts for approved provider write requests. `PROVIDER_WRITE_EXECUTION_KILL_SWITCH` defaults to enabled; when it is enabled, attempts are persisted as `blocked`. Only when explicitly set to `false` can the system record `status=dry_run_recorded`, and even then it must keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `requiresHuman=true`. This verifier still does not call provider APIs, execute provider writes, open payload escrow, store raw order/address/logistics/provider payload values, capture provider responses, or send customer-visible replies.
+
 ## PR59 Provider Write Approval State Machine
 
 Provider write approval state is now checked by:

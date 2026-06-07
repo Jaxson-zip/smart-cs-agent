@@ -20,6 +20,7 @@ import {
   POST as requestProviderWrite,
 } from "./provider-writes/requests/route";
 import { POST as approveProviderWriteRequest } from "./provider-writes/requests/[id]/approve/route";
+import { POST as createProviderWriteExecutionAttempt } from "./provider-writes/requests/[id]/execution-attempts/route";
 import { POST as rejectProviderWriteRequest } from "./provider-writes/requests/[id]/reject/route";
 import {
   GET as listOperators,
@@ -1553,6 +1554,146 @@ describe("operator BFF routes", () => {
       operatorVisibleResult: "rejected",
       requiresHuman: true,
       retryable: false,
+    });
+  });
+
+  it("proxies provider write execution attempts through an admin session without leaking keys or raw payload", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedBody = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      proxiedBody = String(init?.body ?? "");
+      return Response.json({
+        attemptId: "attempt_1",
+        writeRequestId: "provider_write_request_1",
+        status: "blocked",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        operatorVisibleResult: "blocked by kill switch",
+        requiresHuman: true,
+        retryable: true,
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await createProviderWriteExecutionAttempt(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/execution-attempts",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          idempotencyKey: "execution_1",
+        },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/requests/write_1/execution-attempts",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
+    assert.deepStrictEqual(JSON.parse(proxiedBody), {
+      idempotencyKey: "execution_1",
+    });
+    const body = await response.json();
+    assert.deepStrictEqual(body, {
+      attemptId: "attempt_1",
+      writeRequestId: "provider_write_request_1",
+      status: "blocked",
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      payloadEscrowOpened: false,
+      operatorVisibleResult: "blocked by kill switch",
+      requiresHuman: true,
+      retryable: true,
+    });
+    assert.strictEqual(JSON.stringify(body).includes("operator_api_key_must_not_leak"), false);
+  });
+
+  it("rejects unsafe provider write execution attempt responses and blocks non-admin execution attempts", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"},{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({
+        attemptId: "attempt_1",
+        writeRequestId: "provider_write_request_1",
+        status: "dry_run_recorded",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        operatorVisibleResult: "unsafe",
+        requiresHuman: true,
+        retryable: false,
+        providerPayload: { secret: true },
+        operatorApiKey: "operator_api_key_must_not_leak",
+      });
+    };
+
+    const agentLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const blocked = await createProviderWriteExecutionAttempt(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/execution-attempts",
+        agentLogin.headers.get("set-cookie") ?? "",
+        { idempotencyKey: "execution_1" },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(blocked.status, 403);
+    assert.deepStrictEqual(await blocked.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+
+    const adminLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const unsafe = await createProviderWriteExecutionAttempt(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/execution-attempts",
+        adminLogin.headers.get("set-cookie") ?? "",
+        { idempotencyKey: "execution_1" },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(unsafe.status, 502);
+    assert.deepStrictEqual(await unsafe.json(), {
+      error: "Provider write execution attempt response is invalid",
     });
   });
 

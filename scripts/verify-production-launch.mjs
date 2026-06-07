@@ -58,6 +58,8 @@ const files = {
     "scripts/verify-provider-write-requests.mjs",
   providerWriteApprovalStateVerifier:
     "scripts/verify-provider-write-approval-state.mjs",
+  providerWriteExecutionAttemptsVerifier:
+    "scripts/verify-provider-write-execution-attempts.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -118,6 +120,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-provider-write-approval:safe",
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
+  "verify:provider-write-execution-attempts",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -453,6 +456,11 @@ mustContainAll("production readiness references provider write approval state", 
   "npm run verify:provider-write-approval-state",
 ]);
 
+mustContainAll("production readiness references provider write execution attempts", content.productionReadiness, [
+  "PR60 Provider Write Execution Attempt Safety",
+  "npm run verify:provider-write-execution-attempts",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -545,6 +553,11 @@ mustContainAll("task plan references PR59", content.taskPlan, [
   "verify:provider-write-approval-state",
 ]);
 
+mustContainAll("task plan references PR60", content.taskPlan, [
+  "PR60 - Provider Write Execution Attempt Safety",
+  "verify:provider-write-execution-attempts",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -552,6 +565,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-branch-protection",
   "verify:production-provider-write-approval",
   "verify:provider-write-requests",
+  "verify:provider-write-execution-attempts",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -615,6 +629,16 @@ mustContainAll("provider write approval state verifier source", content.provider
   "ProviderWriteApprovalRequestSchema",
   "two-person review",
   "provider write approval state",
+  "providerMutationExecuted: false",
+  "customerVisibleMessageSent: false",
+]);
+
+mustContainAll("provider write execution attempts verifier source", content.providerWriteExecutionAttemptsVerifier, [
+  "verify:provider-write-execution-attempts",
+  "ProviderWriteExecutionAttemptRequestSchema",
+  "PROVIDER_WRITE_EXECUTION_KILL_SWITCH",
+  "provider write execution attempts",
+  "payloadEscrowOpened: false",
   "providerMutationExecuted: false",
   "customerVisibleMessageSent: false",
 ]);
@@ -849,17 +873,29 @@ mustContainAll("provider write approval state docs", content.providerWriteReques
   "payloadEscrowStatus",
   "npm run verify:provider-write-approval-state",
 ]);
+mustContainAll("provider write execution attempts docs", content.providerWriteRequests, [
+  "PR60 Provider Write Execution Attempt Safety",
+  "POST /v2/provider-writes/requests/:id/execution-attempts",
+  "POST /api/operator/provider-writes/requests/:id/execution-attempts",
+  "PROVIDER_WRITE_EXECUTION_KILL_SWITCH",
+  "dry_run_recorded",
+  "npm run verify:provider-write-execution-attempts",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
   "POST /v2/provider-writes/requests/:id/approve",
   "POST /v2/provider-writes/requests/:id/reject",
+  "POST /v2/provider-writes/requests/:id/execution-attempts",
   "POST /api/operator/provider-writes/requests",
   "GET /api/operator/provider-writes/requests",
   "POST /api/operator/provider-writes/requests/:id/approve",
   "POST /api/operator/provider-writes/requests/:id/reject",
+  "POST /api/operator/provider-writes/requests/:id/execution-attempts",
   "ProviderWriteRequest",
+  "ProviderWriteExecutionAttempt",
   "idempotencyKeyHash",
+  "payloadEscrowOpened=false",
   "providerMutationExecuted=false",
   "customerVisibleMessageSent=false",
   "networkExecution=not_started",
@@ -875,6 +911,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:production-launch",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-approval-state",
+  "npm run verify:provider-write-execution-attempts",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

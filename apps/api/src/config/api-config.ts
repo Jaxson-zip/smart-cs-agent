@@ -173,6 +173,11 @@ const apiConfigSchema = z.object({
     .default(0),
   PROVIDER_READONLY_ADAPTERS: providerReadonlyAdaptersEnvSchema,
   PROVIDER_WRITE_REVIEW_ADAPTERS: providerWriteReviewAdaptersEnvSchema,
+  PROVIDER_WRITE_EXECUTION_KILL_SWITCH: z
+    .enum(["true", "false"])
+    .optional()
+    .default("true")
+    .transform((value) => value === "true"),
 });
 
 const webOriginSchema = z.string().url().default("http://localhost:3000");
@@ -190,6 +195,7 @@ export type ApiConfig = {
   realChannelWebhookRateLimitPerMinute: number;
   providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
   providerWriteReviewAdapters: ProviderWriteReviewAdapterConfig[];
+  providerWriteExecutionKillSwitch: boolean;
   providerReadTimeoutMs: number;
   providerReadMaxRetries: number;
 };
@@ -268,9 +274,22 @@ export function loadApiConfig(
       parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
     providerReadonlyAdapters: parsed.data.PROVIDER_READONLY_ADAPTERS,
     providerWriteReviewAdapters: parsed.data.PROVIDER_WRITE_REVIEW_ADAPTERS,
+    providerWriteExecutionKillSwitch:
+      parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH,
     providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
     providerReadMaxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
+}
+
+export function providerWriteExecutionKillSwitchEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const parsed = apiConfigSchema.pick({
+    PROVIDER_WRITE_EXECUTION_KILL_SWITCH: true,
+  }).safeParse(env);
+
+  if (!parsed.success) return true;
+  return parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
 }
 
 export function loadProviderReadonlyAdapterConfigs(

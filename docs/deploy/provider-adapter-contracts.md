@@ -2,6 +2,23 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR60 Provider Write Execution Attempt Safety
+
+PR60 adds a no-network execution-attempt boundary for approved `ProviderWriteRequest` rows:
+
+- `POST /v2/provider-writes/requests/:id/execution-attempts`: admin-only API route.
+- `POST /api/operator/provider-writes/requests/:id/execution-attempts`: Web BFF route that keeps operator API keys server-side.
+- `PROVIDER_WRITE_EXECUTION_KILL_SWITCH` defaults to enabled; enabled means attempts are persisted as blocked.
+- Explicitly disabling the kill switch can record `dry_run_recorded`, but it still keeps `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `payloadEscrowOpened=false`.
+
+Run:
+
+```bash
+npm run verify:provider-write-execution-attempts
+```
+
+This verifier checks the execution-attempt contracts, Prisma state fields, kill-switch config, API/BFF routes, dry-run tests, sanitized docs, static CI wiring, and production launch references. It does not call provider APIs and does not execute provider writes.
+
 ## PR59 Provider Write Approval State Machine
 
 PR59 adds approve/reject transitions for `ProviderWriteRequest` rows created by PR58:

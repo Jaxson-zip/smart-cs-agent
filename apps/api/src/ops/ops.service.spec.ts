@@ -6,6 +6,8 @@ import {
   ProviderReadRequestSchema,
   ProviderReadResponseSchema,
   ProviderWriteApprovalRequestSchema,
+  ProviderWriteExecutionAttemptRequestSchema,
+  ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteRequestSchema,
   ProviderWriteRejectionRequestSchema,
   ProviderWriteResponseSchema,
@@ -28,6 +30,8 @@ describe("OpsService provider adapter contract", () => {
   const originalProviderReadonlyAdapters = process.env.PROVIDER_READONLY_ADAPTERS;
   const originalProviderWriteReviewAdapters =
     process.env.PROVIDER_WRITE_REVIEW_ADAPTERS;
+  const originalProviderWriteExecutionKillSwitch =
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
 
   afterEach(() => {
     if (originalProviderReadonlyAdapters === undefined) {
@@ -40,6 +44,12 @@ describe("OpsService provider adapter contract", () => {
     } else {
       process.env.PROVIDER_WRITE_REVIEW_ADAPTERS =
         originalProviderWriteReviewAdapters;
+    }
+    if (originalProviderWriteExecutionKillSwitch === undefined) {
+      delete process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
+    } else {
+      process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH =
+        originalProviderWriteExecutionKillSwitch;
     }
   });
 
@@ -368,6 +378,26 @@ describe("OpsService provider adapter contract", () => {
     assert.throws(() =>
       ProviderWriteRejectionRequestSchema.parse({
         reasonCode: "free_text_customer_phone_13800000000",
+      }),
+    );
+    assert.throws(() =>
+      ProviderWriteExecutionAttemptRequestSchema.parse({
+        idempotencyKey: "execution_1",
+        rawNote: "secret_order_1 raw address",
+      }),
+    );
+    assert.throws(() =>
+      ProviderWriteExecutionAttemptResponseSchema.parse({
+        attemptId: "attempt_1",
+        writeRequestId: "write_1",
+        status: "dry_run_recorded",
+        networkExecution: "not_started",
+        providerMutationExecuted: true,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        operatorVisibleResult: "unsafe",
+        requiresHuman: true,
+        retryable: false,
       }),
     );
   });
@@ -727,6 +757,342 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(persistence.writeRequests[0].status, "approved");
     assert.strictEqual(
       JSON.stringify(persistence.auditEntries).includes("secret_order_terminal"),
+      false,
+    );
+  });
+
+  it("blocks approved provider write execution attempts by default kill switch without provider execution", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const adapter = new PoisonTaobaoAdapter();
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_execute_blocked", couponAmountCents: 2000 },
+      idempotencyKey: "secret_write_execute_blocked",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+
+    const attempt = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_blocked",
+    });
+
+    assert.strictEqual(attempt.writeRequestId, queued.writeRequestId);
+    assert.strictEqual(attempt.status, "blocked");
+    assert.strictEqual(attempt.networkExecution, "not_started");
+    assert.strictEqual(attempt.providerMutationExecuted, false);
+    assert.strictEqual(attempt.customerVisibleMessageSent, false);
+    assert.strictEqual(attempt.payloadEscrowOpened, false);
+    assert.strictEqual(attempt.requiresHuman, true);
+    assert.strictEqual(attempt.retryable, true);
+    assert.match(attempt.operatorVisibleResult, /kill switch/i);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(persistence.writeExecutionAttempts[0].status, "blocked");
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].policyReason,
+      "execution_kill_switch_enabled",
+    );
+    assert.strictEqual(
+      persistence.auditEntries.at(-1)?.action,
+      "provider_write_execution.blocked",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_order_execute_blocked"),
+      false,
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_execution_attempt_blocked"),
+      false,
+    );
+  });
+
+  it("records provider write dry-run execution attempts when the kill switch is explicitly disabled", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address"],
+      },
+    ]);
+    const adapter = new PoisonTaobaoAdapter();
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "modify_address",
+      payload: {
+        orderId: "secret_order_execute_dry_run",
+        addressFingerprint: "address_fp_execute_123",
+      },
+      idempotencyKey: "secret_write_execute_dry_run",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "customer_confirmed",
+    });
+
+    const attempt = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_dry_run",
+    });
+    const replay = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_dry_run",
+    });
+
+    assert.strictEqual(attempt.status, "dry_run_recorded");
+    assert.strictEqual(attempt.networkExecution, "not_started");
+    assert.strictEqual(attempt.providerMutationExecuted, false);
+    assert.strictEqual(attempt.customerVisibleMessageSent, false);
+    assert.strictEqual(attempt.payloadEscrowOpened, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(replay.attemptId, attempt.attemptId);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].payloadEscrowStatus,
+      "not_stored",
+    );
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].payloadEscrowOpened,
+      false,
+    );
+    assert.match(
+      persistence.writeExecutionAttempts[0].attemptFingerprint,
+      /^[a-f0-9]{64}$/,
+    );
+    assert.strictEqual(
+      persistence.auditEntries.at(-1)?.action,
+      "provider_write_execution.dry_run_recorded",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_order_execute_dry_run"),
+      false,
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_execution_attempt_dry_run"),
+      false,
+    );
+  });
+
+  it("blocks execution attempts for provider write requests that are not approved", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["urge_logistics"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "urge_logistics",
+      payload: { logisticsId: "secret_logistics_execute_unapproved" },
+      idempotencyKey: "secret_write_execute_unapproved",
+      operatorId: "operator_1",
+    });
+    const attempt = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_unapproved",
+    });
+
+    assert.strictEqual(attempt.status, "blocked");
+    assert.match(attempt.operatorVisibleResult, /not approved/i);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].policyReason,
+      "request_not_approved",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries).includes(
+        "secret_logistics_execute_unapproved",
+      ),
+      false,
+    );
+  });
+
+  it("scopes provider write execution attempt idempotency to each write request", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const first = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_execute_one", couponAmountCents: 1000 },
+      idempotencyKey: "secret_write_execute_one",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: first.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+    const second = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_execute_two", couponAmountCents: 2000 },
+      idempotencyKey: "secret_write_execute_two",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: second.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+
+    await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: first.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "shared_execution_key",
+    });
+    const conflict = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: second.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "shared_execution_key",
+    });
+
+    assert.strictEqual(conflict.status, "dry_run_recorded");
+    assert.strictEqual(conflict.networkExecution, "not_started");
+    assert.strictEqual(conflict.providerMutationExecuted, false);
+    assert.strictEqual(conflict.customerVisibleMessageSent, false);
+    assert.strictEqual(conflict.payloadEscrowOpened, false);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 2);
+    assert.notStrictEqual(
+      persistence.writeExecutionAttempts[0].providerWriteRequestId,
+      persistence.writeExecutionAttempts[1].providerWriteRequestId,
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries).includes("secret_order_execute_two"),
+      false,
+    );
+  });
+
+  it("fails closed when provider write execution attempt idempotency is reused after request fingerprint drift", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_execute_drift", couponAmountCents: 1000 },
+      idempotencyKey: "secret_write_execute_drift",
+      operatorId: "operator_1",
+    });
+    await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+
+    const first = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_drift",
+    });
+    persistence.writeRequests[0].reviewFingerprint =
+      "tampered_review_fingerprint";
+    const drift = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_attempt_drift",
+    });
+
+    assert.strictEqual(first.status, "dry_run_recorded");
+    assert.strictEqual(drift.status, "failed");
+    assert.match(drift.operatorVisibleResult, /idempotency/i);
+    assert.strictEqual(drift.networkExecution, "not_started");
+    assert.strictEqual(drift.providerMutationExecuted, false);
+    assert.strictEqual(drift.customerVisibleMessageSent, false);
+    assert.strictEqual(drift.payloadEscrowOpened, false);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries).includes("secret_order_execute_drift"),
       false,
     );
   });
@@ -1760,6 +2126,28 @@ type ProviderWriteRequestRecord = {
   updatedAt: Date;
 };
 
+type ProviderWriteExecutionAttemptRecord = {
+  id: string;
+  tenantId: string;
+  providerWriteRequestId: string;
+  operatorId: string | null;
+  channel: string;
+  action: string;
+  status: "dry_run_recorded" | "blocked" | "failed";
+  idempotencyKeyHash: string;
+  requestHash: string;
+  attemptFingerprint: string;
+  payloadEscrowStatus: string;
+  payloadEscrowOpened: boolean;
+  networkExecution: string;
+  providerMutationExecuted: boolean;
+  customerVisibleMessageSent: boolean;
+  operatorVisibleResult: string;
+  policyReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type ProviderReadCaseRecord = {
   id: string;
   merchantId: string;
@@ -1941,6 +2329,7 @@ function createProviderOperationPersistence(
   } = {},
 ) {
   const writeRequests: ProviderWriteRequestRecord[] = [];
+  const writeExecutionAttempts: ProviderWriteExecutionAttemptRecord[] = [];
   const cases = options.cases ?? [{ id: "case_1", merchantId: "tenant_1" }];
   const auditEntries: Array<{
     caseId: string | null;
@@ -1950,6 +2339,7 @@ function createProviderOperationPersistence(
 
   const persistence = {
     writeRequests,
+    writeExecutionAttempts,
     auditEntries,
     prisma: {
       afterSalesCase: {
@@ -2042,6 +2432,61 @@ function createProviderOperationPersistence(
             });
           }
           return { count: matches.length };
+        },
+      },
+      providerWriteExecutionAttempt: {
+        findUnique: async ({
+          where,
+        }: {
+          where: {
+            tenantId_providerWriteRequestId_idempotencyKeyHash: {
+              tenantId: string;
+              providerWriteRequestId: string;
+              idempotencyKeyHash: string;
+            };
+          };
+        }) =>
+          writeExecutionAttempts.find(
+            (item) =>
+              item.tenantId ===
+                where.tenantId_providerWriteRequestId_idempotencyKeyHash
+                  .tenantId &&
+              item.providerWriteRequestId ===
+                where.tenantId_providerWriteRequestId_idempotencyKeyHash
+                  .providerWriteRequestId &&
+              item.idempotencyKeyHash ===
+                where.tenantId_providerWriteRequestId_idempotencyKeyHash
+                  .idempotencyKeyHash,
+          ) ?? null,
+        create: async ({
+          data,
+        }: {
+          data: Omit<
+            ProviderWriteExecutionAttemptRecord,
+            "id" | "createdAt" | "updatedAt"
+          >;
+        }) => {
+          const existing = writeExecutionAttempts.find(
+            (item) =>
+              item.tenantId === data.tenantId &&
+              item.providerWriteRequestId === data.providerWriteRequestId &&
+              item.idempotencyKeyHash === data.idempotencyKeyHash,
+          );
+          if (existing) {
+            const error = new Error("Unique constraint failed");
+            Object.assign(error, { code: "P2002" });
+            throw error;
+          }
+          const row = {
+            id: `provider_write_execution_attempt_${
+              writeExecutionAttempts.length + 1
+            }`,
+            ...data,
+            createdAt: new Date("2026-06-06T00:02:00.000Z"),
+            updatedAt: new Date("2026-06-06T00:02:00.000Z"),
+          };
+          writeExecutionAttempts.push(row);
+          return row;
         },
       },
     } as unknown as PrismaService,

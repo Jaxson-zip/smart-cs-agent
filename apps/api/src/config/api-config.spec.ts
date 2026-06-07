@@ -3,6 +3,7 @@ import assert from "node:assert";
 import {
   loadApiConfig,
   loadProviderCredentialRefs,
+  providerWriteExecutionKillSwitchEnabled,
   loadProviderWriteReviewAdapterConfigs,
   loadWebOrigin,
 } from "./api-config";
@@ -26,6 +27,7 @@ describe("loadApiConfig", () => {
       realChannelWebhookRateLimitPerMinute: 0,
       providerReadonlyAdapters: [],
       providerWriteReviewAdapters: [],
+      providerWriteExecutionKillSwitch: true,
       providerReadTimeoutMs: 5000,
       providerReadMaxRetries: 0,
     });
@@ -39,6 +41,7 @@ describe("loadApiConfig", () => {
       WECOM_SANDBOX_ENABLED: "false",
       REAL_CHANNEL_WEBHOOK_KILL_SWITCH: "true",
       REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE: "120",
+      PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "false",
       PROVIDER_READ_TIMEOUT_MS: "2500",
       PROVIDER_READ_MAX_RETRIES: "2",
     });
@@ -49,8 +52,31 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.wecomSandboxEnabled, false);
     assert.strictEqual(config.realChannelWebhookKillSwitch, true);
     assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 120);
+    assert.strictEqual(config.providerWriteExecutionKillSwitch, false);
     assert.strictEqual(config.providerReadTimeoutMs, 2500);
     assert.strictEqual(config.providerReadMaxRetries, 2);
+  });
+
+  it("keeps provider write execution kill switch enabled unless explicitly disabled", () => {
+    assert.strictEqual(providerWriteExecutionKillSwitchEnabled({}), true);
+    assert.strictEqual(
+      providerWriteExecutionKillSwitchEnabled({
+        PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+      }),
+      true,
+    );
+    assert.strictEqual(
+      providerWriteExecutionKillSwitchEnabled({
+        PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "false",
+      }),
+      false,
+    );
+    assert.strictEqual(
+      providerWriteExecutionKillSwitchEnabled({
+        PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "not-a-boolean",
+      }),
+      true,
+    );
   });
 
   it("lets explicit environment values override local .env defaults", () => {

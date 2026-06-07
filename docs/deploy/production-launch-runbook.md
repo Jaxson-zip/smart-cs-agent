@@ -222,6 +222,8 @@ Run `npm run verify:provider-write-requests` alongside it when `ProviderWriteReq
 
 Run `npm run verify:provider-write-approval-state` alongside it when the Provider write approval state machine, approve/reject API/BFF routes, two-person review, self-approval blocking, controlled reason codes, `payloadEscrowStatus`, review fingerprints, or sanitized approval response behavior change. This verifier keeps approvals decision-only and checks that approval does not call provider APIs, execute provider writes, decrypt payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
 
+Run `npm run verify:provider-write-execution-attempts` alongside it when the Provider write execution attempt state, execution-attempt API/BFF routes, `PROVIDER_WRITE_EXECUTION_KILL_SWITCH`, dry-run attempt recording, idempotency, payload escrow flags, or sanitized execution-attempt response behavior change. This verifier keeps execution attempts no-network and checks that attempts do not call provider APIs, execute provider writes, open payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
+
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 
 See `docs/deploy/production-image-builds.md` for the build-only image gate and `docs/deploy/production-image-build.yml.example` for the GitHub Actions template.

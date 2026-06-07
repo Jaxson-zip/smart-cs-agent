@@ -17,6 +17,7 @@ import {
   ExecuteActionRequestSchema,
   HandoffRequestSchema,
   ProviderWriteApprovalRequestSchema,
+  ProviderWriteExecutionAttemptRequestSchema,
   ProviderReadRequestSchema,
   ProviderWriteRejectionRequestSchema,
   ProviderWriteRequestSchema,
@@ -25,6 +26,7 @@ import {
   type ExecuteActionRequest,
   type HandoffRequest,
   type ProviderWriteApprovalRequest,
+  type ProviderWriteExecutionAttemptRequest,
   type ProviderReadRequest,
   type ProviderWriteRejectionRequest,
   type ProviderWriteRequest,
@@ -211,6 +213,23 @@ export class OpsController {
       requestId: id,
       reviewerOperatorId: context.operatorId,
       reasonCode: request.reasonCode,
+    });
+  }
+
+  @Post("provider-writes/requests/:id/execution-attempts")
+  executeProviderWriteAttempt(
+    @Param("id") id: string,
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderWriteExecutionAttemptRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const request = ProviderWriteExecutionAttemptRequestSchema.parse(body);
+    return this.opsService.executeProviderWriteAttempt({
+      tenantId: context.tenantId,
+      requestId: id,
+      operatorId: context.operatorId,
+      idempotencyKey: request.idempotencyKey,
     });
   }
 

@@ -51,6 +51,7 @@
     "verify:provider-read-operations": "node scripts/verify-provider-read-operations.mjs",
     "verify:provider-write-requests": "node scripts/verify-provider-write-requests.mjs",
     "verify:provider-write-approval-state": "node scripts/verify-provider-write-approval-state.mjs",
+    "verify:provider-write-execution-attempts": "node scripts/verify-provider-write-execution-attempts.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

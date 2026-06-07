@@ -2,6 +2,27 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR60 Provider Write Execution Attempt Safety
+
+PR60 adds execution-attempt records for approved provider write requests. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.
+
+New API routes:
+
+- `POST /v2/provider-writes/requests/:id/execution-attempts`: admin-only API route for recording a no-network execution attempt for an approved request.
+- `POST /api/operator/provider-writes/requests/:id/execution-attempts`: Web BFF route that uses the HttpOnly admin session and keeps operator API keys server-side.
+
+`PROVIDER_WRITE_EXECUTION_KILL_SWITCH` defaults to enabled. With the default kill switch state, execution attempts persist as `status=blocked` with `policyReason=execution_kill_switch_enabled`. If the kill switch is explicitly set to `false`, the API may record `status=dry_run_recorded`; this still keeps `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `requiresHuman=true`.
+
+`ProviderWriteExecutionAttempt` rows store only tenant/request/operator ids, channel/action names, status, `idempotencyKeyHash`, `requestHash`, `attemptFingerprint`, payload escrow status, no-execution flags, an operator-visible result, and a policy reason. They must not store raw idempotency keys, order IDs, logistics IDs, addresses, provider payloads, provider responses, customer data, operator API keys, provider tokens, webhook secrets, or tenant secrets.
+
+Run:
+
+```bash
+npm run verify:provider-write-execution-attempts
+```
+
+This verifier checks the shared execution attempt contracts, Prisma migration, kill-switch config, API route, Web BFF route, dry-run/no-network tests, sanitized docs, static CI, production launch references, and task plan.
+
 ## PR59 Provider Write Approval State Machine
 
 PR59 adds approve/reject transitions for queued provider write requests. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not decrypt payload escrow, and does not send customer-visible replies.

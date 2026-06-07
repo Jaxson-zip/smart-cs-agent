@@ -583,6 +583,85 @@ describe("OpsController", () => {
     );
   });
 
+  it("uses request operator context for provider write execution attempts", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "demo_tenant",
+        operatorId: "admin_from_context",
+        role: "admin",
+      },
+    ]);
+    let capturedInput:
+      | {
+          tenantId: string;
+          requestId: string;
+          operatorId: string;
+          idempotencyKey: string;
+        }
+      | undefined;
+    const controller = new OpsController({
+      executeProviderWriteAttempt: (input: typeof capturedInput) => {
+        capturedInput = input;
+        return {
+          attemptId: "attempt_1",
+          writeRequestId: input?.requestId ?? "",
+          status: "blocked",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadEscrowOpened: false,
+          operatorVisibleResult: "blocked",
+          requiresHuman: true,
+          retryable: true,
+        };
+      },
+    } as unknown as OpsService);
+
+    await controller.executeProviderWriteAttempt(
+      "write_1",
+      { authorization: "Bearer admin_key_123" },
+      { idempotencyKey: "execution_1" },
+    );
+
+    assert.deepStrictEqual(capturedInput, {
+      tenantId: "demo_tenant",
+      requestId: "write_1",
+      operatorId: "admin_from_context",
+      idempotencyKey: "execution_1",
+    });
+  });
+
+  it("rejects non-admin provider write execution attempts", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      executeProviderWriteAttempt: () => {
+        throw new Error("operator must not execute provider write attempts");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.executeProviderWriteAttempt(
+          "write_1",
+          { authorization: "Bearer operator_key_123" },
+          { idempotencyKey: "execution_1" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
   it("requires operator context before executing provider reads", () => {
     const controller = new OpsController({
       executeProviderRead: () => {

@@ -3,6 +3,7 @@ import { Injectable, Optional } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   ProviderReadResponseSchema,
+  ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteResponseSchema,
   type AgentCaseDecision,
   type CompensationDeclinedRequest,
@@ -14,6 +15,9 @@ import {
   type ProviderReadRequest,
   type ProviderReadResponse,
   type ProviderWriteApprovalRequest,
+  type ProviderWriteExecutionAttemptRequest,
+  type ProviderWriteExecutionAttemptResponse,
+  type ProviderWriteExecutionAttemptStatus,
   type ProviderWriteRequest,
   type ProviderWriteRejectionRequest,
   type ProviderWriteResponse,
@@ -29,6 +33,7 @@ import {
   type ProviderReadonlyClientHarnessResult,
 } from "../adapters/provider-readonly-client-harness.service";
 import { AuditService } from "../audit/audit.service";
+import { providerWriteExecutionKillSwitchEnabled } from "../config/api-config";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -355,6 +360,88 @@ export class OpsService {
     return this.reviewProviderWriteRequest(input, "rejected");
   }
 
+  async executeProviderWriteAttempt(
+    input: ProviderWriteExecutionAttemptInput,
+  ): Promise<ProviderWriteExecutionAttemptResponse> {
+    if (!this.prisma) {
+      return providerWriteExecutionAttemptResponse(
+        `attempt_${Date.now()}`,
+        input.requestId,
+        "failed",
+        "Provider write execution attempt failed because persistence is unavailable.",
+        false,
+      );
+    }
+
+    const request = await this.findProviderWriteRequestById(
+      input.tenantId,
+      input.requestId,
+    );
+    if (!request) {
+      const response = providerWriteExecutionAttemptResponse(
+        `attempt_${Date.now()}`,
+        input.requestId,
+        "failed",
+        "Provider write request was not found for the authenticated tenant.",
+        false,
+      );
+      await this.auditProviderWriteExecutionAttempt(
+        null,
+        input,
+        response,
+        null,
+        null,
+        "request_not_found",
+      );
+      return response;
+    }
+
+    const metadata = providerWriteExecutionAttemptMetadata(input, request);
+    const existingAttempt = await this.findProviderWriteExecutionAttempt(
+      input.tenantId,
+      request.id,
+      metadata.idempotencyKeyHash,
+    );
+    if (existingAttempt) {
+      if (existingAttempt.requestHash === metadata.requestHash) {
+        return providerWriteExecutionAttemptResponseFromRecord(existingAttempt);
+      }
+      const response = providerWriteExecutionAttemptResponse(
+        existingAttempt.id,
+        request.id,
+        "failed",
+        "Provider write execution idempotency key was already used for a different request.",
+        false,
+      );
+      await this.auditProviderWriteExecutionAttempt(
+        request.caseId ?? null,
+        input,
+        response,
+        request,
+        existingAttempt,
+        "idempotency_key_reused",
+      );
+      return response;
+    }
+
+    const decision = providerWriteExecutionDecision(request);
+    const response = providerWriteExecutionAttemptResponse(
+      `attempt_${Date.now()}`,
+      request.id,
+      decision.status,
+      decision.operatorVisibleResult,
+      decision.retryable,
+    );
+
+    return this.persistProviderWriteExecutionAttempt(
+      input,
+      request,
+      response,
+      metadata,
+      decision.policyReason,
+    );
+  }
+
   private async findProviderReadRun(
     tenantId: string | undefined,
     idempotencyKey: string,
@@ -390,6 +477,23 @@ export class OpsService {
         tenantId,
       },
     }) as Promise<ProviderWriteRequestRecord | null>;
+  }
+
+  private async findProviderWriteExecutionAttempt(
+    tenantId: string,
+    providerWriteRequestId: string,
+    idempotencyKeyHash: string,
+  ): Promise<ProviderWriteExecutionAttemptRecord | null> {
+    if (!this.prisma) return null;
+    return this.prisma.providerWriteExecutionAttempt.findUnique({
+      where: {
+        tenantId_providerWriteRequestId_idempotencyKeyHash: {
+          tenantId,
+          providerWriteRequestId,
+          idempotencyKeyHash,
+        },
+      },
+    }) as Promise<ProviderWriteExecutionAttemptRecord | null>;
   }
 
   private async reviewProviderWriteRequest(
@@ -701,6 +805,77 @@ export class OpsService {
     });
   }
 
+  private async persistProviderWriteExecutionAttempt(
+    input: ProviderWriteExecutionAttemptInput,
+    request: ProviderWriteRequestRecord,
+    response: ProviderWriteExecutionAttemptResponse,
+    metadata: ProviderWriteExecutionAttemptMetadata,
+    policyReason: string | null,
+  ): Promise<ProviderWriteExecutionAttemptResponse> {
+    if (!this.prisma) return response;
+
+    let created: ProviderWriteExecutionAttemptRecord;
+    try {
+      created = (await this.prisma.providerWriteExecutionAttempt.create({
+        data: {
+          tenantId: input.tenantId,
+          providerWriteRequestId: request.id,
+          operatorId: input.operatorId ?? null,
+          channel: request.channel ?? "",
+          action: request.action ?? "",
+          status: response.status,
+          idempotencyKeyHash: metadata.idempotencyKeyHash,
+          requestHash: metadata.requestHash,
+          attemptFingerprint: metadata.attemptFingerprint,
+          payloadEscrowStatus: request.payloadEscrowStatus ?? "not_stored",
+          payloadEscrowOpened: false,
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          operatorVisibleResult: response.operatorVisibleResult,
+          policyReason,
+        },
+      })) as ProviderWriteExecutionAttemptRecord;
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const existing = await this.findProviderWriteExecutionAttempt(
+        input.tenantId,
+        request.id,
+        metadata.idempotencyKeyHash,
+      );
+      if (existing?.requestHash === metadata.requestHash) {
+        return providerWriteExecutionAttemptResponseFromRecord(existing);
+      }
+      const conflictResponse = providerWriteExecutionAttemptResponse(
+        existing?.id ?? response.attemptId,
+        request.id,
+        "failed",
+        "Provider write execution idempotency key was already used for a different request.",
+        false,
+      );
+      await this.auditProviderWriteExecutionAttempt(
+        request.caseId ?? null,
+        input,
+        conflictResponse,
+        request,
+        existing ?? null,
+        "idempotency_key_reused",
+      );
+      return conflictResponse;
+    }
+
+    const output = providerWriteExecutionAttemptResponseFromRecord(created);
+    await this.auditProviderWriteExecutionAttempt(
+      request.caseId ?? null,
+      input,
+      output,
+      request,
+      created,
+      policyReason,
+    );
+    return output;
+  }
+
   private async providerReadCaseBelongsToTenant(
     request: ProviderReadRequest,
   ): Promise<boolean> {
@@ -855,6 +1030,43 @@ export class OpsService {
     });
   }
 
+  private async auditProviderWriteExecutionAttempt(
+    caseId: string | null,
+    input: ProviderWriteExecutionAttemptInput,
+    response: ProviderWriteExecutionAttemptResponse,
+    request: ProviderWriteRequestRecord | null,
+    attempt: ProviderWriteExecutionAttemptRecord | null,
+    policyReason: string | null,
+  ) {
+    await this.auditService?.log(
+      caseId,
+      `provider_write_execution.${response.status}`,
+      {
+        providerWriteRequestId: input.requestId,
+        providerWriteExecutionAttemptId: response.attemptId,
+        tenantId: input.tenantId,
+        operatorId: input.operatorId ?? null,
+        channel: request?.channel ?? null,
+        action: request?.action ?? null,
+        requestStatus: request?.status ?? null,
+        reviewFingerprint: fingerprint(request?.reviewFingerprint ?? undefined),
+        payloadEscrowStatus: request?.payloadEscrowStatus ?? "not_stored",
+        payloadEscrowOpened: false,
+        payloadEscrowFingerprint: fingerprint(
+          request?.payloadEscrowFingerprint ?? undefined,
+        ),
+        idempotencyKeyFingerprint: fingerprint(attempt?.idempotencyKeyHash),
+        requestFingerprint: fingerprint(attempt?.requestHash),
+        attemptFingerprint: fingerprint(attempt?.attemptFingerprint),
+        status: response.status,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        policyReason,
+      },
+    );
+  }
+
   handleCompensationDeclined(
     request: CompensationDeclinedRequest,
   ): CompensationDeclinedResponse {
@@ -922,6 +1134,12 @@ type ProviderWriteMetadata = {
   requestHash: string;
 };
 
+type ProviderWriteExecutionAttemptMetadata = {
+  idempotencyKeyHash: string;
+  requestHash: string;
+  attemptFingerprint: string;
+};
+
 type ProviderWriteApprovalInput = {
   tenantId: string;
   requestId: string;
@@ -941,6 +1159,13 @@ type ProviderWriteRejectionInput = {
 type ProviderWriteReviewInput =
   | ProviderWriteApprovalInput
   | ProviderWriteRejectionInput;
+
+type ProviderWriteExecutionAttemptInput = {
+  tenantId: string;
+  requestId: string;
+  operatorId: string;
+  idempotencyKey: ProviderWriteExecutionAttemptRequest["idempotencyKey"];
+};
 
 type ProviderReadCredentialAuditMetadata = {
   credentialResolutionStatus: ProviderCredentialResolution["status"];
@@ -993,6 +1218,28 @@ type ProviderWriteRequestRecord = {
   reviewFingerprint?: string | null;
   payloadEscrowStatus?: string;
   payloadEscrowFingerprint?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+type ProviderWriteExecutionAttemptRecord = {
+  id: string;
+  tenantId?: string;
+  providerWriteRequestId?: string;
+  operatorId?: string | null;
+  channel?: string;
+  action?: string;
+  status: ProviderWriteExecutionAttemptStatus;
+  idempotencyKeyHash?: string;
+  requestHash?: string;
+  attemptFingerprint?: string;
+  payloadEscrowStatus?: string;
+  payloadEscrowOpened?: boolean;
+  networkExecution: string;
+  providerMutationExecuted: boolean;
+  customerVisibleMessageSent: boolean;
+  operatorVisibleResult: string;
+  policyReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -1100,6 +1347,98 @@ function providerWriteReviewFingerprint(
   );
 }
 
+function providerWriteExecutionAttemptMetadata(
+  input: ProviderWriteExecutionAttemptInput,
+  request: ProviderWriteRequestRecord,
+): ProviderWriteExecutionAttemptMetadata {
+  const idempotencyKeyHash = sha256(
+    stableJson({
+      kind: "provider_write_execution_attempt_idempotency_key",
+      value: input.idempotencyKey,
+    }),
+  );
+  const requestHash = sha256(
+    stableJson({
+      kind: "provider_write_execution_attempt_request",
+      providerWriteRequestId: request.id,
+      providerWriteRequestHash: request.requestHash,
+      requestStatus: request.status,
+      reviewFingerprint: request.reviewFingerprint ?? null,
+      payloadEscrowStatus: request.payloadEscrowStatus ?? "not_stored",
+      payloadEscrowFingerprint: request.payloadEscrowFingerprint ?? null,
+      tenantId: input.tenantId,
+      idempotencyKeyHash,
+    }),
+  );
+  return {
+    idempotencyKeyHash,
+    requestHash,
+    attemptFingerprint: sha256(
+      stableJson({
+        kind: "provider_write_execution_attempt",
+        providerWriteRequestId: request.id,
+        providerWriteRequestHash: request.requestHash,
+        requestHash,
+        requestStatus: request.status,
+        reviewFingerprint: request.reviewFingerprint ?? null,
+        payloadEscrowStatus: request.payloadEscrowStatus ?? "not_stored",
+        payloadEscrowFingerprint: request.payloadEscrowFingerprint ?? null,
+        payloadEscrowOpened: false,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+      }),
+    ),
+  };
+}
+
+function providerWriteExecutionDecision(
+  request: ProviderWriteRequestRecord,
+): {
+  status: ProviderWriteExecutionAttemptStatus;
+  operatorVisibleResult: string;
+  policyReason: string | null;
+  retryable: boolean;
+} {
+  if (request.status !== "approved") {
+    return {
+      status: "blocked",
+      operatorVisibleResult:
+        "Provider write execution attempt blocked because the request is not approved.",
+      policyReason: "request_not_approved",
+      retryable: false,
+    };
+  }
+
+  if ((request.payloadEscrowStatus ?? "not_stored") !== "not_stored") {
+    return {
+      status: "blocked",
+      operatorVisibleResult:
+        "Provider write execution attempt blocked because payload escrow opening is not supported in this build.",
+      policyReason: "unsupported_payload_escrow_state",
+      retryable: false,
+    };
+  }
+
+  if (providerWriteExecutionKillSwitchEnabled()) {
+    return {
+      status: "blocked",
+      operatorVisibleResult:
+        "Provider write execution attempt blocked by the provider write execution kill switch.",
+      policyReason: "execution_kill_switch_enabled",
+      retryable: true,
+    };
+  }
+
+  return {
+    status: "dry_run_recorded",
+    operatorVisibleResult:
+      "Provider write dry-run execution attempt recorded; provider network execution remains disabled in this build.",
+    policyReason: null,
+    retryable: false,
+  };
+}
+
 function providerReadResponseFromRun(
   run: ProviderReadRunRecord,
 ): ProviderReadResponse {
@@ -1144,6 +1483,40 @@ function providerWriteReviewResponse(
     requiresHuman: true,
     retryable: false,
   });
+}
+
+function providerWriteExecutionAttemptResponse(
+  attemptId: string,
+  writeRequestId: string,
+  status: ProviderWriteExecutionAttemptStatus,
+  operatorVisibleResult: string,
+  retryable: boolean,
+): ProviderWriteExecutionAttemptResponse {
+  return ProviderWriteExecutionAttemptResponseSchema.parse({
+    attemptId,
+    writeRequestId,
+    status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    payloadEscrowOpened: false,
+    operatorVisibleResult,
+    requiresHuman: true,
+    retryable,
+  });
+}
+
+function providerWriteExecutionAttemptResponseFromRecord(
+  attempt: ProviderWriteExecutionAttemptRecord,
+): ProviderWriteExecutionAttemptResponse {
+  return providerWriteExecutionAttemptResponse(
+    attempt.id,
+    attempt.providerWriteRequestId ?? "",
+    attempt.status,
+    attempt.operatorVisibleResult,
+    attempt.status === "blocked" &&
+      attempt.policyReason === "execution_kill_switch_enabled",
+  );
 }
 
 function sha256(value: string) {
