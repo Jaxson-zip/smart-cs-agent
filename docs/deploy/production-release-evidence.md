@@ -64,3 +64,5 @@ npm run verify:production-launch
 Use `npm run verify:production-release-evidence:safe` in release CI or a launch terminal after `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE` and `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS=true` are injected through the environment.
 
 Before opening a production launch window, run `npm run verify:production-change-approval:safe` against the sanitized approval package. See `docs/deploy/production-change-approval.md` and `docs/deploy/production-change-approval.yml.example`.
+
+For PR54 launch binding, include `launchManifest.scopeHash` as the SHA-256 of the sorted launch manifest entries (`tenantFingerprint`, `channel`, `evidenceFile`) so the binding gate can reject same-count manifest swaps without storing raw tenant IDs.

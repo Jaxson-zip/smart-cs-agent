@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR54 Production Launch Binding Gate
+
+Production launch binding is now checked by:
+
+```bash
+npm run verify:production-launch-binding
+npm run verify:production-launch-binding:safe
+```
+
+The default command validates the launch binding gate, docs, workflow example, and launch references. The safe command reads sanitized release provenance, production release evidence, production change approval, and launch manifest artifacts from their artifact directories, then verifies they belong to the same release id, source commit, production target, change ticket, manifest scope, and artifact SHA-256 set through `SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS=true`. Use `docs/deploy/production-launch-binding.yml.example` after release provenance, release evidence, change approval, and launch manifest artifacts have been exported. This gate still does not call the API, connect to a database, publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR53 Production Change Approval Gate
 
 Production change approval is now checked by:

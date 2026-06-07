@@ -1,0 +1,67 @@
+name: smart-cs-agent production launch binding
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch-binding:
+    name: Verify production launch binding
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify release provenance package
+        env:
+          SMARTCS_RELEASE_PROVENANCE_FILE: production-release-provenance-artifacts/release-provenance.json
+          SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS: "true"
+        run: npm run verify:production-release-provenance:safe
+
+      - name: Verify production release evidence package
+        env:
+          SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE: production-release-evidence-artifacts/production-release-evidence.json
+          SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS: "true"
+        run: npm run verify:production-release-evidence:safe
+
+      - name: Verify production change approval package
+        env:
+          SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE: production-change-approval-artifacts/production-change-approval.json
+          SMARTCS_PRODUCTION_CHANGE_APPROVAL_REQUIRE_PASS: "true"
+        run: npm run verify:production-change-approval:safe
+
+      - name: Verify launch manifest package
+        env:
+          SMARTCS_LAUNCH_MANIFEST_FILE: launch-manifest-artifacts/launch-manifest.json
+          SMARTCS_LAUNCH_EVIDENCE_DIR: launch-evidence-artifacts
+          SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS: "true"
+          SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL: "true"
+          SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY: "true"
+        run: npm run verify:launch-manifest:safe
+
+      - name: Verify launch binding static boundary
+        run: npm run verify:production-launch-binding
+
+      - name: Verify sanitized launch binding
+        env:
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_FILE: production-release-provenance-artifacts/release-provenance.json
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_EVIDENCE_FILE: production-release-evidence-artifacts/production-release-evidence.json
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_CHANGE_APPROVAL_FILE: production-change-approval-artifacts/production-change-approval.json
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_LAUNCH_MANIFEST_FILE: launch-manifest-artifacts/launch-manifest.json
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_SHA256: "${{ env.SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_SHA256 }}"
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_EVIDENCE_SHA256: "${{ env.SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_EVIDENCE_SHA256 }}"
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_CHANGE_APPROVAL_SHA256: "${{ env.SMARTCS_PRODUCTION_LAUNCH_BINDING_CHANGE_APPROVAL_SHA256 }}"
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_LAUNCH_MANIFEST_SHA256: "${{ env.SMARTCS_PRODUCTION_LAUNCH_BINDING_LAUNCH_MANIFEST_SHA256 }}"
+          SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS: "true"
+        run: npm run verify:production-launch-binding:safe

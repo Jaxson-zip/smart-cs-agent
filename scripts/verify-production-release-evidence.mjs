@@ -38,6 +38,7 @@ const LAUNCH_MANIFEST_KEYS = new Set([
   "status",
   "entryCount",
   "channelCount",
+  "scopeHash",
   "requireRealChannel",
   "requireProviderReadonly",
 ]);
@@ -393,6 +394,11 @@ function validateLaunchManifest(launchManifest, options) {
       failures.push(`launchManifest.${key} must be a positive integer`);
     }
   }
+  if (options.requirePass && !isSha256Hex(launchManifest.scopeHash)) {
+    failures.push("launchManifest.scopeHash must be a sha256 hex value");
+  } else if (hasValue(launchManifest.scopeHash) && !isSha256Hex(launchManifest.scopeHash)) {
+    failures.push("launchManifest.scopeHash must be a sha256 hex value");
+  }
   for (const key of ["requireRealChannel", "requireProviderReadonly"]) {
     validateBoolean(`launchManifest.${key}`, launchManifest[key]);
     if (options.requirePass && launchManifest[key] !== true) {
@@ -676,6 +682,10 @@ function isSafeArtifactName(value) {
     value === basename(value) &&
     /^[A-Za-z0-9._-]{3,120}$/.test(value)
   );
+}
+
+function isSha256Hex(value) {
+  return typeof value === "string" && /^[a-fA-F0-9]{64}$/.test(value);
 }
 
 function isIsoTimestamp(value) {

@@ -153,6 +153,7 @@ function validEvidence() {
       status: "passed",
       entryCount: 2,
       channelCount: 2,
+      scopeHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       requireRealChannel: true,
       requireProviderReadonly: true,
     },

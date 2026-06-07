@@ -16,6 +16,7 @@ production-image-security-artifacts/
 production-release-provenance-artifacts/
 production-release-evidence-artifacts/
 production-change-approval-artifacts/
+launch-manifest-artifacts/
 
 # next.js
 /.next/

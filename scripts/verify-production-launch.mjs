@@ -33,6 +33,10 @@ const files = {
     "docs/deploy/production-change-approval.md",
   productionChangeApprovalWorkflow:
     "docs/deploy/production-change-approval.yml.example",
+  productionLaunchBinding:
+    "docs/deploy/production-launch-binding.md",
+  productionLaunchBindingWorkflow:
+    "docs/deploy/production-launch-binding.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
@@ -48,6 +52,8 @@ const files = {
     "scripts/verify-production-release-evidence.mjs",
   productionChangeApprovalVerifier:
     "scripts/verify-production-change-approval.mjs",
+  productionLaunchBindingVerifier:
+    "scripts/verify-production-launch-binding.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -98,6 +104,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-release-evidence:safe",
   "verify:production-change-approval",
   "verify:production-change-approval:safe",
+  "verify:production-launch-binding",
+  "verify:production-launch-binding:safe",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -151,6 +159,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-release-provenance",
   "npm run verify:production-release-evidence",
   "npm run verify:production-change-approval",
+  "npm run verify:production-launch-binding",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -182,6 +191,11 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_CHANGE_APPROVAL_REQUIRE_PASS=true",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_FILE",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_EVIDENCE_FILE",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_CHANGE_APPROVAL_FILE",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_LAUNCH_MANIFEST_FILE",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -359,6 +373,13 @@ mustContainAll("production readiness references change approval", content.produc
   "npm run verify:production-change-approval:safe",
 ]);
 
+mustContainAll("production readiness references launch binding", content.productionReadiness, [
+  "PR54 Production Launch Binding Gate",
+  "docs/deploy/production-launch-binding.yml.example",
+  "npm run verify:production-launch-binding",
+  "npm run verify:production-launch-binding:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -420,6 +441,12 @@ mustContainAll("task plan references PR53", content.taskPlan, [
   "production-change-approval.yml.example",
 ]);
 
+mustContainAll("task plan references PR54", content.taskPlan, [
+  "PR54 - Production Launch Binding Gate",
+  "verify:production-launch-binding",
+  "production-launch-binding.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -430,6 +457,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-release-provenance",
   "verify:production-release-evidence",
   "verify:production-change-approval",
+  "verify:production-launch-binding",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -533,6 +561,15 @@ mustContainAll("production change approval verifier source", content.productionC
   "killSwitchReady",
   "operatorCoverageConfirmed",
 ]);
+mustContainAll("production launch binding verifier source", content.productionLaunchBindingVerifier, [
+  "verify:production-launch-binding",
+  "production-release-provenance-artifacts",
+  "production-release-evidence-artifacts",
+  "production-change-approval-artifacts",
+  "launch-manifest-artifacts",
+  "releaseId binding mismatch",
+  "change ticket binding mismatch",
+]);
 mustContainAll("production image build docs", content.productionImageBuilds, [
   "PR48 Production Image Build Gate",
   "npm run verify:production-image-builds",
@@ -609,6 +646,20 @@ mustContainAll("production change approval workflow", content.productionChangeAp
   "npm run verify:production-change-approval:safe",
   "actions/upload-artifact@v4",
 ]);
+mustContainAll("production launch binding docs", content.productionLaunchBinding, [
+  "PR54 Production Launch Binding Gate",
+  "npm run verify:production-launch-binding",
+  "npm run verify:production-launch-binding:safe",
+  "artifact SHA-256",
+  "does not call the API",
+]);
+mustContainAll("production launch binding workflow", content.productionLaunchBindingWorkflow, [
+  "permissions:",
+  "contents: read",
+  "npm run verify:production-launch-binding",
+  "npm run verify:production-launch-binding:safe",
+  "SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_FILE",
+]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
   "WECOM_SANDBOX_ENABLED=false",
@@ -655,6 +706,8 @@ mustNotContainUnsafeExamples({
   productionReleaseEvidenceWorkflow: content.productionReleaseEvidenceWorkflow,
   productionChangeApproval: content.productionChangeApproval,
   productionChangeApprovalWorkflow: content.productionChangeApprovalWorkflow,
+  productionLaunchBinding: content.productionLaunchBinding,
+  productionLaunchBindingWorkflow: content.productionLaunchBindingWorkflow,
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,
