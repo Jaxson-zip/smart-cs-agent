@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR60 - Provider Write Execution Attempt Safety
+## Current Stage: PR61 - Provider Write Execution Attempt Invariants And Visibility
 
 Status: locally verified, ready for local commit
 
-Previous Stage: PR59 - Provider Write Approval State Machine was verified locally and committed as `33cc55f`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR60 - Provider Write Execution Attempt Safety was verified locally and committed as `a77d7da`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+Provider Write Execution Attempt Safety Stage: PR60 - Provider Write Execution Attempt Safety was verified with no-network execution-attempt records, default-on `PROVIDER_WRITE_EXECUTION_KILL_SWITCH`, dry-run-only recording, `payloadEscrowOpened=false`, no provider/customer-visible execution, request/attempt fingerprints, and fail-closed Web BFF response parsing. It must stay connected to PR61 DB invariants, sanitized visibility, launch checks, and static CI.
 
 Provider Write Approval State Stage: PR59 - Provider Write Approval State Machine was verified with admin-only approve/reject transitions, two-person review, controlled reason codes, sanitized review fingerprints, `payloadEscrowStatus=not_stored`, no provider/customer-visible execution, and BFF request-body allowlisting. It must stay connected to provider write execution attempts, launch checks, and static CI.
 
@@ -59,6 +61,27 @@ Readonly Stage: PR36 - Real Provider Readonly Foundation was verified and must s
 Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified and must stay connected to provider adapter checks.
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
+
+PR61 adds database-level invariants and sanitized admin visibility for `ProviderWriteExecutionAttempt` rows. PostgreSQL check constraints keep persisted attempts locked to `status in (dry_run_recorded, blocked, failed)`, `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `payloadEscrowStatus=not_stored`. Admin-only API and Web BFF list routes return `ProviderWriteExecutionAttemptListItem` metadata for the authenticated tenant only, using short fingerprints and no raw hashes, no provider payloads, no provider responses, no customer messages, no operator API keys, no provider tokens, and no secrets.
+
+### PR61 Scope
+
+- Add PostgreSQL check constraints for provider write execution attempt no-network/no-escrow/customer-invisible invariants.
+- Add shared sanitized `ProviderWriteExecutionAttemptListItem` contract.
+- Add admin-only API route `GET /v2/provider-writes/execution-attempts`.
+- Add admin-only Web BFF route `GET /api/operator/provider-writes/execution-attempts`.
+- Enforce tenant scoping, admin-only access, status/request filters, strict response parsing, and fail-closed unsafe upstream response behavior.
+- Add `npm run verify:provider-write-execution-attempt-visibility` and connect it to docs, public API surface, production launch, and static CI.
+- Keep PR61 visibility read-only/no-network: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR61
+
+- Live Taobao/Douyin provider write clients.
+- Secure payload escrow creation, opening, or decrypt-on-execution.
+- Reading provider credentials or secret manager values.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Replacing the default provider write kill switch with live executor behavior.
+- Production canary coverage for provider write execution.
 
 PR60 adds a no-network provider write execution-attempt safety layer on top of approved write requests. Admin operators can record a dry-run execution attempt only after approval, but the default `PROVIDER_WRITE_EXECUTION_KILL_SWITCH=true` blocks attempts. Even with the kill switch explicitly disabled, attempts only record `dry_run_recorded` and must keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `requiresHuman=true`. Execution-attempt idempotency is scoped to `tenantId + providerWriteRequestId + idempotencyKeyHash`, and the attempt fingerprint binds the original write request hash, approval state, review fingerprint, and payload escrow fingerprint.
 
@@ -165,10 +188,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR58 provider write request queue.
 - [x] PR59 provider write approval state machine.
 - [x] PR60 provider write execution attempt safety.
+- [x] PR61 - Provider Write Execution Attempt Invariants And Visibility.
 
 ## Verification Gate
 
-PR60 provider write execution attempt safety is tracked against this gate inventory:
+PR61 provider write execution attempt invariants and visibility is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -237,6 +261,9 @@ PR60 provider write execution attempt safety is tracked against this gate invent
 - `node --check scripts/verify-provider-write-execution-attempts.mjs`
 - `node --test scripts/verify-provider-write-execution-attempts.test.mjs`
 - `npm.cmd run verify:provider-write-execution-attempts`
+- `node --check scripts/verify-provider-write-execution-attempt-visibility.mjs`
+- `node --test scripts/verify-provider-write-execution-attempt-visibility.test.mjs`
+- `npm.cmd run verify:provider-write-execution-attempt-visibility`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -281,6 +308,20 @@ PR60 provider write execution attempt safety is tracked against this gate invent
 - `git diff --check` passed with CRLF warnings only.
 - Read-only PR60 reviews found a P1 plan ambiguity around `payloadEscrowStatus=not_stored` and idempotency scope, then P2/P3 hardening opportunities in verifier scanning and BFF upstream response handling. The implementation and plan now define `not_stored` as the safe dry-run precondition, persist `payloadEscrowOpened=false`, scope idempotency to each provider write request, bind request/attempt fingerprints to approval and escrow state, add verifier checks that reject provider write calls or credential/decrypt access in execution helpers, and make the Web BFF fail closed if the upstream execution-attempt response contains raw/provider/secret fields.
 - PR60 is still no-network only: no payload escrow opening, no provider credential/decrypt path, no real Taobao/Douyin mutation, and no customer-visible message send has been enabled.
+
+### PR61 Final Verification Notes
+
+- `npm.cmd run db:generate` passed.
+- `npm.cmd run db:migrate:deploy` passed and applied `20260608011000_pr61_provider_write_execution_attempt_constraints`.
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 188 tests.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 75 tests.
+- `node --test scripts\verify-provider-write-execution-attempt-visibility.test.mjs` passed with 4 tests.
+- `npm.cmd run verify:provider-write-execution-attempt-visibility`, `npm.cmd run verify:provider-write-execution-attempts`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 107 pass / 1 skipped. The skipped test is the existing Windows symlink-permission case.
+- `git diff --check` passed with CRLF warnings only.
+- Read-only PR61 review found no blocking issue. One P3 hardening item was fixed: `operatorVisibleResult` is now blocked from execution-attempt list visibility by the shared schema test, BFF unsafe-field guard, and PR61 verifier negative fixture.
+- PR61 is still read-only/no-network visibility only: no payload escrow opening, no provider credential/decrypt path, no real Taobao/Douyin mutation, and no customer-visible message send has been enabled.
 
 ### PR59 Final Verification Notes
 

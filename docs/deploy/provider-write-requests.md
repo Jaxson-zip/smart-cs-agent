@@ -2,6 +2,27 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR61 Provider Write Execution Attempt Invariants And Visibility
+
+PR61 adds database invariants and admin-only sanitized visibility for provider write execution attempts. It does not add a live executor, payload escrow opening, provider credential reads, provider mutations, or customer-visible sends.
+
+New read routes:
+
+- `GET /v2/provider-writes/execution-attempts`: admin-only API route for listing sanitized `ProviderWriteExecutionAttemptListItem` rows for the authenticated tenant.
+- `GET /api/operator/provider-writes/execution-attempts`: Web BFF admin route that uses the HttpOnly admin session and keeps operator API keys server-side.
+
+The database now rejects unsafe `ProviderWriteExecutionAttempt` rows unless `status` is one of `dry_run_recorded`, `blocked`, or `failed`, `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `payloadEscrowStatus=not_stored`.
+
+Visibility responses expose only safe operational metadata: attempt id, provider write request id, operator id, channel/action, status, no-network flags, payload escrow status, short request/attempt fingerprints, policy reason, and timestamps. They must not expose `idempotencyKeyHash`, full request hashes, full attempt fingerprints, raw order IDs, logistics IDs, addresses, provider payloads, provider responses, customer messages, operator API keys, provider tokens, webhook secrets, or tenant secrets.
+
+Run:
+
+```bash
+npm run verify:provider-write-execution-attempt-visibility
+```
+
+This verifier checks the migration constraints, shared `ProviderWriteExecutionAttemptListItem` contract, API route, Web BFF route, tests, docs, static CI wiring, and production launch references. It keeps visibility read-only and no-network.
+
 ## PR60 Provider Write Execution Attempt Safety
 
 PR60 adds execution-attempt records for approved provider write requests. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.

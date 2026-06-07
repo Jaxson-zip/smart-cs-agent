@@ -18,6 +18,8 @@ The provider readonly sandbox harness is still no-network in this launch track. 
 
 Provider write requests are also review-only in this launch track. `ProviderWriteRequest` may queue low-risk requests allowed by `PROVIDER_WRITE_REVIEW_ADAPTERS`, but accepted requests must keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`. The queue persists `idempotencyKeyHash`, not raw caller idempotency keys. Do not include raw order IDs, logistics IDs, addresses, provider payloads, provider responses, idempotency keys, operator API keys, provider tokens, or customer data in launch tickets or audit exports.
 
+Provider write execution attempt visibility is support-only in this launch track. Admins may inspect sanitized `ProviderWriteExecutionAttemptListItem` rows through `GET /v2/provider-writes/execution-attempts` or `GET /api/operator/provider-writes/execution-attempts`, but these routes must remain read-only and must not expose raw hashes, raw order IDs, logistics IDs, addresses, provider payloads, provider responses, customer messages, operator API keys, provider tokens, webhook secrets, or tenant secrets. Provider write execution attempt visibility does not prove that any real provider write has run.
+
 ## Launch Decision
 
 Use this runbook before every production launch or gray release that changes real-channel intake, queue handling, identity, readiness, metrics, alerting, or operator review behavior.
@@ -29,6 +31,7 @@ Launch may proceed only when all of these are true:
 - Production branch protection evidence has passed `npm run verify:production-branch-protection:safe`, with `Static production gates` configured as a required status check and no bypass actors.
 - Any real provider write pilot has passed `npm run verify:production-provider-write-approval:safe`, remains `human_review_required`, and has automatic provider writes disabled.
 - `npm run verify:provider-write-requests` passes when provider write request queue contracts, `ProviderWriteRequest` persistence, `PROVIDER_WRITE_REVIEW_ADAPTERS`, API/BFF routes, or sanitized response behavior change.
+- `npm run verify:provider-write-execution-attempt-visibility` passes when provider write execution attempt visibility, DB no-network constraints, API/BFF list routes, or sanitized list response behavior change.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
 - `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.
@@ -76,6 +79,7 @@ npm run verify:production-branch-protection:safe
 npm run verify:production-provider-write-approval
 npm run verify:production-provider-write-approval:safe
 npm run verify:provider-write-requests
+npm run verify:provider-write-execution-attempt-visibility
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
 npm run verify:merchant-launch-preflight:safe
 npm run generate:launch-evidence:safe
@@ -223,6 +227,8 @@ Run `npm run verify:provider-write-requests` alongside it when `ProviderWriteReq
 Run `npm run verify:provider-write-approval-state` alongside it when the Provider write approval state machine, approve/reject API/BFF routes, two-person review, self-approval blocking, controlled reason codes, `payloadEscrowStatus`, review fingerprints, or sanitized approval response behavior change. This verifier keeps approvals decision-only and checks that approval does not call provider APIs, execute provider writes, decrypt payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
 
 Run `npm run verify:provider-write-execution-attempts` alongside it when the Provider write execution attempt state, execution-attempt API/BFF routes, `PROVIDER_WRITE_EXECUTION_KILL_SWITCH`, dry-run attempt recording, idempotency, payload escrow flags, or sanitized execution-attempt response behavior change. This verifier keeps execution attempts no-network and checks that attempts do not call provider APIs, execute provider writes, open payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
+
+Run `npm run verify:provider-write-execution-attempt-visibility` alongside it when Provider write execution attempt visibility, DB no-network constraints, API/BFF list routes, `ProviderWriteExecutionAttemptListItem`, or sanitized response behavior change. This verifier keeps visibility read-only and checks that the browser and launch support exports do not expose raw hashes, provider payloads, provider responses, customer messages, operator API keys, provider tokens, or secrets. See `docs/deploy/provider-write-requests.md`.
 
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 

@@ -299,6 +299,27 @@ export const ProviderWriteExecutionAttemptResponseSchema = z
   })
   .strict();
 
+export const ProviderWriteExecutionAttemptListItemSchema = z
+  .object({
+    id: z.string(),
+    providerWriteRequestId: z.string(),
+    operatorId: z.string().nullable(),
+    channel: CommerceChannelSchema,
+    action: ProviderWriteActionSchema,
+    status: ProviderWriteExecutionAttemptStatusSchema,
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+    payloadEscrowStatus: z.literal("not_stored"),
+    payloadEscrowOpened: z.literal(false),
+    requestFingerprint: z.string(),
+    attemptFingerprint: z.string(),
+    policyReason: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -384,6 +405,9 @@ export type ProviderWriteExecutionAttemptRequest = z.infer<
 >;
 export type ProviderWriteExecutionAttemptResponse = z.infer<
   typeof ProviderWriteExecutionAttemptResponseSchema
+>;
+export type ProviderWriteExecutionAttemptListItem = z.infer<
+  typeof ProviderWriteExecutionAttemptListItemSchema
 >;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema

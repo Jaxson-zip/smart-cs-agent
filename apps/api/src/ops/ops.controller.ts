@@ -18,6 +18,7 @@ import {
   HandoffRequestSchema,
   ProviderWriteApprovalRequestSchema,
   ProviderWriteExecutionAttemptRequestSchema,
+  ProviderWriteExecutionAttemptStatusSchema,
   ProviderReadRequestSchema,
   ProviderWriteRejectionRequestSchema,
   ProviderWriteRequestSchema,
@@ -48,6 +49,12 @@ const providerWriteRequestsQuerySchema = z.object({
   status: z
     .enum(["approval_required", "approved", "rejected", "blocked", "failed"])
     .optional(),
+});
+
+const providerWriteExecutionAttemptsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  status: ProviderWriteExecutionAttemptStatusSchema.optional(),
+  providerWriteRequestId: z.string().min(1).optional(),
 });
 
 const providerReadSummaryQuerySchema = z.object({
@@ -126,6 +133,27 @@ export class OpsController {
       tenantId: context.tenantId,
       limit: parsed.data.limit,
       status: parsed.data.status,
+    });
+  }
+
+  @Get("provider-writes/execution-attempts")
+  async listProviderWriteExecutionAttempts(
+    @Query() query: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const parsed = providerWriteExecutionAttemptsQuerySchema.safeParse(
+      query ?? {},
+    );
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+    return this.opsService.listProviderWriteExecutionAttempts({
+      tenantId: context.tenantId,
+      limit: parsed.data.limit,
+      status: parsed.data.status,
+      providerWriteRequestId: parsed.data.providerWriteRequestId,
     });
   }
 

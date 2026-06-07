@@ -3,6 +3,7 @@ import { Injectable, Optional } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   ProviderReadResponseSchema,
+  ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteResponseSchema,
   type AgentCaseDecision,
@@ -16,6 +17,7 @@ import {
   type ProviderReadResponse,
   type ProviderWriteApprovalRequest,
   type ProviderWriteExecutionAttemptRequest,
+  type ProviderWriteExecutionAttemptListItem,
   type ProviderWriteExecutionAttemptResponse,
   type ProviderWriteExecutionAttemptStatus,
   type ProviderWriteRequest,
@@ -132,6 +134,26 @@ export class OpsService {
     })) as ProviderWriteRequestRecord[];
 
     return requests.map(toSanitizedProviderWriteRequest);
+  }
+
+  async listProviderWriteExecutionAttempts(
+    input: ListProviderWriteExecutionAttemptsInput,
+  ): Promise<ProviderWriteExecutionAttemptListItem[]> {
+    if (!this.prisma) return [];
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    const attempts = (await this.prisma.providerWriteExecutionAttempt.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.providerWriteRequestId
+          ? { providerWriteRequestId: input.providerWriteRequestId }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    })) as ProviderWriteExecutionAttemptRecord[];
+
+    return attempts.map(toSanitizedProviderWriteExecutionAttempt);
   }
 
   ingestMessage(): AgentCaseDecision {
@@ -1256,6 +1278,13 @@ type ListProviderWriteRequestsInput = {
   status?: string;
 };
 
+type ListProviderWriteExecutionAttemptsInput = {
+  tenantId: string;
+  limit?: number;
+  status?: ProviderWriteExecutionAttemptStatus;
+  providerWriteRequestId?: string;
+};
+
 type ProviderReadSummaryInput = {
   tenantId: string;
   from?: Date;
@@ -1621,6 +1650,29 @@ function toSanitizedProviderWriteRequest(run: ProviderWriteRequestRecord) {
     createdAt: run.createdAt?.toISOString() ?? "",
     updatedAt: run.updatedAt?.toISOString() ?? "",
   };
+}
+
+function toSanitizedProviderWriteExecutionAttempt(
+  attempt: ProviderWriteExecutionAttemptRecord,
+): ProviderWriteExecutionAttemptListItem {
+  return ProviderWriteExecutionAttemptListItemSchema.parse({
+    id: attempt.id,
+    providerWriteRequestId: attempt.providerWriteRequestId ?? "",
+    operatorId: attempt.operatorId ?? null,
+    channel: attempt.channel ?? "",
+    action: attempt.action ?? "",
+    status: attempt.status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    payloadEscrowStatus: "not_stored",
+    payloadEscrowOpened: false,
+    requestFingerprint: fingerprint(attempt.requestHash),
+    attemptFingerprint: fingerprint(attempt.attemptFingerprint),
+    policyReason: attempt.policyReason ?? null,
+    createdAt: attempt.createdAt?.toISOString() ?? "",
+    updatedAt: attempt.updatedAt?.toISOString() ?? "",
+  });
 }
 
 function sanitizeLookupKeys(value: unknown) {

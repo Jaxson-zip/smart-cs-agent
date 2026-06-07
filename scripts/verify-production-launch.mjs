@@ -60,6 +60,8 @@ const files = {
     "scripts/verify-provider-write-approval-state.mjs",
   providerWriteExecutionAttemptsVerifier:
     "scripts/verify-provider-write-execution-attempts.mjs",
+  providerWriteExecutionAttemptVisibilityVerifier:
+    "scripts/verify-provider-write-execution-attempt-visibility.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -121,6 +123,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
+  "verify:provider-write-execution-attempt-visibility",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -184,6 +187,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-provider-write-approval",
   "npm run verify:production-provider-write-approval:safe",
   "npm run verify:provider-write-requests",
+  "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -461,6 +465,11 @@ mustContainAll("production readiness references provider write execution attempt
   "npm run verify:provider-write-execution-attempts",
 ]);
 
+mustContainAll("production readiness references provider write execution attempt visibility", content.productionReadiness, [
+  "PR61 Provider Write Execution Attempt Invariants And Visibility",
+  "npm run verify:provider-write-execution-attempt-visibility",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -558,6 +567,11 @@ mustContainAll("task plan references PR60", content.taskPlan, [
   "verify:provider-write-execution-attempts",
 ]);
 
+mustContainAll("task plan references PR61", content.taskPlan, [
+  "PR61 - Provider Write Execution Attempt Invariants And Visibility",
+  "verify:provider-write-execution-attempt-visibility",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -566,6 +580,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-provider-write-approval",
   "verify:provider-write-requests",
   "verify:provider-write-execution-attempts",
+  "verify:provider-write-execution-attempt-visibility",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -641,6 +656,13 @@ mustContainAll("provider write execution attempts verifier source", content.prov
   "payloadEscrowOpened: false",
   "providerMutationExecuted: false",
   "customerVisibleMessageSent: false",
+]);
+mustContainAll("provider write execution attempt visibility verifier source", content.providerWriteExecutionAttemptVisibilityVerifier, [
+  "verify:provider-write-execution-attempt-visibility",
+  "ProviderWriteExecutionAttemptListItemSchema",
+  "GET /v2/provider-writes/execution-attempts",
+  "GET /api/operator/provider-writes/execution-attempts",
+  "provider write execution attempt visibility",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -881,19 +903,29 @@ mustContainAll("provider write execution attempts docs", content.providerWriteRe
   "dry_run_recorded",
   "npm run verify:provider-write-execution-attempts",
 ]);
+mustContainAll("provider write execution attempt visibility docs", content.providerWriteRequests, [
+  "PR61 Provider Write Execution Attempt Invariants And Visibility",
+  "GET /v2/provider-writes/execution-attempts",
+  "GET /api/operator/provider-writes/execution-attempts",
+  "ProviderWriteExecutionAttemptListItem",
+  "npm run verify:provider-write-execution-attempt-visibility",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
   "POST /v2/provider-writes/requests/:id/approve",
   "POST /v2/provider-writes/requests/:id/reject",
   "POST /v2/provider-writes/requests/:id/execution-attempts",
+  "GET /v2/provider-writes/execution-attempts",
   "POST /api/operator/provider-writes/requests",
   "GET /api/operator/provider-writes/requests",
   "POST /api/operator/provider-writes/requests/:id/approve",
   "POST /api/operator/provider-writes/requests/:id/reject",
   "POST /api/operator/provider-writes/requests/:id/execution-attempts",
+  "GET /api/operator/provider-writes/execution-attempts",
   "ProviderWriteRequest",
   "ProviderWriteExecutionAttempt",
+  "ProviderWriteExecutionAttemptListItem",
   "idempotencyKeyHash",
   "payloadEscrowOpened=false",
   "providerMutationExecuted=false",
@@ -912,6 +944,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-approval-state",
   "npm run verify:provider-write-execution-attempts",
+  "npm run verify:provider-write-execution-attempt-visibility",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

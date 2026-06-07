@@ -6,6 +6,7 @@ import {
   ProviderReadRequestSchema,
   ProviderReadResponseSchema,
   ProviderWriteApprovalRequestSchema,
+  ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptRequestSchema,
   ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteRequestSchema,
@@ -398,6 +399,50 @@ describe("OpsService provider adapter contract", () => {
         operatorVisibleResult: "unsafe",
         requiresHuman: true,
         retryable: false,
+      }),
+    );
+    assert.throws(() =>
+      ProviderWriteExecutionAttemptListItemSchema.parse({
+        id: "attempt_1",
+        providerWriteRequestId: "write_1",
+        operatorId: "admin_1",
+        channel: "taobao",
+        action: "issue_coupon",
+        status: "dry_run_recorded",
+        networkExecution: "started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowOpened: false,
+        requestFingerprint: "abcdef123456",
+        attemptFingerprint: "123456abcdef",
+        policyReason: null,
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      }),
+    );
+    assert.throws(() =>
+      ProviderWriteExecutionAttemptListItemSchema.parse({
+        id: "attempt_1",
+        providerWriteRequestId: "write_1",
+        operatorId: "admin_1",
+        channel: "taobao",
+        action: "issue_coupon",
+        status: "dry_run_recorded",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowOpened: false,
+        requestFingerprint: "abcdef123456",
+        attemptFingerprint: "123456abcdef",
+        policyReason: null,
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+        operatorVisibleResult: "free text must not enter list rows",
+        orderId: "secret_order_1",
+        providerPayload: { secret: true },
+        operatorApiKey: "secret_key",
       }),
     );
   });
@@ -1093,6 +1138,100 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
     assert.strictEqual(
       JSON.stringify(persistence.auditEntries).includes("secret_order_execute_drift"),
+      false,
+    );
+  });
+
+  it("lists sanitized provider write execution attempts for one tenant with filters", async () => {
+    const persistence = createProviderOperationPersistence();
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_old",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_1",
+      operatorId: "admin_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "blocked",
+      idempotencyKeyHash:
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      requestHash:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      attemptFingerprint:
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-06T00:00:00.000Z"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_latest",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_2",
+      operatorId: "admin_2",
+      channel: "douyin",
+      action: "urge_logistics",
+      status: "dry_run_recorded",
+      idempotencyKeyHash:
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      requestHash:
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      attemptFingerprint:
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      policyReason: null,
+      createdAt: new Date("2026-06-06T00:05:00.000Z"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_other_tenant",
+      tenantId: "tenant_2",
+      providerWriteRequestId: "provider_write_request_3",
+      operatorId: "admin_3",
+      channel: "taobao",
+      action: "modify_address",
+      status: "blocked",
+      idempotencyKeyHash:
+        "1111111111111111111111111111111111111111111111111111111111111111",
+      requestHash:
+        "2222222222222222222222222222222222222222222222222222222222222222",
+      attemptFingerprint:
+        "3333333333333333333333333333333333333333333333333333333333333333",
+      policyReason: "request_not_approved",
+      createdAt: new Date("2026-06-06T00:10:00.000Z"),
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const attempts = await service.listProviderWriteExecutionAttempts({
+      tenantId: "tenant_1",
+      limit: 10,
+    });
+    const filtered = await service.listProviderWriteExecutionAttempts({
+      tenantId: "tenant_1",
+      status: "blocked",
+      providerWriteRequestId: "provider_write_request_1",
+      limit: 10,
+    });
+
+    assert.deepStrictEqual(
+      attempts.map((attempt) => attempt.id),
+      ["attempt_latest", "attempt_old"],
+    );
+    assert.strictEqual(attempts[0].networkExecution, "not_started");
+    assert.strictEqual(attempts[0].providerMutationExecuted, false);
+    assert.strictEqual(attempts[0].customerVisibleMessageSent, false);
+    assert.strictEqual(attempts[0].payloadEscrowStatus, "not_stored");
+    assert.strictEqual(attempts[0].payloadEscrowOpened, false);
+    assert.strictEqual(attempts[0].requestFingerprint, "eeeeeeeeeeee");
+    assert.strictEqual(attempts[0].attemptFingerprint, "ffffffffffff");
+    assert.strictEqual(filtered.length, 1);
+    assert.strictEqual(filtered[0].id, "attempt_old");
+    assert.strictEqual("requestHash" in attempts[0], false);
+    assert.strictEqual("idempotencyKeyHash" in attempts[0], false);
+    assert.strictEqual(JSON.stringify(attempts).includes("tenant_2"), false);
+    assert.strictEqual(
+      JSON.stringify(attempts).includes(
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      ),
       false,
     );
   });
@@ -2168,6 +2307,21 @@ type SeedProviderReadRunInput = {
   createdAt?: Date;
 };
 
+type SeedProviderWriteExecutionAttemptInput = {
+  id: string;
+  tenantId: string;
+  providerWriteRequestId: string;
+  operatorId: string | null;
+  channel: string;
+  action: string;
+  status: "dry_run_recorded" | "blocked" | "failed";
+  idempotencyKeyHash: string;
+  requestHash: string;
+  attemptFingerprint: string;
+  policyReason: string | null;
+  createdAt: Date;
+};
+
 function createProviderReadPersistence(
   options: {
     failNextCreateWithDuplicate?: boolean;
@@ -2336,11 +2490,37 @@ function createProviderOperationPersistence(
     action: string;
     details: unknown;
   }> = [];
+  const seedWriteExecutionAttempt = (
+    input: SeedProviderWriteExecutionAttemptInput,
+  ) => {
+    writeExecutionAttempts.push({
+      id: input.id,
+      tenantId: input.tenantId,
+      providerWriteRequestId: input.providerWriteRequestId,
+      operatorId: input.operatorId,
+      channel: input.channel,
+      action: input.action,
+      status: input.status,
+      idempotencyKeyHash: input.idempotencyKeyHash,
+      requestHash: input.requestHash,
+      attemptFingerprint: input.attemptFingerprint,
+      payloadEscrowStatus: "not_stored",
+      payloadEscrowOpened: false,
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult: "seeded",
+      policyReason: input.policyReason,
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
+    });
+  };
 
   const persistence = {
     writeRequests,
     writeExecutionAttempts,
     auditEntries,
+    seedWriteExecutionAttempt,
     prisma: {
       afterSalesCase: {
         findFirst: async ({
@@ -2435,6 +2615,24 @@ function createProviderOperationPersistence(
         },
       },
       providerWriteExecutionAttempt: {
+        findMany: async ({
+          where,
+          orderBy,
+          take,
+        }: {
+          where?: ProviderWriteExecutionAttemptWhere;
+          orderBy?: { createdAt?: "asc" | "desc" };
+          take?: number;
+        }) => {
+          const sorted = filterWriteExecutionAttempts(
+            writeExecutionAttempts,
+            where,
+          ).sort((left, right) => {
+            const direction = orderBy?.createdAt === "asc" ? 1 : -1;
+            return direction * (left.createdAt.getTime() - right.createdAt.getTime());
+          });
+          return take === undefined ? sorted : sorted.slice(0, take);
+        },
         findUnique: async ({
           where,
         }: {
@@ -2637,6 +2835,12 @@ type ProviderWriteRequestWhere = {
   channel?: string;
 };
 
+type ProviderWriteExecutionAttemptWhere = {
+  tenantId?: string;
+  status?: string;
+  providerWriteRequestId?: string;
+};
+
 function filterWriteRequests(
   writeRequests: ProviderWriteRequestRecord[],
   where: ProviderWriteRequestWhere | undefined,
@@ -2646,6 +2850,23 @@ function filterWriteRequests(
     if (where?.tenantId && request.tenantId !== where.tenantId) return false;
     if (where?.status && request.status !== where.status) return false;
     if (where?.channel && request.channel !== where.channel) return false;
+    return true;
+  });
+}
+
+function filterWriteExecutionAttempts(
+  attempts: ProviderWriteExecutionAttemptRecord[],
+  where: ProviderWriteExecutionAttemptWhere | undefined,
+) {
+  return attempts.filter((attempt) => {
+    if (where?.tenantId && attempt.tenantId !== where.tenantId) return false;
+    if (where?.status && attempt.status !== where.status) return false;
+    if (
+      where?.providerWriteRequestId &&
+      attempt.providerWriteRequestId !== where.providerWriteRequestId
+    ) {
+      return false;
+    }
     return true;
   });
 }

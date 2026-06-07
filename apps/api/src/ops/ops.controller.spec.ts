@@ -330,6 +330,90 @@ describe("OpsController", () => {
     assert.strictEqual(capturedRequest?.operatorId, "operator_from_context");
   });
 
+  it("lets admin operators list sanitized provider write execution attempts", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    let capturedInput: unknown;
+    const controller = new OpsController({
+      listProviderWriteExecutionAttempts: (input: unknown) => {
+        capturedInput = input;
+        return [
+          {
+            id: "attempt_1",
+            providerWriteRequestId: "write_1",
+            operatorId: "admin_1",
+            channel: "taobao",
+            action: "issue_coupon",
+            status: "blocked",
+            networkExecution: "not_started",
+            providerMutationExecuted: false,
+            customerVisibleMessageSent: false,
+            payloadEscrowStatus: "not_stored",
+            payloadEscrowOpened: false,
+            requestFingerprint: "abcdef123456",
+            attemptFingerprint: "123456abcdef",
+            policyReason: "execution_kill_switch_enabled",
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+          },
+        ];
+      },
+    } as unknown as OpsService);
+
+    const response = await controller.listProviderWriteExecutionAttempts(
+      {
+        limit: "10",
+        status: "blocked",
+        providerWriteRequestId: "write_1",
+      },
+      { authorization: "Bearer admin_key_123" },
+    );
+
+    assert.deepStrictEqual(capturedInput, {
+      tenantId: "tenant_1",
+      limit: 10,
+      status: "blocked",
+      providerWriteRequestId: "write_1",
+    });
+    assert.strictEqual(response[0].networkExecution, "not_started");
+    assert.strictEqual("requestHash" in response[0], false);
+  });
+
+  it("rejects non-admin provider write execution attempt visibility", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      listProviderWriteExecutionAttempts: () => {
+        throw new Error("must not list provider write execution attempts");
+      },
+    } as unknown as OpsService);
+
+    await assert.rejects(
+      () =>
+        controller.listProviderWriteExecutionAttempts(
+          {},
+          { authorization: "Bearer operator_key_123" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
   it("uses request operator context for provider write requests", async () => {
     process.env.OPERATOR_API_KEYS = JSON.stringify([
       {

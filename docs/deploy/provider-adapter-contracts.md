@@ -2,6 +2,22 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR61 Provider Write Execution Attempt Invariants And Visibility
+
+PR61 adds database check constraints and admin-only sanitized list visibility for no-network `ProviderWriteExecutionAttempt` rows:
+
+- `GET /v2/provider-writes/execution-attempts`: admin-only API route returning `ProviderWriteExecutionAttemptListItem` records for the authenticated tenant.
+- `GET /api/operator/provider-writes/execution-attempts`: Web BFF admin route that validates upstream shape and fails closed on raw/provider/secret fields.
+- PostgreSQL constraints keep execution attempts locked to `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, `payloadEscrowOpened=false`, and `payloadEscrowStatus=not_stored`.
+
+Run:
+
+```bash
+npm run verify:provider-write-execution-attempt-visibility
+```
+
+This verifier checks the visibility contract, DB invariants, API/BFF routes, sanitized tests, docs, static CI wiring, and production launch references. It does not call provider APIs and does not execute provider writes.
+
 ## PR60 Provider Write Execution Attempt Safety
 
 PR60 adds a no-network execution-attempt boundary for approved `ProviderWriteRequest` rows:

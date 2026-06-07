@@ -15,6 +15,7 @@ import { POST as logoutOperator } from "./logout/route";
 import { GET as getOperatorMe } from "./me/route";
 import { GET as listProviderReadRuns } from "./provider-reads/runs/route";
 import { GET as getProviderReadSummary } from "./provider-reads/summary/route";
+import { GET as listProviderWriteExecutionAttempts } from "./provider-writes/execution-attempts/route";
 import {
   GET as listProviderWriteRequests,
   POST as requestProviderWrite,
@@ -1689,6 +1690,154 @@ describe("operator BFF routes", () => {
         { idempotencyKey: "execution_1" },
       ),
       { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(unsafe.status, 502);
+    assert.deepStrictEqual(await unsafe.json(), {
+      error: "Provider write execution attempt response is invalid",
+    });
+  });
+
+  it("lets admin sessions list sanitized provider write execution attempts through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json([
+        {
+          id: "attempt_1",
+          providerWriteRequestId: "provider_write_request_1",
+          operatorId: "admin_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          status: "blocked",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadEscrowStatus: "not_stored",
+          payloadEscrowOpened: false,
+          requestFingerprint: "abcdef123456",
+          attemptFingerprint: "123456abcdef",
+          policyReason: "execution_kill_switch_enabled",
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+      ]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listProviderWriteExecutionAttempts(
+      new Request(
+        "http://localhost/api/operator/provider-writes/execution-attempts?limit=10&status=blocked&providerWriteRequestId=provider_write_request_1",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/execution-attempts?limit=10&status=blocked&providerWriteRequestId=provider_write_request_1",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    const body = await response.json();
+    assert.deepStrictEqual(body, [
+      {
+        id: "attempt_1",
+        providerWriteRequestId: "provider_write_request_1",
+        operatorId: "admin_1",
+        channel: "taobao",
+        action: "issue_coupon",
+        status: "blocked",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowOpened: false,
+        requestFingerprint: "abcdef123456",
+        attemptFingerprint: "123456abcdef",
+        policyReason: "execution_kill_switch_enabled",
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      },
+    ]);
+    assert.strictEqual(JSON.stringify(body).includes("admin_api_key"), false);
+  });
+
+  it("rejects unsafe provider write execution attempt lists and blocks non-admin sessions", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"},{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json([
+        {
+          id: "attempt_1",
+          providerWriteRequestId: "provider_write_request_1",
+          operatorId: "admin_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          status: "dry_run_recorded",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadEscrowStatus: "not_stored",
+          payloadEscrowOpened: false,
+          requestFingerprint: "abcdef123456",
+          attemptFingerprint: "123456abcdef",
+          policyReason: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+          operatorVisibleResult: "free text must not enter list rows",
+          providerPayload: { secret: true },
+          operatorApiKey: "operator_api_key_must_not_leak",
+        },
+      ]);
+    };
+
+    const agentLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const blocked = await listProviderWriteExecutionAttempts(
+      new Request("http://localhost/api/operator/provider-writes/execution-attempts", {
+        headers: { cookie: agentLogin.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(blocked.status, 403);
+    assert.deepStrictEqual(await blocked.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+
+    const adminLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const unsafe = await listProviderWriteExecutionAttempts(
+      new Request("http://localhost/api/operator/provider-writes/execution-attempts", {
+        headers: { cookie: adminLogin.headers.get("set-cookie") ?? "" },
+      }),
     );
 
     assert.strictEqual(unsafe.status, 502);

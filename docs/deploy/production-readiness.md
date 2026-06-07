@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR61 Provider Write Execution Attempt Invariants And Visibility
+
+Provider write execution attempt invariants and visibility are now checked by:
+
+```bash
+npm run verify:provider-write-execution-attempt-visibility
+```
+
+This gate adds PostgreSQL check constraints and admin-only sanitized list visibility for `ProviderWriteExecutionAttempt` rows. It requires execution attempts to remain no-network, no-escrow, and customer-invisible at the database boundary, and it exposes only `ProviderWriteExecutionAttemptListItem` metadata through `GET /v2/provider-writes/execution-attempts` and `GET /api/operator/provider-writes/execution-attempts`. This verifier still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw order/address/logistics/provider payload values, capture provider responses, expose operator API keys, or send customer-visible replies.
+
 ## PR60 Provider Write Execution Attempt Safety
 
 Provider write execution attempts are now checked by:
