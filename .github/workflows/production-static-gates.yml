@@ -1,0 +1,101 @@
+name: smart-cs-agent production static gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-static-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-gates:
+    name: Static production gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run API tests
+        run: npm run test --workspace @smart-cs-agent/api
+
+      - name: Run Web tests
+        run: npm run test --workspace @smart-cs-agent/web
+
+      - name: Run production verifier script tests
+        run: |
+          node --test scripts/verify-production-canary.test.mjs
+          node --test scripts/verify-merchant-launch-preflight.test.mjs
+          node --test scripts/generate-launch-evidence.test.mjs
+          node --test scripts/verify-launch-evidence-archive.test.mjs
+          node --test scripts/verify-launch-manifest.test.mjs
+          node --test scripts/verify-production-image-builds.test.mjs
+          node --test scripts/verify-production-container-smoke.test.mjs
+          node --test scripts/verify-production-image-security.test.mjs
+          node --test scripts/verify-production-release-provenance.test.mjs
+          node --test scripts/verify-production-release-evidence.test.mjs
+          node --test scripts/verify-production-change-approval.test.mjs
+          node --test scripts/verify-production-launch-binding.test.mjs
+          node --test scripts/verify-production-static-ci.test.mjs
+
+      - name: Typecheck
+        run: npm run typecheck --workspaces --if-present -- --pretty false
+
+      - name: Lint
+        run: npm run lint --workspaces --if-present -- --max-warnings=0
+
+      - name: Build
+        run: npm run build --workspaces --if-present
+
+      - name: Verify production static CI
+        run: npm run verify:production-static-ci
+
+      - name: Verify production static gates
+        run: |
+          npm run verify:operator-bootstrap
+          npm run verify:channel-runbook
+          npm run verify:production-alerting
+          npm run verify:production-deploy-artifacts
+          npm run verify:production-image-builds
+          npm run verify:production-container-smoke
+          npm run verify:production-image-security
+          npm run verify:production-release-provenance
+          npm run verify:production-release-evidence
+          npm run verify:production-change-approval
+          npm run verify:production-launch-binding
+          npm run verify:production-launch
+
+      - name: Verify provider safety gates
+        run: |
+          npm run verify:provider-adapters
+          npm run verify:provider-readonly
+          npm run verify:provider-read-contract
+          npm run verify:provider-read-audit
+          npm run verify:provider-read-operations
+          npm run verify:provider-credential-boundary
+          npm run verify:provider-credential-store
+          npm run verify:provider-read-harness

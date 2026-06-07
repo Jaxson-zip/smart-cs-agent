@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR55 Production Static CI Gate
+
+Production static CI is now checked by:
+
+```bash
+npm run verify:production-static-ci
+```
+
+The real GitHub Actions workflow `.github/workflows/production-static-gates.yml` runs static production gates on pull requests, pushes, and manual dispatch without secrets, live production URLs, launch artifacts, deployment credentials, Docker publish access, or provider credentials. This gate still does not call production APIs, connect to production databases, run production migrations, publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR54 Production Launch Binding Gate
 
 Production launch binding is now checked by:

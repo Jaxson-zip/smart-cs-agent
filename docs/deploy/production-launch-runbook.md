@@ -23,6 +23,7 @@ Use this runbook before every production launch or gray release that changes rea
 Launch may proceed only when all of these are true:
 
 - A rollback owner, incident owner, and operator lead are named in the deploy ticket.
+- `.github/workflows/production-static-gates.yml` has passed on the release branch, including `npm run verify:production-static-ci`.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
 - `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.
@@ -64,6 +65,7 @@ npm run test --workspace @smart-cs-agent/web
 npm run typecheck --workspaces --if-present -- --pretty false
 npm run lint --workspaces --if-present -- --max-warnings=0
 npm run build --workspaces --if-present
+npm run verify:production-static-ci
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
 npm run verify:merchant-launch-preflight:safe
 npm run generate:launch-evidence:safe
@@ -193,6 +195,10 @@ npm run verify:production-launch
 This checks that the launch runbook stays connected to readiness, canary, alerting, channel queue operations, rollback controls, recovery evidence, and no-secret/no-customer-action boundaries. Run `npm run verify:provider-adapters` alongside it when provider adapter contracts or action execution policy change.
 
 Run `npm run verify:production-deploy-artifacts` alongside it when Dockerfiles, production compose examples, Next standalone output, image startup commands, or deployment artifact docs change.
+
+Run `npm run verify:production-static-ci` alongside it when `.github/workflows/production-static-gates.yml`, static CI command coverage, workflow permissions, or CI/deploy boundary docs change.
+
+See `docs/deploy/production-static-ci.md` for the static PR/push workflow boundary.
 
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 

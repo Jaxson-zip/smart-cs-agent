@@ -10,6 +10,9 @@ const files = {
   productionReadiness: "docs/deploy/production-readiness.md",
   channelRunbook: "docs/deploy/channel-queue-runbook.md",
   productionAlerting: "docs/deploy/production-alerting.md",
+  productionStaticCi: "docs/deploy/production-static-ci.md",
+  productionStaticCiWorkflow:
+    ".github/workflows/production-static-gates.yml",
   productionDeploymentArtifacts:
     "docs/deploy/production-deployment-artifacts.md",
   productionImageBuilds: "docs/deploy/production-image-builds.md",
@@ -38,6 +41,7 @@ const files = {
   productionLaunchBindingWorkflow:
     "docs/deploy/production-launch-binding.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
+  productionStaticCiVerifier: "scripts/verify-production-static-ci.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -91,6 +95,7 @@ mustContainAll("package scripts", content.packageJson, [
   "scripts/verify-production-launch.mjs",
   "verify:production-readiness",
   "verify:production-canary",
+  "verify:production-static-ci",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -148,6 +153,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run typecheck --workspaces --if-present -- --pretty false",
   "npm run lint --workspaces --if-present -- --max-warnings=0",
   "npm run build --workspaces --if-present",
+  "npm run verify:production-static-ci",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -380,6 +386,12 @@ mustContainAll("production readiness references launch binding", content.product
   "npm run verify:production-launch-binding:safe",
 ]);
 
+mustContainAll("production readiness references static CI", content.productionReadiness, [
+  "PR55 Production Static CI Gate",
+  ".github/workflows/production-static-gates.yml",
+  "npm run verify:production-static-ci",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -447,9 +459,15 @@ mustContainAll("task plan references PR54", content.taskPlan, [
   "production-launch-binding.yml.example",
 ]);
 
+mustContainAll("task plan references PR55", content.taskPlan, [
+  "PR55 - Production Static CI Gate",
+  "verify:production-static-ci",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
+  "verify:production-static-ci",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -476,6 +494,12 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
 ]);
 mustContainAll("production launch verifier source", content.productionAlertingVerifier, [
   "verify:production-alerting",
+]);
+mustContainAll("production static CI verifier source", content.productionStaticCiVerifier, [
+  "verify:production-static-ci",
+  "production-static-gates.yml",
+  "workflow must not use secrets context",
+  "workflow must not run environment-bound production commands",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -660,6 +684,22 @@ mustContainAll("production launch binding workflow", content.productionLaunchBin
   "npm run verify:production-launch-binding:safe",
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_RELEASE_PROVENANCE_FILE",
 ]);
+mustContainAll("production static CI docs", content.productionStaticCi, [
+  "PR55 Production Static CI Gate",
+  ".github/workflows/production-static-gates.yml",
+  "npm run verify:production-static-ci",
+  "does not call production APIs",
+]);
+mustContainAll("production static CI workflow", content.productionStaticCiWorkflow, [
+  "permissions:",
+  "contents: read",
+  "pull_request:",
+  "push:",
+  "workflow_dispatch:",
+  "npm ci",
+  "npm run verify:production-static-ci",
+  "npm run verify:production-launch",
+]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
   "WECOM_SANDBOX_ENABLED=false",
@@ -693,6 +733,8 @@ mustContainAll("channel runbook verifier source", content.channelRunbookVerifier
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
+  productionStaticCi: content.productionStaticCi,
+  productionStaticCiWorkflow: content.productionStaticCiWorkflow,
   productionDeploymentArtifacts: content.productionDeploymentArtifacts,
   productionImageBuilds: content.productionImageBuilds,
   productionImageBuildWorkflow: content.productionImageBuildWorkflow,
