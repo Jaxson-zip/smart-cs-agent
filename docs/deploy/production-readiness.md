@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR58 Provider Write Request Queue
+
+Provider write requests are now checked by:
+
+```bash
+npm run verify:provider-write-requests
+```
+
+This gate adds a tenant-scoped `ProviderWriteRequest` queue for future human-reviewed provider writes. Operators may request only low-risk actions allowlisted by `PROVIDER_WRITE_REVIEW_ADAPTERS`, such as `modify_address`, `issue_coupon`, and `urge_logistics`; refunds and invoice updates remain blocked. Accepted requests are idempotent on `tenantId + idempotencyKeyHash`, verify `AfterSalesCase.id + merchantId` ownership before persistence, store only hashes and payload-key booleans, and return `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`. This verifier still does not call provider APIs, execute provider writes, read provider credentials, store raw idempotency/order/address/logistics/provider payload values, send customer-visible replies, or enable automatic commerce actions.
+
 ## PR57 Production Provider Write Approval Gate
 
 Production provider write approval is now checked by:

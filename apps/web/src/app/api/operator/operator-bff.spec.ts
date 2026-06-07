@@ -16,6 +16,10 @@ import { GET as getOperatorMe } from "./me/route";
 import { GET as listProviderReadRuns } from "./provider-reads/runs/route";
 import { GET as getProviderReadSummary } from "./provider-reads/summary/route";
 import {
+  GET as listProviderWriteRequests,
+  POST as requestProviderWrite,
+} from "./provider-writes/requests/route";
+import {
   GET as listOperators,
   POST as createOperator,
 } from "./operators/route";
@@ -1195,6 +1199,297 @@ describe("operator BFF routes", () => {
       byCapability: [{ key: "get_order", count: 3 }],
       latestCreatedAt: "2026-06-06T07:45:00.000Z",
     });
+  });
+
+  it("proxies provider write requests through the operator session without leaking keys", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedBody = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      proxiedBody = String(init?.body ?? "");
+      return Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "approval_required",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "queued",
+        requiresHuman: true,
+        retryable: false,
+        providerPayload: { secret: true },
+        operatorApiKey: "operator_api_key_must_not_leak",
+        tenantId: "must_not_leak",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await requestProviderWrite(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          caseId: "case_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          payload: { orderId: "order_1", couponAmountCents: 2000 },
+          idempotencyKey: "write_1",
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/request",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer session_api_key");
+    assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
+    assert.strictEqual(JSON.parse(proxiedBody).operatorApiKey, undefined);
+    assert.deepStrictEqual(await response.json(), {
+      writeRequestId: "provider_write_request_1",
+      status: "approval_required",
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult: "queued",
+      requiresHuman: true,
+      retryable: false,
+    });
+  });
+
+  it("rejects provider write responses that imply network execution or bypass review", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    globalThis.fetch = async () =>
+      Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "approval_required",
+        networkExecution: "executed",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "unsafe",
+        requiresHuman: false,
+        retryable: false,
+      });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await requestProviderWrite(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          caseId: "case_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          payload: { orderId: "order_1", couponAmountCents: 2000 },
+          idempotencyKey: "write_1",
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 502);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write request response is invalid",
+    });
+  });
+
+  it("lets admin sessions list sanitized provider write requests through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+
+    globalThis.fetch = async (input) => {
+      proxiedUrl = String(input);
+      return Response.json([
+        {
+          id: "provider_write_request_1",
+          caseId: "case_1",
+          operatorId: "operator_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          status: "approval_required",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadKeys: {
+            hasOrderId: true,
+            hasLogisticsId: false,
+            hasAddressFingerprint: false,
+            hasCouponAmountCents: true,
+          },
+          payloadFingerprint: "abcdef123456",
+          requestFingerprint: "123456abcdef",
+          policyReason: null,
+          createdAt: "2026-06-06T08:00:00.000Z",
+          updatedAt: "2026-06-06T08:00:00.000Z",
+          payloadHash: "must_not_leak",
+          requestHash: "must_not_leak",
+          idempotencyKey: "must_not_leak",
+          providerPayload: { secret: true },
+          orderId: "raw_order_1",
+          tenantId: "must_not_leak",
+        },
+      ]);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listProviderWriteRequests(
+      new Request(
+        "http://localhost/api/operator/provider-writes/requests?limit=10&status=approval_required",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/requests?limit=10&status=approval_required",
+    );
+    assert.deepStrictEqual(await response.json(), [
+      {
+        id: "provider_write_request_1",
+        caseId: "case_1",
+        operatorId: "operator_1",
+        channel: "taobao",
+        action: "issue_coupon",
+        status: "approval_required",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadKeys: {
+          hasOrderId: true,
+          hasLogisticsId: false,
+          hasAddressFingerprint: false,
+          hasCouponAmountCents: true,
+        },
+        payloadFingerprint: "abcdef123456",
+        requestFingerprint: "123456abcdef",
+        policyReason: null,
+        createdAt: "2026-06-06T08:00:00.000Z",
+        updatedAt: "2026-06-06T08:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("rejects provider write request lists with unsafe execution state", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+
+    globalThis.fetch = async () =>
+      Response.json([
+        {
+          id: "provider_write_request_1",
+          caseId: "case_1",
+          operatorId: "operator_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          status: "approval_required",
+          networkExecution: "executed",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          payloadKeys: {
+            hasOrderId: true,
+            hasLogisticsId: false,
+            hasAddressFingerprint: false,
+            hasCouponAmountCents: true,
+          },
+          payloadFingerprint: "abcdef123456",
+          requestFingerprint: "123456abcdef",
+          policyReason: null,
+          createdAt: "2026-06-06T08:00:00.000Z",
+          updatedAt: "2026-06-06T08:00:00.000Z",
+        },
+      ]);
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await listProviderWriteRequests(
+      new Request("http://localhost/api/operator/provider-writes/requests", {
+        headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(response.status, 502);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write operation response is invalid",
+    });
+  });
+
+  it("blocks viewer sessions from requesting provider writes in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"viewer","password":"secret","tenantId":"tenant_1","operatorId":"viewer_1","role":"viewer","apiKey":"viewer_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({ ok: true });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "viewer",
+        password: "secret",
+      }),
+    );
+    const response = await requestProviderWrite(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          caseId: "case_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          payload: { orderId: "order_1", couponAmountCents: 2000 },
+          idempotencyKey: "write_1",
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write requests require operator permission",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("rejects malformed queue audit summary fields in the BFF", async () => {

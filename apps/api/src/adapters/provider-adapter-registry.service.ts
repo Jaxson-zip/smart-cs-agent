@@ -6,10 +6,14 @@ import type {
   IntegrationStatus,
   ProviderReadRequest,
   ProviderReadCapability,
+  ProviderWriteAction,
+  ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import {
   loadProviderReadonlyAdapterConfigs,
+  loadProviderWriteReviewAdapterConfigs,
   type ProviderReadonlyAdapterConfig,
+  type ProviderWriteReviewAdapterConfig,
 } from "../config/api-config";
 import type { ProviderAdapterContract } from "./adapters.interface";
 import { MockDouyinAdapter } from "./mock-douyin.adapter";
@@ -20,6 +24,10 @@ type ActionPolicyResult =
   | { allowed: false; reason: string; retryable: boolean };
 
 type ReadPolicyResult =
+  | { allowed: true }
+  | { allowed: false; reason: string; retryable: boolean };
+
+type WriteRequestPolicyResult =
   | { allowed: true }
   | { allowed: false; reason: string; retryable: boolean };
 
@@ -43,6 +51,8 @@ export class ProviderAdapterRegistry {
   private readonly contracts: ProviderAdapterContract[];
   private readonly readonlyConfigs: ProviderReadonlyAdapterConfig[];
   private readonly readonlyContractKeys: Set<string>;
+  private readonly writeReviewConfigs: ProviderWriteReviewAdapterConfig[];
+  private readonly writeReviewContractKeys: Set<string>;
 
   constructor(
     taobaoAdapter: MockTaobaoAdapter = new MockTaobaoAdapter(),
@@ -51,6 +61,12 @@ export class ProviderAdapterRegistry {
     this.readonlyConfigs = loadProviderReadonlyAdapterConfigs();
     this.readonlyContractKeys = new Set(
       this.readonlyConfigs.map((item) => contractKey(item.tenantId, item.channel)),
+    );
+    this.writeReviewConfigs = loadProviderWriteReviewAdapterConfigs();
+    this.writeReviewContractKeys = new Set(
+      this.writeReviewConfigs.map((item) =>
+        contractKey(item.tenantId, item.channel),
+      ),
     );
     this.contracts = [
       taobaoAdapter,
@@ -152,6 +168,51 @@ export class ProviderAdapterRegistry {
     return { allowed: true };
   }
 
+  evaluateWriteRequestPolicy(
+    request: ProviderWriteRequest,
+  ): WriteRequestPolicyResult {
+    const tenantId = request.tenantId ?? "";
+    const contract = this.getContract(request.channel, tenantId);
+    if (!contract) {
+      return {
+        allowed: false,
+        reason: "No provider adapter contract is registered for this channel.",
+        retryable: false,
+      };
+    }
+
+    if (
+      contract.writePolicy !== "human_review_required" ||
+      contract.mode !== "real_actions_disabled"
+    ) {
+      return {
+        allowed: false,
+        reason:
+          "Provider write review is not configured for this tenant and channel.",
+        retryable: false,
+      };
+    }
+
+    if (!contract.capabilities.includes(request.action)) {
+      return {
+        allowed: false,
+        reason: "Provider write review contract does not expose this action.",
+        retryable: false,
+      };
+    }
+
+    if (contract.realCommerceActionsEnabled || contract.customerVisibleActionsEnabled) {
+      return {
+        allowed: false,
+        reason:
+          "Provider write review contract must keep real writes and customer-visible actions disabled.",
+        retryable: false,
+      };
+    }
+
+    return { allowed: true };
+  }
+
   getReadonlyCredentialRef(
     channel: CommerceChannel,
     tenantId: string,
@@ -165,9 +226,18 @@ export class ProviderAdapterRegistry {
     tenantId: string,
     contract: ProviderAdapterContract,
   ): ProviderAdapterContract {
-    return this.readonlyContractKeys.has(contractKey(tenantId, contract.channel))
-      ? readOnlyContract(contract.channel)
-      : contract;
+    const key = contractKey(tenantId, contract.channel);
+    if (this.writeReviewContractKeys.has(key)) {
+      const writeReviewConfig = this.writeReviewConfigs.find(
+        (item) => item.tenantId === tenantId && item.channel === contract.channel,
+      );
+      return writeReviewContract(
+        contract.channel,
+        writeReviewConfig?.allowedActions ?? [],
+        this.readonlyContractKeys.has(key),
+      );
+    }
+    return this.readonlyContractKeys.has(key) ? readOnlyContract(contract.channel) : contract;
   }
 }
 
@@ -224,6 +294,33 @@ function readOnlyContract(channel: CommerceChannel): ProviderAdapterContract {
     safetyNotes: [
       "Real provider readonly credential reference is configured.",
       "Only non-mutating order and logistics reads are allowed.",
+      "Real commerce writes and customer-visible actions are disabled.",
+    ],
+  };
+}
+
+function writeReviewContract(
+  channel: CommerceChannel,
+  allowedActions: ProviderWriteAction[],
+  readonlyConfigured: boolean,
+): ProviderAdapterContract {
+  return {
+    channel,
+    mode: "real_actions_disabled",
+    writePolicy: "human_review_required",
+    connected: true,
+    health: "normal",
+    capabilities: Array.from(new Set<ProviderWriteAction | "handoff">([
+      ...allowedActions,
+      "handoff",
+    ])),
+    readCapabilities: readonlyConfigured ? READ_CAPABILITIES : [],
+    customerVisibleActionsEnabled: false,
+    realCommerceActionsEnabled: false,
+    contractVersion: CONTRACT_VERSION,
+    safetyNotes: [
+      "Provider write review allowlist is configured.",
+      "Provider write requests may be queued for human review only.",
       "Real commerce writes and customer-visible actions are disabled.",
     ],
   };

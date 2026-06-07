@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import {
   CommerceChannelSchema,
   type CommerceChannel,
+  ProviderWriteActionSchema,
+  type ProviderWriteAction,
 } from "@smart-cs-agent/shared";
 import { z } from "zod";
 
@@ -52,6 +54,24 @@ const providerReadonlyAdapterConfigSchema = z
   })
   .strict();
 
+const providerWriteReviewAdapterConfigSchema = z
+  .object({
+    channel: CommerceChannelSchema,
+    tenantId: z.string().min(1),
+    allowedActions: z
+      .array(ProviderWriteActionSchema)
+      .min(1)
+      .superRefine((value, context) => {
+        if (new Set(value).size !== value.length) {
+          context.addIssue({
+            code: "custom",
+            message: "allowedActions must not contain duplicates",
+          });
+        }
+      }),
+  })
+  .strict();
+
 const providerCredentialRefSchema = z
   .string()
   .regex(
@@ -79,6 +99,25 @@ const providerReadonlyAdaptersEnvSchema = z
         code: "custom",
         message:
           "PROVIDER_READONLY_ADAPTERS must be a JSON array of readonly adapter references without inline secrets",
+      });
+      return z.NEVER;
+    }
+  });
+
+const providerWriteReviewAdaptersEnvSchema = z
+  .string()
+  .optional()
+  .default("[]")
+  .transform((value, context) => {
+    try {
+      return z
+        .array(providerWriteReviewAdapterConfigSchema)
+        .parse(JSON.parse(value));
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message:
+          "PROVIDER_WRITE_REVIEW_ADAPTERS must be a JSON array of provider write review allowlists without credentials",
       });
       return z.NEVER;
     }
@@ -133,6 +172,7 @@ const apiConfigSchema = z.object({
     .max(3)
     .default(0),
   PROVIDER_READONLY_ADAPTERS: providerReadonlyAdaptersEnvSchema,
+  PROVIDER_WRITE_REVIEW_ADAPTERS: providerWriteReviewAdaptersEnvSchema,
 });
 
 const webOriginSchema = z.string().url().default("http://localhost:3000");
@@ -149,6 +189,7 @@ export type ApiConfig = {
   realChannelWebhookMaxAgeSeconds: number;
   realChannelWebhookRateLimitPerMinute: number;
   providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
+  providerWriteReviewAdapters: ProviderWriteReviewAdapterConfig[];
   providerReadTimeoutMs: number;
   providerReadMaxRetries: number;
 };
@@ -157,6 +198,12 @@ export type ProviderReadonlyAdapterConfig = {
   channel: CommerceChannel;
   tenantId: string;
   credentialRef: string;
+};
+
+export type ProviderWriteReviewAdapterConfig = {
+  channel: CommerceChannel;
+  tenantId: string;
+  allowedActions: ProviderWriteAction[];
 };
 
 export type ProviderCredentialRefRecord = {
@@ -220,6 +267,7 @@ export function loadApiConfig(
     realChannelWebhookRateLimitPerMinute:
       parsed.data.REAL_CHANNEL_WEBHOOK_RATE_LIMIT_PER_MINUTE,
     providerReadonlyAdapters: parsed.data.PROVIDER_READONLY_ADAPTERS,
+    providerWriteReviewAdapters: parsed.data.PROVIDER_WRITE_REVIEW_ADAPTERS,
     providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
     providerReadMaxRetries: parsed.data.PROVIDER_READ_MAX_RETRIES,
   };
@@ -235,6 +283,22 @@ export function loadProviderReadonlyAdapterConfigs(
   if (!parsed.success) {
     throw new Error(
       "Invalid API configuration: PROVIDER_READONLY_ADAPTERS must be a JSON array of readonly adapter references without inline secrets",
+    );
+  }
+
+  return parsed.data;
+}
+
+export function loadProviderWriteReviewAdapterConfigs(
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderWriteReviewAdapterConfig[] {
+  const parsed = providerWriteReviewAdaptersEnvSchema.safeParse(
+    env.PROVIDER_WRITE_REVIEW_ADAPTERS,
+  );
+
+  if (!parsed.success) {
+    throw new Error(
+      "Invalid API configuration: PROVIDER_WRITE_REVIEW_ADAPTERS must be a JSON array of provider write review allowlists without credentials",
     );
   }
 

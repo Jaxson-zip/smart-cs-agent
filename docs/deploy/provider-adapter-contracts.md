@@ -2,6 +2,25 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR58 Provider Write Request Queue
+
+PR58 adds the internal request queue for future human-reviewed provider writes:
+
+- `PROVIDER_WRITE_REVIEW_ADAPTERS`: optional JSON allowlist for tenant/channel/action pairs. It contains no credentials and only permits `modify_address`, `issue_coupon`, and `urge_logistics`.
+- `POST /v2/provider-writes/request`: creates a sanitized `ProviderWriteRequest` only after case ownership is verified against the authenticated tenant.
+- `GET /v2/provider-writes/requests`: admin-only visibility into sanitized queued/blocked/failed write requests.
+- `GET /api/operator/provider-writes/requests` and `POST /api/operator/provider-writes/requests`: Web BFF routes that keep operator API keys server-side.
+
+Accepted requests stay `approval_required`, with `networkExecution=not_started`, `providerMutationExecuted=false`, and `customerVisibleMessageSent=false`. The raw caller idempotency key is hashed before persistence as `idempotencyKeyHash` and is not returned. This queue does not call provider APIs and does not execute real writes. It is the review and idempotency boundary that a later provider write executor must consume.
+
+Run:
+
+```bash
+npm run verify:provider-write-requests
+```
+
+This verifier checks the shared contract, Prisma model and migration, config parser, adapter policy, Ops service queue behavior, API/BFF routes, sanitized tests, docs, launch runbook, and task plan.
+
 ## PR42 Provider Readonly Sandbox Harness
 
 PR42 adds the readonly client execution harness that future live provider read clients must pass through:

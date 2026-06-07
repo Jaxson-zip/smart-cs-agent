@@ -48,6 +48,7 @@ const REQUIRED_RUN_COMMANDS = [
   "npm run verify:provider-read-contract",
   "npm run verify:provider-read-audit",
   "npm run verify:provider-read-operations",
+  "npm run verify:provider-write-requests",
   "npm run verify:provider-credential-boundary",
   "npm run verify:provider-credential-store",
   "npm run verify:provider-read-harness",

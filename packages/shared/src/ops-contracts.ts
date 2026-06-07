@@ -33,6 +33,12 @@ export const ProviderReadCapabilitySchema = z.enum([
   "query_logistics",
 ]);
 
+export const ProviderWriteActionSchema = z.enum([
+  "modify_address",
+  "issue_coupon",
+  "urge_logistics",
+]);
+
 export const ProviderAdapterModeSchema = z.enum([
   "sandbox_mock",
   "real_readonly",
@@ -153,6 +159,85 @@ export const ProviderReadResponseSchema = z
   })
   .strict();
 
+export const ProviderWritePayloadSchema = z
+  .object({
+    orderId: z.string().min(1).optional(),
+    logisticsId: z.string().min(1).optional(),
+    addressFingerprint: z.string().min(8).max(128).optional(),
+    couponAmountCents: z.number().int().min(1).max(10000).optional(),
+  })
+  .strict();
+
+export const ProviderWriteRequestSchema = z
+  .object({
+    caseId: z.string().min(1),
+    tenantId: z.string().min(1).optional(),
+    channel: CommerceChannelSchema,
+    action: ProviderWriteActionSchema,
+    payload: ProviderWritePayloadSchema,
+    idempotencyKey: z.string().min(1),
+    operatorId: z.string().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === "modify_address") {
+      if (!value.payload.orderId) {
+        context.addIssue({
+          code: "custom",
+          path: ["payload", "orderId"],
+          message: "modify_address provider writes require orderId",
+        });
+      }
+      if (!value.payload.addressFingerprint) {
+        context.addIssue({
+          code: "custom",
+          path: ["payload", "addressFingerprint"],
+          message: "modify_address provider writes require addressFingerprint",
+        });
+      }
+    }
+    if (value.action === "issue_coupon") {
+      if (!value.payload.orderId) {
+        context.addIssue({
+          code: "custom",
+          path: ["payload", "orderId"],
+          message: "issue_coupon provider writes require orderId",
+        });
+      }
+      if (value.payload.couponAmountCents === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["payload", "couponAmountCents"],
+          message: "issue_coupon provider writes require couponAmountCents",
+        });
+      }
+    }
+    if (
+      value.action === "urge_logistics" &&
+      !value.payload.orderId &&
+      !value.payload.logisticsId
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "urge_logistics provider writes require orderId or logisticsId",
+      });
+    }
+  });
+
+export const ProviderWriteResponseSchema = z
+  .object({
+    writeRequestId: z.string(),
+    status: z.enum(["approval_required", "blocked", "failed"]),
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+    operatorVisibleResult: z.string(),
+    requiresHuman: z.literal(true),
+    retryable: z.boolean(),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -219,6 +304,10 @@ export type ExecuteActionResponse = z.infer<typeof ExecuteActionResponseSchema>;
 export type ProviderReadLookup = z.infer<typeof ProviderReadLookupSchema>;
 export type ProviderReadRequest = z.infer<typeof ProviderReadRequestSchema>;
 export type ProviderReadResponse = z.infer<typeof ProviderReadResponseSchema>;
+export type ProviderWriteAction = z.infer<typeof ProviderWriteActionSchema>;
+export type ProviderWritePayload = z.infer<typeof ProviderWritePayloadSchema>;
+export type ProviderWriteRequest = z.infer<typeof ProviderWriteRequestSchema>;
+export type ProviderWriteResponse = z.infer<typeof ProviderWriteResponseSchema>;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema
 >;

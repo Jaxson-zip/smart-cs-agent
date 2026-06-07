@@ -49,6 +49,7 @@
     "verify:provider-read-contract": "node scripts/verify-provider-read-contract.mjs",
     "verify:provider-read-audit": "node scripts/verify-provider-read-audit.mjs",
     "verify:provider-read-operations": "node scripts/verify-provider-read-operations.mjs",
+    "verify:provider-write-requests": "node scripts/verify-provider-write-requests.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

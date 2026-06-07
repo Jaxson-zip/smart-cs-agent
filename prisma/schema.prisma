@@ -152,6 +152,32 @@ model ProviderReadRun {
   @@index([tenantId, caseId, createdAt])
 }
 
+model ProviderWriteRequest {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  operatorId                 String?
+  caseId                     String
+  channel                    String
+  action                     String
+  idempotencyKeyHash         String
+  payloadHash                String
+  payloadKeys                Json
+  requestHash                String
+  status                     String
+  networkExecution           String
+  providerMutationExecuted   Boolean  @default(false)
+  customerVisibleMessageSent Boolean  @default(false)
+  operatorVisibleResult      String
+  policyReason               String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([tenantId, idempotencyKeyHash])
+  @@index([tenantId, channel, createdAt])
+  @@index([tenantId, caseId, createdAt])
+  @@index([tenantId, status, createdAt])
+}
+
 model CaseMessage {
   id         String         @id @default(cuid())
   caseId     String

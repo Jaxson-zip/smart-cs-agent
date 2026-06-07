@@ -3,6 +3,7 @@ import { Injectable, Optional } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   ProviderReadResponseSchema,
+  ProviderWriteResponseSchema,
   type AgentCaseDecision,
   type CompensationDeclinedRequest,
   type CompensationDeclinedResponse,
@@ -12,6 +13,8 @@ import {
   type IntegrationStatus,
   type ProviderReadRequest,
   type ProviderReadResponse,
+  type ProviderWriteRequest,
+  type ProviderWriteResponse,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 import {
@@ -106,6 +109,21 @@ export class OpsService {
       byCapability: summarizeProviderReadRuns(runs, "readCapability"),
       latestCreatedAt: runs[0]?.createdAt.toISOString() ?? null,
     };
+  }
+
+  async listProviderWriteRequests(input: ListProviderWriteRequestsInput) {
+    if (!this.prisma) return [];
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    const requests = (await this.prisma.providerWriteRequest.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(input.status ? { status: input.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    })) as ProviderWriteRequestRecord[];
+
+    return requests.map(toSanitizedProviderWriteRequest);
   }
 
   ingestMessage(): AgentCaseDecision {
@@ -229,6 +247,99 @@ export class OpsService {
     return this.persistProviderReadRun(request, response, metadata, null);
   }
 
+  async requestProviderWrite(
+    request: ProviderWriteRequest,
+  ): Promise<ProviderWriteResponse> {
+    const metadata = providerWriteMetadata(request);
+    const caseBelongsToTenant = await this.providerWriteCaseBelongsToTenant(
+      request,
+    );
+    if (!caseBelongsToTenant) {
+      const response = ProviderWriteResponseSchema.parse({
+        writeRequestId: `write_${Date.now()}`,
+        status: "blocked",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult:
+          "Provider write blocked because the case does not belong to the authenticated tenant.",
+        requiresHuman: true,
+        retryable: false,
+      });
+      await this.auditProviderWrite(
+        null,
+        request,
+        response,
+        metadata,
+        "case_tenant_mismatch",
+      );
+      return response;
+    }
+
+    const existingRequest = await this.findProviderWriteRequest(
+      request.tenantId,
+      metadata.idempotencyKeyHash,
+    );
+    if (existingRequest) {
+      if (existingRequest.requestHash === metadata.requestHash) {
+        return providerWriteResponseFromRequest(existingRequest);
+      }
+      const response = ProviderWriteResponseSchema.parse({
+        writeRequestId: existingRequest.id,
+        status: "failed",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult:
+          "Provider write idempotency key was already used for a different request.",
+        requiresHuman: true,
+        retryable: false,
+      });
+      await this.auditProviderWrite(
+        request.caseId,
+        request,
+        response,
+        metadata,
+        "idempotency_key_reused",
+        existingRequest.id,
+      );
+      return response;
+    }
+
+    const policy = this.providerAdapters.evaluateWriteRequestPolicy(request);
+    if (!policy.allowed) {
+      const response = ProviderWriteResponseSchema.parse({
+        writeRequestId: `write_${Date.now()}`,
+        status: "blocked",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: policy.reason,
+        requiresHuman: true,
+        retryable: policy.retryable,
+      });
+      return this.persistProviderWriteRequest(
+        request,
+        response,
+        metadata,
+        policy.reason,
+      );
+    }
+
+    const response = ProviderWriteResponseSchema.parse({
+      writeRequestId: `write_${Date.now()}`,
+      status: "approval_required",
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult:
+        "Provider write request recorded for human approval; provider network execution is disabled in this build.",
+      requiresHuman: true,
+      retryable: false,
+    });
+    return this.persistProviderWriteRequest(request, response, metadata, null);
+  }
+
   private async findProviderReadRun(
     tenantId: string | undefined,
     idempotencyKey: string,
@@ -239,6 +350,18 @@ export class OpsService {
         tenantId_idempotencyKey: { tenantId, idempotencyKey },
       },
     }) as Promise<ProviderReadRunRecord | null>;
+  }
+
+  private async findProviderWriteRequest(
+    tenantId: string | undefined,
+    idempotencyKeyHash: string,
+  ): Promise<ProviderWriteRequestRecord | null> {
+    if (!this.prisma || !tenantId) return null;
+    return this.prisma.providerWriteRequest.findUnique({
+      where: {
+        tenantId_idempotencyKeyHash: { tenantId, idempotencyKeyHash },
+      },
+    }) as Promise<ProviderWriteRequestRecord | null>;
   }
 
   private async persistProviderReadRun(
@@ -321,8 +444,95 @@ export class OpsService {
     });
   }
 
+  private async persistProviderWriteRequest(
+    request: ProviderWriteRequest,
+    response: ProviderWriteResponse,
+    metadata: ProviderWriteMetadata,
+    policyReason: string | null,
+  ): Promise<ProviderWriteResponse> {
+    if (!this.prisma || !request.tenantId) return response;
+    let created: ProviderWriteRequestRecord;
+    try {
+      created = (await this.prisma.providerWriteRequest.create({
+        data: {
+          tenantId: request.tenantId,
+          operatorId: request.operatorId ?? null,
+          caseId: request.caseId,
+          channel: request.channel,
+          action: request.action,
+          idempotencyKeyHash: metadata.idempotencyKeyHash,
+          payloadHash: metadata.payloadHash,
+          payloadKeys: metadata.payloadKeys as Prisma.InputJsonValue,
+          requestHash: metadata.requestHash,
+          status: response.status,
+          networkExecution: response.networkExecution,
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          operatorVisibleResult: response.operatorVisibleResult,
+          policyReason,
+        },
+      })) as ProviderWriteRequestRecord;
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const existing = await this.findProviderWriteRequest(
+        request.tenantId,
+        metadata.idempotencyKeyHash,
+      );
+      if (existing?.requestHash === metadata.requestHash) {
+        return providerWriteResponseFromRequest(existing);
+      }
+      const conflictResponse = ProviderWriteResponseSchema.parse({
+        writeRequestId: existing?.id ?? response.writeRequestId,
+        status: "failed",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult:
+          "Provider write idempotency key was already used for a different request.",
+        requiresHuman: true,
+        retryable: false,
+      });
+      await this.auditProviderWrite(
+        request.caseId,
+        request,
+        conflictResponse,
+        metadata,
+        "idempotency_key_reused",
+        existing?.id,
+      );
+      return conflictResponse;
+    }
+    await this.auditProviderWrite(
+      request.caseId,
+      request,
+      response,
+      metadata,
+      policyReason,
+      created.id,
+    );
+    return ProviderWriteResponseSchema.parse({
+      ...response,
+      writeRequestId: created.id,
+    });
+  }
+
   private async providerReadCaseBelongsToTenant(
     request: ProviderReadRequest,
+  ): Promise<boolean> {
+    if (!this.prisma) return true;
+    if (!request.tenantId) return false;
+    const caseItem = await this.prisma.afterSalesCase.findFirst({
+      where: {
+        id: request.caseId,
+        merchantId: request.tenantId,
+      },
+      select: { id: true },
+    });
+    return Boolean(caseItem);
+  }
+
+  private async providerWriteCaseBelongsToTenant(
+    request: ProviderWriteRequest,
   ): Promise<boolean> {
     if (!this.prisma) return true;
     if (!request.tenantId) return false;
@@ -404,6 +614,31 @@ export class OpsService {
     });
   }
 
+  private async auditProviderWrite(
+    caseId: string | null,
+    request: ProviderWriteRequest,
+    response: ProviderWriteResponse,
+    metadata: ProviderWriteMetadata,
+    policyReason: string | null,
+    providerWriteRequestId?: string,
+  ) {
+    await this.auditService?.log(caseId, `provider_write.${response.status}`, {
+      ...(providerWriteRequestId ? { providerWriteRequestId } : {}),
+      tenantId: request.tenantId ?? null,
+      operatorId: request.operatorId ?? null,
+      channel: request.channel,
+      action: request.action,
+      payloadHash: metadata.payloadHash,
+      payloadKeys: metadata.payloadKeys,
+      requestHash: metadata.requestHash,
+      status: response.status,
+      networkExecution: response.networkExecution,
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      policyReason,
+    });
+  }
+
   handleCompensationDeclined(
     request: CompensationDeclinedRequest,
   ): CompensationDeclinedResponse {
@@ -459,6 +694,18 @@ type ProviderReadMetadata = {
   requestHash: string;
 };
 
+type ProviderWriteMetadata = {
+  idempotencyKeyHash: string;
+  payloadHash: string;
+  payloadKeys: {
+    hasOrderId: boolean;
+    hasLogisticsId: boolean;
+    hasAddressFingerprint: boolean;
+    hasCouponAmountCents: boolean;
+  };
+  requestHash: string;
+};
+
 type ProviderReadCredentialAuditMetadata = {
   credentialResolutionStatus: ProviderCredentialResolution["status"];
   credentialSource: ProviderCredentialResolution["source"];
@@ -488,7 +735,32 @@ type ProviderReadRunRecord = {
   updatedAt?: Date;
 };
 
+type ProviderWriteRequestRecord = {
+  id: string;
+  caseId?: string;
+  operatorId?: string | null;
+  channel?: string;
+  action?: string;
+  status: string;
+  networkExecution: string;
+  providerMutationExecuted: boolean;
+  customerVisibleMessageSent: boolean;
+  operatorVisibleResult: string;
+  payloadHash?: string;
+  payloadKeys?: unknown;
+  requestHash: string;
+  policyReason?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
 type ListProviderReadRunsInput = {
+  tenantId: string;
+  limit?: number;
+  status?: string;
+};
+
+type ListProviderWriteRequestsInput = {
   tenantId: string;
   limit?: number;
   status?: string;
@@ -523,6 +795,36 @@ function providerReadMetadata(request: ProviderReadRequest): ProviderReadMetadat
   };
 }
 
+function providerWriteMetadata(
+  request: ProviderWriteRequest,
+): ProviderWriteMetadata {
+  const payloadHash = sha256(stableJson(request.payload));
+  return {
+    idempotencyKeyHash: sha256(
+      stableJson({
+        kind: "provider_write_idempotency_key",
+        value: request.idempotencyKey,
+      }),
+    ),
+    payloadHash,
+    payloadKeys: {
+      hasOrderId: Boolean(request.payload.orderId),
+      hasLogisticsId: Boolean(request.payload.logisticsId),
+      hasAddressFingerprint: Boolean(request.payload.addressFingerprint),
+      hasCouponAmountCents: request.payload.couponAmountCents !== undefined,
+    },
+    requestHash: sha256(
+      stableJson({
+        caseId: request.caseId,
+        tenantId: request.tenantId,
+        channel: request.channel,
+        action: request.action,
+        payloadHash,
+      }),
+    ),
+  };
+}
+
 function providerReadResponseFromRun(
   run: ProviderReadRunRecord,
 ): ProviderReadResponse {
@@ -533,6 +835,21 @@ function providerReadResponseFromRun(
     providerDataReturned: false,
     operatorVisibleResult: run.operatorVisibleResult,
     requiresHuman: run.status !== "policy_accepted",
+    retryable: false,
+  });
+}
+
+function providerWriteResponseFromRequest(
+  request: ProviderWriteRequestRecord,
+): ProviderWriteResponse {
+  return ProviderWriteResponseSchema.parse({
+    writeRequestId: request.id,
+    status: request.status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    operatorVisibleResult: request.operatorVisibleResult,
+    requiresHuman: true,
     retryable: false,
   });
 }
@@ -613,6 +930,26 @@ function toSanitizedProviderReadRun(run: ProviderReadRunRecord) {
   };
 }
 
+function toSanitizedProviderWriteRequest(run: ProviderWriteRequestRecord) {
+  return {
+    id: run.id,
+    caseId: run.caseId ?? "",
+    operatorId: run.operatorId ?? null,
+    channel: run.channel ?? "",
+    action: run.action ?? "",
+    status: run.status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    payloadKeys: sanitizePayloadKeys(run.payloadKeys),
+    payloadFingerprint: fingerprint(run.payloadHash),
+    requestFingerprint: fingerprint(run.requestHash),
+    policyReason: run.policyReason ?? null,
+    createdAt: run.createdAt?.toISOString() ?? "",
+    updatedAt: run.updatedAt?.toISOString() ?? "",
+  };
+}
+
 function sanitizeLookupKeys(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { hasOrderId: false, hasLogisticsId: false };
@@ -621,6 +958,24 @@ function sanitizeLookupKeys(value: unknown) {
   return {
     hasOrderId: record.hasOrderId === true,
     hasLogisticsId: record.hasLogisticsId === true,
+  };
+}
+
+function sanitizePayloadKeys(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      hasOrderId: false,
+      hasLogisticsId: false,
+      hasAddressFingerprint: false,
+      hasCouponAmountCents: false,
+    };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    hasOrderId: record.hasOrderId === true,
+    hasLogisticsId: record.hasLogisticsId === true,
+    hasAddressFingerprint: record.hasAddressFingerprint === true,
+    hasCouponAmountCents: record.hasCouponAmountCents === true,
   };
 }
 

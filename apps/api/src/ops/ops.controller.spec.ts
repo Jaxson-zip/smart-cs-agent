@@ -9,6 +9,7 @@ import type {
   ExecuteActionRequest,
   IntegrationStatus,
   ProviderReadRequest,
+  ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 import { OpsController } from "./ops.controller";
@@ -327,6 +328,112 @@ describe("OpsController", () => {
 
     assert.strictEqual(capturedRequest?.tenantId, "demo_tenant");
     assert.strictEqual(capturedRequest?.operatorId, "operator_from_context");
+  });
+
+  it("uses request operator context for provider write requests", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "demo_tenant",
+        operatorId: "operator_from_context",
+        role: "operator",
+      },
+    ]);
+    let capturedRequest: ProviderWriteRequest | undefined;
+    const controller = new OpsController({
+      requestProviderWrite: (request: ProviderWriteRequest) => {
+        capturedRequest = request;
+        return {
+          writeRequestId: "write_1",
+          status: "approval_required",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          operatorVisibleResult: "queued",
+          requiresHuman: true,
+          retryable: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    await controller.requestProviderWrite(
+      { authorization: "Bearer operator_key_123" },
+      {
+        caseId: "case_1",
+        tenantId: "spoofed_tenant",
+        channel: "taobao",
+        action: "issue_coupon",
+        payload: { orderId: "order_1", couponAmountCents: 2000 },
+        idempotencyKey: "write_1",
+        operatorId: "spoofed_operator",
+      },
+    );
+
+    assert.strictEqual(capturedRequest?.tenantId, "demo_tenant");
+    assert.strictEqual(capturedRequest?.operatorId, "operator_from_context");
+  });
+
+  it("rejects insecure header fallback for provider write requests", async () => {
+    delete process.env.OPERATOR_API_KEYS;
+    const controller = new OpsController({
+      requestProviderWrite: () => {
+        throw new Error("must not create provider write requests from insecure headers");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.requestProviderWrite(
+          { "x-tenant-id": "tenant_1", "x-operator-id": "operator_1" },
+          {
+            caseId: "case_1",
+            channel: "taobao",
+            action: "issue_coupon",
+            payload: { orderId: "order_1", couponAmountCents: 2000 },
+            idempotencyKey: "write_1",
+          },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+  });
+
+  it("blocks viewer operators from creating provider write requests", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "viewer_key_123",
+        tenantId: "tenant_1",
+        operatorId: "viewer_1",
+        role: "viewer",
+      },
+    ]);
+    const controller = new OpsController({
+      requestProviderWrite: () => {
+        throw new Error("viewer must not create provider write requests");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.requestProviderWrite(
+          { authorization: "Bearer viewer_key_123" },
+          {
+            caseId: "case_1",
+            channel: "taobao",
+            action: "issue_coupon",
+            payload: { orderId: "order_1", couponAmountCents: 2000 },
+            idempotencyKey: "write_1",
+          },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
   });
 
   it("requires operator context before executing provider reads", () => {

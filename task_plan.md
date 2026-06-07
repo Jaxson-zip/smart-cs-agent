@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR57 - Production Provider Write Approval Gate
+## Current Stage: PR58 - Provider Write Request Queue
 
-Status: verified
+Status: in progress
 
-Previous Stage: PR56 - Production Branch Protection Gate was verified locally. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR57 - Production Provider Write Approval Gate was verified locally. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+Provider Write Approval Stage: PR57 - Production Provider Write Approval Gate was verified with sanitized approval evidence shape and must stay connected to provider write request queues, production launch checks, and static CI.
 
 Branch Protection Stage: PR56 - Production Branch Protection Gate was verified with `production-branch-protection-artifacts/` evidence shape and must stay connected to provider write approval and production launch checks.
 
@@ -54,18 +56,19 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR57 adds a production provider write approval gate. It gives release owners a local evidence verifier for the first possible real provider write pilot: a single merchant/channel, `human_review_required`, `approvalStatus=approved`, distinct reviewer fingerprints, artifact hash bindings, low-risk action allowlist, idempotency, audit, provider write kill switch, customer-visible reply approval, limits, rollback owner, and no automatic provider writes, without calling provider APIs or executing customer-visible actions.
+PR58 adds the first provider write request queue. It lets authenticated operators request low-risk provider actions for human review, but it still keeps every real provider mutation disabled. `ProviderWriteRequest` rows are tenant-scoped, idempotent on `tenantId + idempotencyKeyHash`, tied to an owned `AfterSalesCase`, and store only hashes, status fields, and payload-key booleans. Accepted responses must keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`.
 
-### PR57 Scope
+### PR58 Scope
 
-- Add `npm run verify:production-provider-write-approval` for static provider write approval checks.
-- Add `npm run verify:production-provider-write-approval:safe` to verify sanitized write approval evidence from `SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_*`.
-- Add `docs/deploy/production-provider-write-approval.md`.
-- Connect provider write approval checks into provider adapter docs, production readiness, launch runbook, and `verify:production-launch`.
-- Connect provider write approval tests and the static verifier into `.github/workflows/production-static-gates.yml`.
-- Keep the verifier local and no-execution: no provider API calls, no provider credentials, no provider writes, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+- Add shared provider write request/response contracts for `modify_address`, `issue_coupon`, and `urge_logistics`.
+- Add `ProviderWriteRequest` persistence with sanitized hashes, payload-key booleans, tenant/case/operator context, and idempotency on `tenantId + idempotencyKeyHash`.
+- Add `PROVIDER_WRITE_REVIEW_ADAPTERS` parsing as an allowlist only, without credentials or token material.
+- Add API routes `POST /v2/provider-writes/request` and `GET /v2/provider-writes/requests`.
+- Add Web BFF routes `POST /api/operator/provider-writes/requests` and `GET /api/operator/provider-writes/requests` without exposing operator keys to the browser.
+- Add `npm run verify:provider-write-requests` and connect it to docs, public API surface, production launch, and static CI.
+- Keep the verifier and runtime local/no-execution: no provider API calls, no provider credentials, no provider writes, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
 
-### Out Of Scope For PR57
+### Out Of Scope For PR58
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -86,6 +89,9 @@ PR57 adds a production provider write approval gate. It gives release owners a l
 - Provider-specific production API callbacks beyond sandbox-shaped payloads.
 - Real customer replies or real commerce actions from the review pool.
 - Bulk review, assignment, SLA routing, and notification workflows.
+- Approval state transitions for provider write requests.
+- Secure payload escrow and decrypt-on-approval behavior.
+- Live provider write executor, provider-specific write clients, live kill switch enforcement immediately before network calls, execution attempts, compensation rollback, and production canary coverage for provider writes.
 
 ## Phases
 
@@ -152,10 +158,11 @@ PR57 adds a production provider write approval gate. It gives release owners a l
 - [x] PR55 production static CI gate.
 - [x] PR56 production branch protection gate.
 - [x] PR57 production provider write approval gate.
+- [ ] PR58 provider write request queue.
 
 ## Verification Gate
 
-Do not claim PR57 production provider write approval gate complete until these pass:
+Do not claim PR58 provider write request queue complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -216,6 +223,8 @@ Do not claim PR57 production provider write approval gate complete until these p
 - `node --check scripts/verify-production-provider-write-approval.mjs`
 - `node --test scripts/verify-production-provider-write-approval.test.mjs`
 - `npm.cmd run verify:production-provider-write-approval`
+- `node --check scripts/verify-provider-write-requests.mjs`
+- `npm.cmd run verify:provider-write-requests`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

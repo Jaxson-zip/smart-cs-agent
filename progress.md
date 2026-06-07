@@ -273,3 +273,12 @@
 - Addressed PR57 review feedback by making any provided approval evidence require `human_review_required` and core safety controls even without `--require-pass`, adding a regression test for that path, and resolving approval paths through realpaths so symlinks or junctions cannot escape `production-provider-write-approval-artifacts/`.
 - Addressed PR57 production safety review feedback by hardening `verify:production-provider-write-approval:safe` to include `--require-pass`, requiring `approvalStatus=approved`, distinct reviewer fingerprints, artifact hash bindings, and adding the provider-write approval tests and static gate into `.github/workflows/production-static-gates.yml`.
 - Final PR57 verification passed: Prisma generate, API tests, Web tests, production verifier script aggregate tests, provider-write approval verifier tests, typecheck, lint, build, `verify:production-provider-write-approval`, `verify:production-launch`, and `git diff --check`. This gate still verifies approval evidence only; actual provider write clients, persisted write-run execution, live kill-switch enforcement before network calls, and real customer-visible replies remain future work.
+
+## 2026-06-07
+
+- Started PR58 provider write request queue.
+- Added shared provider write contracts, `ProviderWriteRequest` schema/migration, `PROVIDER_WRITE_REVIEW_ADAPTERS` allowlist parsing, API routes, Web BFF routes, and tests for low-risk human-reviewed write requests.
+- Added `npm run verify:provider-write-requests` and connected it to the production static CI workflow and provider adapter docs.
+- Observed the first PR58 verifier red run: production readiness, public API surface, launch runbook, and task plan were missing provider write request references.
+- Updated production readiness, public API surface, launch runbook, task plan, and progress notes so PR58 remains clearly review-only: no provider API calls, no provider writes, no customer-visible replies, no raw payload storage, and no browser operator-key exposure.
+- Addressed PR58 safety review findings: `ProviderWriteRequest` now persists `idempotencyKeyHash` instead of the raw caller idempotency key, direct `POST /v2/provider-writes/request` requires an operator API key instead of insecure header fallback, and the Web BFF rejects provider write responses/lists unless they remain `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and human-reviewed.

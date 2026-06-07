@@ -15,6 +15,10 @@ const files = {
     "docs/deploy/production-branch-protection.md",
   productionProviderWriteApproval:
     "docs/deploy/production-provider-write-approval.md",
+  providerWriteRequests:
+    "docs/deploy/provider-write-requests.md",
+  publicApiSurface:
+    "docs/deploy/public-api-surface.md",
   productionStaticCiWorkflow:
     ".github/workflows/production-static-gates.yml",
   productionDeploymentArtifacts:
@@ -50,6 +54,8 @@ const files = {
     "scripts/verify-production-branch-protection.mjs",
   productionProviderWriteApprovalVerifier:
     "scripts/verify-production-provider-write-approval.mjs",
+  providerWriteRequestsVerifier:
+    "scripts/verify-provider-write-requests.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -108,6 +114,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-branch-protection:safe",
   "verify:production-provider-write-approval",
   "verify:production-provider-write-approval:safe",
+  "verify:provider-write-requests",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -170,6 +177,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-branch-protection:safe",
   "npm run verify:production-provider-write-approval",
   "npm run verify:production-provider-write-approval:safe",
+  "npm run verify:provider-write-requests",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -327,6 +335,13 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "provider read operations",
   "ProviderCredentialResolverService",
   "secretValueReturned=false",
+  "ProviderWriteRequest",
+  "PROVIDER_WRITE_REVIEW_ADAPTERS",
+  "idempotencyKeyHash",
+  "providerMutationExecuted=false",
+  "customerVisibleMessageSent=false",
+  "networkExecution=not_started",
+  "requiresHuman=true",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -424,6 +439,12 @@ mustContainAll("production readiness references provider write approval", conten
   "npm run verify:production-provider-write-approval:safe",
 ]);
 
+mustContainAll("production readiness references provider write requests", content.productionReadiness, [
+  "PR58 Provider Write Request Queue",
+  "ProviderWriteRequest",
+  "npm run verify:provider-write-requests",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -506,12 +527,18 @@ mustContainAll("task plan references PR57", content.taskPlan, [
   "verify:production-provider-write-approval",
 ]);
 
+mustContainAll("task plan references PR58", content.taskPlan, [
+  "PR58 - Provider Write Request Queue",
+  "verify:provider-write-requests",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-static-ci",
   "verify:production-branch-protection",
   "verify:production-provider-write-approval",
+  "verify:provider-write-requests",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -560,6 +587,14 @@ mustContainAll("production provider write approval verifier source", content.pro
   "artifactBindings",
   "providerWriteKillSwitchReady",
   "automaticProviderWritesEnabled",
+]);
+mustContainAll("provider write requests verifier source", content.providerWriteRequestsVerifier, [
+  "verify:provider-write-requests",
+  "ProviderWriteRequest",
+  "PROVIDER_WRITE_REVIEW_ADAPTERS",
+  "providerMutationExecuted: false",
+  "customerVisibleMessageSent: false",
+  "does not call provider APIs",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -772,6 +807,29 @@ mustContainAll("production provider write approval docs", content.productionProv
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
+mustContainAll("provider write requests docs", content.providerWriteRequests, [
+  "PR58 Provider Write Request Queue",
+  "ProviderWriteRequest",
+  "PROVIDER_WRITE_REVIEW_ADAPTERS",
+  "idempotencyKeyHash",
+  "POST /v2/provider-writes/request",
+  "GET /v2/provider-writes/requests",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not send customer-visible replies",
+  "npm run verify:provider-write-requests",
+]);
+mustContainAll("public API provider write routes", content.publicApiSurface, [
+  "POST /v2/provider-writes/request",
+  "GET /v2/provider-writes/requests",
+  "POST /api/operator/provider-writes/requests",
+  "GET /api/operator/provider-writes/requests",
+  "ProviderWriteRequest",
+  "idempotencyKeyHash",
+  "providerMutationExecuted=false",
+  "customerVisibleMessageSent=false",
+  "networkExecution=not_started",
+]);
 mustContainAll("production static CI workflow", content.productionStaticCiWorkflow, [
   "permissions:",
   "contents: read",
@@ -781,6 +839,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm ci",
   "npm run verify:production-static-ci",
   "npm run verify:production-launch",
+  "npm run verify:provider-write-requests",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -818,6 +877,8 @@ mustNotContainUnsafeExamples({
   productionStaticCi: content.productionStaticCi,
   productionBranchProtection: content.productionBranchProtection,
   productionProviderWriteApproval: content.productionProviderWriteApproval,
+  providerWriteRequests: content.providerWriteRequests,
+  publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
   productionDeploymentArtifacts: content.productionDeploymentArtifacts,
   productionImageBuilds: content.productionImageBuilds,

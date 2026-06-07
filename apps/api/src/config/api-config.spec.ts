@@ -3,6 +3,7 @@ import assert from "node:assert";
 import {
   loadApiConfig,
   loadProviderCredentialRefs,
+  loadProviderWriteReviewAdapterConfigs,
   loadWebOrigin,
 } from "./api-config";
 
@@ -24,6 +25,7 @@ describe("loadApiConfig", () => {
       realChannelWebhookMaxAgeSeconds: 300,
       realChannelWebhookRateLimitPerMinute: 0,
       providerReadonlyAdapters: [],
+      providerWriteReviewAdapters: [],
       providerReadTimeoutMs: 5000,
       providerReadMaxRetries: 0,
     });
@@ -162,6 +164,77 @@ describe("loadApiConfig", () => {
         credentialRef: "secret://smartcs/taobao/tenant_1",
       },
     ]);
+  });
+
+  it("parses provider write review adapter allowlists without credentials", () => {
+    const config = loadApiConfig({
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+      PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+        {
+          channel: "taobao",
+          tenantId: "tenant_1",
+          allowedActions: ["modify_address", "issue_coupon"],
+        },
+      ]),
+    });
+
+    assert.deepStrictEqual(config.providerWriteReviewAdapters, [
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address", "issue_coupon"],
+      },
+    ]);
+    assert.deepStrictEqual(
+      loadProviderWriteReviewAdapterConfigs({
+        PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+          {
+            channel: "douyin",
+            tenantId: "tenant_2",
+            allowedActions: ["urge_logistics"],
+          },
+        ]),
+      }),
+      [
+        {
+          channel: "douyin",
+          tenantId: "tenant_2",
+          allowedActions: ["urge_logistics"],
+        },
+      ],
+    );
+  });
+
+  it("rejects provider write review configs with secrets or unsupported actions", () => {
+    const cases = [
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address"],
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+      },
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["refund"],
+      },
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon", "issue_coupon"],
+      },
+    ];
+
+    for (const item of cases) {
+      assert.throws(
+        () =>
+          loadApiConfig({
+            DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+            PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([item]),
+          }),
+        /PROVIDER_WRITE_REVIEW_ADAPTERS/,
+      );
+    }
   });
 
   it("rejects provider readonly adapter configs that inline secret material", () => {

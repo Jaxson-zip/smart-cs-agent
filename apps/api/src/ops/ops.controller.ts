@@ -16,11 +16,13 @@ import {
   ExecuteActionRequestSchema,
   HandoffRequestSchema,
   ProviderReadRequestSchema,
+  ProviderWriteRequestSchema,
   type ChannelMessageIngest,
   type CompensationDeclinedRequest,
   type ExecuteActionRequest,
   type HandoffRequest,
   type ProviderReadRequest,
+  type ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import {
   requireRequestContext,
@@ -32,6 +34,11 @@ import { OpsService } from "./ops.service";
 const providerReadRunsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
   status: z.enum(["policy_accepted", "blocked", "failed"]).optional(),
+});
+
+const providerWriteRequestsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  status: z.enum(["approval_required", "blocked", "failed"]).optional(),
 });
 
 const providerReadSummaryQuerySchema = z.object({
@@ -95,6 +102,24 @@ export class OpsController {
     });
   }
 
+  @Get("provider-writes/requests")
+  async listProviderWriteRequests(
+    @Query() query: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const parsed = providerWriteRequestsQuerySchema.safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+    return this.opsService.listProviderWriteRequests({
+      tenantId: context.tenantId,
+      limit: parsed.data.limit,
+      status: parsed.data.status,
+    });
+  }
+
   @Post("channel-events")
   ingestMessage(
     @Headers() headers: RequestHeaders,
@@ -133,6 +158,21 @@ export class OpsController {
     });
   }
 
+  @Post("provider-writes/request")
+  requestProviderWrite(
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderWriteRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteOperatorAccess(context);
+    const request = ProviderWriteRequestSchema.parse(body);
+    return this.opsService.requestProviderWrite({
+      ...request,
+      tenantId: context.tenantId,
+      operatorId: context.operatorId,
+    });
+  }
+
   @Post("compensation/declined")
   handleCompensationDeclined(
     @Headers() headers: RequestHeaders,
@@ -157,6 +197,24 @@ export class OpsController {
 function requireProviderReadAdminAccess(context: RequestContext) {
   if (context.role !== "admin") {
     throw new ForbiddenException("Provider read operations require admin permission");
+  }
+  if (context.authMethod !== "operator_api_key") {
+    throw new UnauthorizedException("Operator API key is required");
+  }
+}
+
+function requireProviderWriteAdminAccess(context: RequestContext) {
+  if (context.role !== "admin") {
+    throw new ForbiddenException("Provider write operations require admin permission");
+  }
+  if (context.authMethod !== "operator_api_key") {
+    throw new UnauthorizedException("Operator API key is required");
+  }
+}
+
+function requireProviderWriteOperatorAccess(context: RequestContext) {
+  if (context.role === "viewer") {
+    throw new ForbiddenException("Provider write requests require operator permission");
   }
   if (context.authMethod !== "operator_api_key") {
     throw new UnauthorizedException("Operator API key is required");
