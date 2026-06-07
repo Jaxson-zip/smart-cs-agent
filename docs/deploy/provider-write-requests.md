@@ -2,6 +2,18 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR63 Provider Write Dry-Run Rehearsal Evidence Gate
+
+PR63 adds a sanitized evidence gate for rehearsing the provider write request, human review, and no-network execution-attempt chain. It validates `smart-cs-agent.provider-write-dry-run-rehearsal.v1` packages under `provider-write-dry-run-rehearsal-artifacts/`, but it does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.
+
+Run:
+
+```bash
+npm run verify:provider-write-dry-run-rehearsal
+```
+
+Use `npm run verify:provider-write-dry-run-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE` and `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true` after a release owner exports sanitized dry-run evidence. See `docs/deploy/provider-write-dry-run-rehearsal.md`.
+
 ## PR62 Provider Write Payload Escrow Boundary
 
 PR62 adds a default-off payload escrow readiness boundary for future provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not decrypt payloads, and does not send customer-visible replies.

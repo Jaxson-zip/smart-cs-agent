@@ -2,11 +2,30 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR62 - Provider Write Payload Escrow Boundary
+## Current Stage: PR63 - Provider Write Dry-Run Rehearsal Evidence Gate
 
-Status: verified locally; push remains blocked until GitHub OAuth has workflow scope.
+Status: verified locally; local commit pending. Remote push remains blocked until GitHub OAuth has workflow scope.
 
-Previous Stage: PR61 - Provider Write Execution Attempt Invariants And Visibility was verified locally and committed as `4db00db`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR62 - Provider Write Payload Escrow Boundary was verified locally and committed as `787ee42`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR63 adds a sanitized provider write dry-run rehearsal evidence gate. `smart-cs-agent.provider-write-dry-run-rehearsal.v1` evidence lives under `provider-write-dry-run-rehearsal-artifacts/` and proves only that the request, human review, and no-network execution-attempt chain was rehearsed with fingerprints and safety booleans. PR63 must not call provider APIs, execute provider writes, read provider credentials, open or decrypt payload escrow, store raw tenant/customer/provider data, store raw idempotency keys, or send customer-visible replies.
+
+### PR63 Scope
+
+- Add `npm run verify:provider-write-dry-run-rehearsal` and `npm run verify:provider-write-dry-run-rehearsal:safe`.
+- Validate optional sanitized rehearsal evidence under `provider-write-dry-run-rehearsal-artifacts/`.
+- Require human review, two-person review, idempotency, audit, provider write kill-switch, no provider credentials, no provider network calls, no payload escrow opening, no provider mutation, and no customer-visible replies in pass evidence.
+- Connect PR63 to provider write docs, production provider write approval, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR63 evidence-only/no-network: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR63
+
+- Live Taobao/Douyin provider write clients.
+- Creating provider write requests or execution attempts from the verifier.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting or decrypting sealed payload escrow bodies.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR62 adds a default-off provider write payload escrow readiness boundary. `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE` defaults to `disabled`; when explicitly set to `sealed_metadata`, `ProviderWriteRequest` may store only request-scoped sealed metadata fingerprints for future executor readiness. PR62 must not store raw order IDs, logistics IDs, addresses, provider payloads, ciphertext bodies, provider responses, customer messages, credentials, tokens, operator API keys, or secret material. PR62 also must not execute provider writes, open/decrypt payload escrow, call provider write adapters, read credential material, or send customer-visible replies. `ProviderWriteExecutionAttempt` rows remain protected by the PR61 database invariant: `payloadEscrowStatus=not_stored`, `payloadEscrowOpened=false`, `networkExecution=not_started`, `providerMutationExecuted=false`, and `customerVisibleMessageSent=false`.
 
@@ -210,10 +229,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR60 provider write execution attempt safety.
 - [x] PR61 - Provider Write Execution Attempt Invariants And Visibility.
 - [x] PR62 - Provider Write Payload Escrow Boundary.
+- [x] PR63 - Provider Write Dry-Run Rehearsal Evidence Gate.
 
 ## Verification Gate
 
-PR62 provider write payload escrow boundary is tracked against this gate inventory:
+PR63 provider write dry-run rehearsal evidence gate is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -266,6 +286,7 @@ PR62 provider write payload escrow boundary is tracked against this gate invento
 - `node --test scripts/verify-production-launch-binding.test.mjs`
 - `npm.cmd run verify:production-launch-binding`
 - `node --check scripts/verify-production-static-ci.mjs`
+- `node --test scripts/verify-production-launch.test.mjs`
 - `node --test scripts/verify-production-static-ci.test.mjs`
 - `npm.cmd run verify:production-static-ci`
 - `node --check scripts/verify-production-branch-protection.mjs`
@@ -288,6 +309,10 @@ PR62 provider write payload escrow boundary is tracked against this gate invento
 - `node --check scripts/verify-provider-write-payload-escrow-boundary.mjs`
 - `node --test scripts/verify-provider-write-payload-escrow-boundary.test.mjs`
 - `npm.cmd run verify:provider-write-payload-escrow-boundary`
+- `node --check scripts/verify-provider-write-dry-run-rehearsal.mjs`
+- `node --test scripts/verify-provider-write-dry-run-rehearsal.test.mjs`
+- `npm.cmd run verify:provider-write-dry-run-rehearsal`
+- `npm.cmd run verify:provider-write-dry-run-rehearsal:safe`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -329,6 +354,19 @@ PR62 provider write payload escrow boundary is tracked against this gate invento
 - `node --test scripts\*.test.mjs` passed with 112 pass / 1 skipped. The skipped test is the existing Windows symlink-permission case.
 - `git diff --check` passed with CRLF warnings only.
 - PR62 remains a default-off readiness boundary only: no payload escrow opening/decrypting, no provider credential reads, no real Taobao/Douyin mutation, no provider write adapter call, no raw provider/customer payload storage, and no customer-visible message send has been enabled. Independent read-only review found no P0/P1 blocker; its P2 database consistency finding was fixed by adding `ProviderWriteRequest_payload_escrow_consistency_chk`, which rejects mismatched `payloadEscrowStatus` / `payloadEscrowMode` / envelope metadata combinations.
+
+### PR63 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 194 tests.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 75 tests.
+- `node --test scripts/verify-provider-write-dry-run-rehearsal.test.mjs` passed with 8 tests.
+- `node --test scripts/verify-production-launch.test.mjs` passed with 1 test, covering the dry-run-before-provider-write-approval safe-mode order.
+- `npm.cmd run verify:provider-write-dry-run-rehearsal`, `npm.cmd run verify:provider-write-payload-escrow-boundary`, `npm.cmd run verify:production-provider-write-approval`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 121 pass / 1 skipped. The skipped test is the existing Windows symlink-permission case.
+- `git diff --check` passed with CRLF warnings only.
+- Read-only security review found no P0/P1/P2/P3 findings. Read-only launch/static CI review found no P0/P1/P2 findings; its P3 test-hardening finding was fixed by checking the exact verifier ordering assertion block.
+- PR63 remains no-network evidence only: no provider API calls, no provider credentials, no vault/decrypt access, no payload escrow opening, no real Taobao/Douyin mutation, no raw provider/customer payload storage, no raw idempotency-key output, and no customer-visible message send has been enabled.
 
 ### PR60 Final Verification Notes
 

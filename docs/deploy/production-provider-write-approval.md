@@ -22,6 +22,8 @@ The evidence file must use schema `smart-cs-agent.production-provider-write-appr
 
 The `:safe` command hard-requires pass evidence. It fails closed when `SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE` is missing or when the package is not approved.
 
+Before the approval package is accepted, run `npm run verify:provider-write-dry-run-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE` pointing at a file under `provider-write-dry-run-rehearsal-artifacts/` and `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true`. The approval package binds that rehearsal through `dryRunRehearsalSha256`.
+
 ## Required Evidence Shape
 
 The provider write approval package should include:
@@ -46,6 +48,7 @@ This verifier rejects unsupported sensitive fields such as `tenantId`, `provider
 Run this gate after:
 
 ```bash
+npm run verify:provider-write-dry-run-rehearsal:safe
 npm run verify:production-branch-protection
 npm run verify:production-launch
 ```

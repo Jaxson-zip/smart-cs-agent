@@ -54,6 +54,8 @@
     "verify:provider-write-execution-attempts": "node scripts/verify-provider-write-execution-attempts.mjs",
     "verify:provider-write-execution-attempt-visibility": "node scripts/verify-provider-write-execution-attempt-visibility.mjs",
     "verify:provider-write-payload-escrow-boundary": "node scripts/verify-provider-write-payload-escrow-boundary.mjs",
+    "verify:provider-write-dry-run-rehearsal": "node scripts/verify-provider-write-dry-run-rehearsal.mjs",
+    "verify:provider-write-dry-run-rehearsal:safe": "node scripts/verify-provider-write-dry-run-rehearsal.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

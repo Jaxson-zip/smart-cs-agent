@@ -18,6 +18,7 @@ production-release-evidence-artifacts/
 production-change-approval-artifacts/
 production-branch-protection-artifacts/
 production-provider-write-approval-artifacts/
+provider-write-dry-run-rehearsal-artifacts/
 launch-manifest-artifacts/
 
 # next.js

@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR63 Provider Write Dry-Run Rehearsal Evidence Gate
+
+Provider write dry-run rehearsal evidence is now checked by:
+
+```bash
+npm run verify:provider-write-dry-run-rehearsal
+npm run verify:provider-write-dry-run-rehearsal:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-dry-run-rehearsal.v1` package for the request, human review, and no-network execution-attempt chain. It requires provider write kill switch, idempotency, audit, no credential reads, no provider network calls, no payload escrow opening, no provider mutation, and no customer-visible replies. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, or send customer-visible replies.
+
 ## PR62 Provider Write Payload Escrow Boundary
 
 Provider write payload escrow readiness is now checked by:

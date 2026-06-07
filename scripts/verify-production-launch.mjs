@@ -15,6 +15,8 @@ const files = {
     "docs/deploy/production-branch-protection.md",
   productionProviderWriteApproval:
     "docs/deploy/production-provider-write-approval.md",
+  providerWriteDryRunRehearsal:
+    "docs/deploy/provider-write-dry-run-rehearsal.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -54,6 +56,8 @@ const files = {
     "scripts/verify-production-branch-protection.mjs",
   productionProviderWriteApprovalVerifier:
     "scripts/verify-production-provider-write-approval.mjs",
+  providerWriteDryRunRehearsalVerifier:
+    "scripts/verify-provider-write-dry-run-rehearsal.mjs",
   providerWriteRequestsVerifier:
     "scripts/verify-provider-write-requests.mjs",
   providerWriteApprovalStateVerifier:
@@ -122,6 +126,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-branch-protection:safe",
   "verify:production-provider-write-approval",
   "verify:production-provider-write-approval:safe",
+  "verify:provider-write-dry-run-rehearsal",
+  "verify:provider-write-dry-run-rehearsal:safe",
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
@@ -189,6 +195,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-branch-protection:safe",
   "npm run verify:production-provider-write-approval",
   "npm run verify:production-provider-write-approval:safe",
+  "npm run verify:provider-write-dry-run-rehearsal",
+  "npm run verify:provider-write-dry-run-rehearsal:safe",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
@@ -242,10 +250,21 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_BRANCH_PROTECTION_FILE",
   "SMARTCS_PRODUCTION_BRANCH_PROTECTION_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
+
+mustContainInOrder(
+  "launch runbook provider write approval ordering",
+  extractPreflightCommands(content.launchRunbook),
+  [
+    "npm run verify:provider-write-dry-run-rehearsal:safe",
+    "npm run verify:production-provider-write-approval:safe",
+  ],
+);
 
 mustContainAll("launch runbook deploy artifacts", content.launchRunbook, [
   "docs/deploy/production-deployment-artifacts.md",
@@ -479,6 +498,12 @@ mustContainAll("production readiness references provider write payload escrow bo
   "npm run verify:provider-write-payload-escrow-boundary",
 ]);
 
+mustContainAll("production readiness references provider write dry-run rehearsal", content.productionReadiness, [
+  "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
+  "npm run verify:provider-write-dry-run-rehearsal",
+  "npm run verify:provider-write-dry-run-rehearsal:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -585,6 +610,10 @@ mustContainAll("task plan references PR62", content.taskPlan, [
   "PR62 - Provider Write Payload Escrow Boundary",
   "verify:provider-write-payload-escrow-boundary",
 ]);
+mustContainAll("task plan references PR63", content.taskPlan, [
+  "PR63 - Provider Write Dry-Run Rehearsal Evidence Gate",
+  "verify:provider-write-dry-run-rehearsal",
+]);
 
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
@@ -644,6 +673,15 @@ mustContainAll("production provider write approval verifier source", content.pro
   "artifactBindings",
   "providerWriteKillSwitchReady",
   "automaticProviderWritesEnabled",
+]);
+mustContainAll("provider write dry-run rehearsal verifier source", content.providerWriteDryRunRehearsalVerifier, [
+  "verify:provider-write-dry-run-rehearsal",
+  "provider-write-dry-run-rehearsal-artifacts",
+  "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
+  "provider write dry-run rehearsal",
+  "providerMutationExecuted",
+  "customerVisibleMessageSent",
+  "payloadEscrowOpened",
 ]);
 mustContainAll("provider write requests verifier source", content.providerWriteRequestsVerifier, [
   "verify:provider-write-requests",
@@ -896,6 +934,15 @@ mustContainAll("production provider write approval docs", content.productionProv
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
+mustContainAll("provider write dry-run rehearsal docs", content.providerWriteDryRunRehearsal, [
+  "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
+  "npm run verify:provider-write-dry-run-rehearsal",
+  "npm run verify:provider-write-dry-run-rehearsal:safe",
+  "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
+  "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE",
+  "does not call provider APIs",
+  "does not execute provider writes",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -938,6 +985,11 @@ mustContainAll("provider write payload escrow boundary docs", content.providerWr
   "payloadEscrowEnvelopeFingerprint",
   "npm run verify:provider-write-payload-escrow-boundary",
 ]);
+mustContainAll("provider write dry-run rehearsal docs reference", content.providerWriteRequests, [
+  "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
+  "npm run verify:provider-write-dry-run-rehearsal",
+  "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
@@ -974,6 +1026,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-execution-attempts",
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
+  "npm run verify:provider-write-dry-run-rehearsal",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1011,6 +1064,7 @@ mustNotContainUnsafeExamples({
   productionStaticCi: content.productionStaticCi,
   productionBranchProtection: content.productionBranchProtection,
   productionProviderWriteApproval: content.productionProviderWriteApproval,
+  providerWriteDryRunRehearsal: content.providerWriteDryRunRehearsal,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
@@ -1059,6 +1113,37 @@ function mustContainAll(label, haystack, needles) {
       failures.push(`${label}: missing ${needle}`);
     }
   }
+}
+
+function mustContainInOrder(label, haystack, needles) {
+  const positions = needles.map((needle) => [needle, haystack.indexOf(needle)]);
+
+  for (const [needle, position] of positions) {
+    if (position === -1) {
+      failures.push(`${label}: missing ${needle}`);
+    }
+  }
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const [previousNeedle, previousPosition] = positions[index - 1];
+    const [currentNeedle, currentPosition] = positions[index];
+    if (
+      previousPosition !== -1 &&
+      currentPosition !== -1 &&
+      currentPosition <= previousPosition
+    ) {
+      failures.push(`${label}: expected ${previousNeedle} before ${currentNeedle}`);
+    }
+  }
+}
+
+function extractPreflightCommands(markdown) {
+  const match = markdown.match(/## Preflight Commands[\s\S]*?```bash\n([\s\S]*?)\n```/);
+  if (!match) {
+    failures.push("launch runbook preflight commands: missing bash command block");
+    return "";
+  }
+  return match[1];
 }
 
 function mustNotContainUnsafeExamples(items) {
