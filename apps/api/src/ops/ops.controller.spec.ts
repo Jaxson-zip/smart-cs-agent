@@ -436,6 +436,153 @@ describe("OpsController", () => {
     );
   });
 
+  it("uses request operator context for provider write approvals", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "demo_tenant",
+        operatorId: "admin_from_context",
+        role: "admin",
+      },
+    ]);
+    let capturedInput:
+      | {
+          tenantId: string;
+          requestId: string;
+          reviewerOperatorId: string;
+          reasonCode: string;
+        }
+      | undefined;
+    const controller = new OpsController({
+      approveProviderWriteRequest: (input: typeof capturedInput) => {
+        capturedInput = input;
+        return {
+          writeRequestId: input?.requestId ?? "",
+          status: "approved",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          operatorVisibleResult: "approved",
+          requiresHuman: true,
+          retryable: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    await controller.approveProviderWriteRequest(
+      "write_1",
+      { authorization: "Bearer admin_key_123" },
+      { reasonCode: "policy_verified" },
+    );
+
+    assert.deepStrictEqual(capturedInput, {
+      tenantId: "demo_tenant",
+      requestId: "write_1",
+      reviewerOperatorId: "admin_from_context",
+      reasonCode: "policy_verified",
+    });
+  });
+
+  it("uses request operator context for provider write rejections", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "demo_tenant",
+        operatorId: "admin_from_context",
+        role: "admin",
+      },
+    ]);
+    let capturedInput:
+      | {
+          tenantId: string;
+          requestId: string;
+          reviewerOperatorId: string;
+          reasonCode: string;
+        }
+      | undefined;
+    const controller = new OpsController({
+      rejectProviderWriteRequest: (input: typeof capturedInput) => {
+        capturedInput = input;
+        return {
+          writeRequestId: input?.requestId ?? "",
+          status: "rejected",
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+          operatorVisibleResult: "rejected",
+          requiresHuman: true,
+          retryable: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    await controller.rejectProviderWriteRequest(
+      "write_1",
+      { authorization: "Bearer admin_key_123" },
+      { reasonCode: "insufficient_context" },
+    );
+
+    assert.deepStrictEqual(capturedInput, {
+      tenantId: "demo_tenant",
+      requestId: "write_1",
+      reviewerOperatorId: "admin_from_context",
+      reasonCode: "insufficient_context",
+    });
+  });
+
+  it("rejects non-admin provider write approvals", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      approveProviderWriteRequest: () => {
+        throw new Error("operator must not approve provider writes");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.approveProviderWriteRequest(
+          "write_1",
+          { authorization: "Bearer operator_key_123" },
+          { reasonCode: "policy_verified" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
+  it("rejects insecure header fallback for provider write approvals", async () => {
+    delete process.env.OPERATOR_API_KEYS;
+    const controller = new OpsController({
+      approveProviderWriteRequest: () => {
+        throw new Error("must not approve provider writes from insecure headers");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.approveProviderWriteRequest(
+          "write_1",
+          { "x-tenant-id": "tenant_1", "x-operator-id": "admin_1" },
+          { reasonCode: "policy_verified" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+  });
+
   it("requires operator context before executing provider reads", () => {
     const controller = new OpsController({
       executeProviderRead: () => {

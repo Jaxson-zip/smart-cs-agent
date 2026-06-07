@@ -53,6 +53,14 @@ export const ProviderWritePolicySchema = z.enum([
   "disabled",
 ]);
 
+export const ProviderWriteStatusSchema = z.enum([
+  "approval_required",
+  "approved",
+  "rejected",
+  "blocked",
+  "failed",
+]);
+
 export const ChannelMessageIngestSchema = z.object({
   externalMessageId: z.string().min(1),
   channel: CommerceChannelSchema,
@@ -228,13 +236,39 @@ export const ProviderWriteRequestSchema = z
 export const ProviderWriteResponseSchema = z
   .object({
     writeRequestId: z.string(),
-    status: z.enum(["approval_required", "blocked", "failed"]),
+    status: ProviderWriteStatusSchema,
     networkExecution: z.literal("not_started"),
     providerMutationExecuted: z.literal(false),
     customerVisibleMessageSent: z.literal(false),
     operatorVisibleResult: z.string(),
     requiresHuman: z.literal(true),
     retryable: z.boolean(),
+  })
+  .strict();
+
+export const ProviderWriteApprovalReasonCodeSchema = z.enum([
+  "policy_verified",
+  "customer_confirmed",
+  "merchant_approved",
+]);
+
+export const ProviderWriteRejectionReasonCodeSchema = z.enum([
+  "risk_rejected",
+  "customer_declined",
+  "duplicate_request",
+  "insufficient_context",
+  "policy_blocked",
+]);
+
+export const ProviderWriteApprovalRequestSchema = z
+  .object({
+    reasonCode: ProviderWriteApprovalReasonCodeSchema,
+  })
+  .strict();
+
+export const ProviderWriteRejectionRequestSchema = z
+  .object({
+    reasonCode: ProviderWriteRejectionReasonCodeSchema,
   })
   .strict();
 
@@ -297,6 +331,7 @@ export type ProviderReadCapability = z.infer<
 >;
 export type ProviderAdapterMode = z.infer<typeof ProviderAdapterModeSchema>;
 export type ProviderWritePolicy = z.infer<typeof ProviderWritePolicySchema>;
+export type ProviderWriteStatus = z.infer<typeof ProviderWriteStatusSchema>;
 export type ChannelMessageIngest = z.infer<typeof ChannelMessageIngestSchema>;
 export type AgentCaseDecision = z.infer<typeof AgentCaseDecisionSchema>;
 export type ExecuteActionRequest = z.infer<typeof ExecuteActionRequestSchema>;
@@ -308,6 +343,12 @@ export type ProviderWriteAction = z.infer<typeof ProviderWriteActionSchema>;
 export type ProviderWritePayload = z.infer<typeof ProviderWritePayloadSchema>;
 export type ProviderWriteRequest = z.infer<typeof ProviderWriteRequestSchema>;
 export type ProviderWriteResponse = z.infer<typeof ProviderWriteResponseSchema>;
+export type ProviderWriteApprovalRequest = z.infer<
+  typeof ProviderWriteApprovalRequestSchema
+>;
+export type ProviderWriteRejectionRequest = z.infer<
+  typeof ProviderWriteRejectionRequestSchema
+>;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema
 >;

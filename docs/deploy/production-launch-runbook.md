@@ -220,6 +220,8 @@ Use `SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE` and `SMARTCS_PRODUCTION_PR
 
 Run `npm run verify:provider-write-requests` alongside it when `ProviderWriteRequest`, `PROVIDER_WRITE_REVIEW_ADAPTERS`, provider write request API/BFF routes, idempotency, case ownership checks, or sanitized response behavior change. This verifier keeps the queue review-only and checks that it does not call provider APIs, execute provider writes, store raw provider payloads, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
 
+Run `npm run verify:provider-write-approval-state` alongside it when the Provider write approval state machine, approve/reject API/BFF routes, two-person review, self-approval blocking, controlled reason codes, `payloadEscrowStatus`, review fingerprints, or sanitized approval response behavior change. This verifier keeps approvals decision-only and checks that approval does not call provider APIs, execute provider writes, decrypt payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
+
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 
 See `docs/deploy/production-image-builds.md` for the build-only image gate and `docs/deploy/production-image-build.yml.example` for the GitHub Actions template.

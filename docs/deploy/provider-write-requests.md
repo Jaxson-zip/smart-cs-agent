@@ -2,6 +2,33 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR59 Provider Write Approval State Machine
+
+PR59 adds approve/reject transitions for queued provider write requests. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not decrypt payload escrow, and does not send customer-visible replies.
+
+New API routes:
+
+- `POST /v2/provider-writes/requests/:id/approve`: admin-only API route for approving an `approval_required` request.
+- `POST /v2/provider-writes/requests/:id/reject`: admin-only API route for rejecting an `approval_required` request.
+- `POST /api/operator/provider-writes/requests/:id/approve`: Web BFF route that uses the HttpOnly admin session and keeps operator API keys server-side.
+- `POST /api/operator/provider-writes/requests/:id/reject`: Web BFF route that uses the HttpOnly admin session and keeps operator API keys server-side.
+
+Approval and rejection are tenant-scoped and require two-person review. The reviewer is derived from the authenticated operator context; body-supplied tenant, operator, reviewer, raw payload, or key fields are ignored or rejected. The original requester cannot approve their own request, even when that requester is an admin.
+
+Review requests accept only controlled `reasonCode` values. They do not accept free-text notes, raw order IDs, logistics IDs, addresses, provider payloads, provider responses, customer data, operator API keys, provider tokens, webhook secrets, or tenant secrets.
+
+Reviewed rows may store `reviewerOperatorId`, `reviewedAt`, `reviewReasonCode`, `reviewFingerprint`, `payloadEscrowStatus`, and `payloadEscrowFingerprint`. `payloadEscrowStatus=not_stored` is an explicit boundary: PR59 records that no raw provider write payload is available for execution in this build. The fingerprint is only an audit marker for the absent escrow envelope.
+
+Approved requests return `status=approved`, `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`. Rejected requests use the same no-execution flags with `status=rejected`. Approval means "eligible for a future executor after another reviewed implementation," not "executed."
+
+Run:
+
+```bash
+npm run verify:provider-write-approval-state
+```
+
+This verifier checks the shared approval contracts, Prisma migration, API routes, Web BFF routes, two-person review tests, sanitized response behavior, docs, static CI, production launch references, and task plan.
+
 ## Configuration
 
 Configure a tenant/channel pair for reviewed write requests with `PROVIDER_WRITE_REVIEW_ADAPTERS`:
@@ -39,7 +66,7 @@ It does not store raw idempotency keys, raw order IDs, raw logistics IDs, raw ad
 
 Accepted requests return `status=approval_required`, `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`.
 
-This queue is not enough to execute real writes. A later stage must add secure payload escrow, a live kill switch check immediately before network calls, provider-specific write clients, approval state transitions, execution attempts, rollback behavior, and production canary coverage.
+This queue and approval state machine are not enough to execute real writes. A later stage must add secure payload escrow with decrypt-on-execution controls, a live kill switch check immediately before network calls, provider-specific write clients, execution attempts, rollback behavior, and production canary coverage.
 
 ## Verification
 

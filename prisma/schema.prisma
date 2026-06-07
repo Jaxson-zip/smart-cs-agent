@@ -169,6 +169,12 @@ model ProviderWriteRequest {
   customerVisibleMessageSent Boolean  @default(false)
   operatorVisibleResult      String
   policyReason               String?
+  reviewerOperatorId         String?
+  reviewedAt                 DateTime?
+  reviewReasonCode           String?
+  reviewFingerprint          String?
+  payloadEscrowStatus        String   @default("not_stored")
+  payloadEscrowFingerprint   String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -176,6 +182,8 @@ model ProviderWriteRequest {
   @@index([tenantId, channel, createdAt])
   @@index([tenantId, caseId, createdAt])
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, status, reviewedAt])
+  @@index([tenantId, reviewerOperatorId, reviewedAt])
 }
 
 model CaseMessage {

@@ -2,6 +2,25 @@
 
 This document defines the launch boundary for commerce provider adapters. It is a contract package for future Taobao, Douyin, Shopify, WeChat, and email integrations. It does not enable real provider network calls, real refunds, real address changes, real coupons, logistics edits, or customer-visible replies.
 
+## PR59 Provider Write Approval State Machine
+
+PR59 adds approve/reject transitions for `ProviderWriteRequest` rows created by PR58:
+
+- `POST /v2/provider-writes/requests/:id/approve` and `POST /v2/provider-writes/requests/:id/reject`: admin-only API routes.
+- `POST /api/operator/provider-writes/requests/:id/approve` and `POST /api/operator/provider-writes/requests/:id/reject`: Web BFF routes that keep operator API keys server-side.
+- Two-person review is enforced: the requester cannot approve their own request.
+- Review evidence stores only `reviewerOperatorId`, `reviewedAt`, controlled `reviewReasonCode`, `reviewFingerprint`, and `payloadEscrowStatus=not_stored` / `payloadEscrowFingerprint`.
+
+Approved or rejected requests still keep `networkExecution=not_started`, `providerMutationExecuted=false`, and `customerVisibleMessageSent=false`. Approval does not execute provider writes. It only records a human decision that a future provider write executor may consume after a separate reviewed implementation.
+
+Run:
+
+```bash
+npm run verify:provider-write-approval-state
+```
+
+This verifier checks the approval contracts, Prisma state fields, API/BFF routes, two-person review tests, sanitized docs, static CI wiring, and production launch references.
+
 ## PR58 Provider Write Request Queue
 
 PR58 adds the internal request queue for future human-reviewed provider writes:

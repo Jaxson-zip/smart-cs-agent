@@ -5,7 +5,9 @@ import {
   CommerceActionSchema,
   ProviderReadRequestSchema,
   ProviderReadResponseSchema,
+  ProviderWriteApprovalRequestSchema,
   ProviderWriteRequestSchema,
+  ProviderWriteRejectionRequestSchema,
   ProviderWriteResponseSchema,
   type CommerceChannel,
   type ExecuteActionRequest,
@@ -357,6 +359,17 @@ describe("OpsService provider adapter contract", () => {
         retryable: false,
       }),
     );
+    assert.throws(() =>
+      ProviderWriteApprovalRequestSchema.parse({
+        reasonCode: "policy_verified",
+        rawNote: "secret_order_1 raw address",
+      }),
+    );
+    assert.throws(() =>
+      ProviderWriteRejectionRequestSchema.parse({
+        reasonCode: "free_text_customer_phone_13800000000",
+      }),
+    );
   });
 
   it("reuses provider write requests for duplicate idempotency keys", async () => {
@@ -481,6 +494,240 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(
       persistence.auditEntries[0].action,
       "provider_write.blocked",
+    );
+  });
+
+  it("approves queued provider write requests with two-person review without provider execution", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["modify_address"],
+      },
+    ]);
+    const adapter = new PoisonTaobaoAdapter();
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "modify_address",
+      payload: {
+        orderId: "secret_order_approval",
+        addressFingerprint: "address_fp_approval_123",
+      },
+      idempotencyKey: "secret_idem_approval",
+      operatorId: "operator_1",
+    });
+    const approved = await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+
+    assert.strictEqual(approved.writeRequestId, queued.writeRequestId);
+    assert.strictEqual(approved.status, "approved");
+    assert.strictEqual(approved.networkExecution, "not_started");
+    assert.strictEqual(approved.providerMutationExecuted, false);
+    assert.strictEqual(approved.customerVisibleMessageSent, false);
+    assert.strictEqual(approved.requiresHuman, true);
+    assert.strictEqual(approved.retryable, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(persistence.writeRequests[0].status, "approved");
+    assert.strictEqual(
+      persistence.writeRequests[0].reviewerOperatorId,
+      "admin_2",
+    );
+    assert.strictEqual(
+      persistence.writeRequests[0].reviewReasonCode,
+      "policy_verified",
+    );
+    assert.ok(persistence.writeRequests[0].reviewedAt instanceof Date);
+    assert.match(
+      persistence.writeRequests[0].reviewFingerprint ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    assert.strictEqual(
+      persistence.writeRequests[0].payloadEscrowStatus,
+      "not_stored",
+    );
+    assert.match(
+      persistence.writeRequests[0].payloadEscrowFingerprint ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    assert.strictEqual(persistence.auditEntries.length, 2);
+    assert.strictEqual(
+      persistence.auditEntries[1].action,
+      "provider_write.approved",
+    );
+    assert.strictEqual(JSON.stringify(approved).includes("secret_order_approval"), false);
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[1]).includes("secret_order_approval"),
+      false,
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.writeRequests[0]).includes("secret_idem_approval"),
+      false,
+    );
+  });
+
+  it("blocks provider write self-approval and leaves the request pending", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_self_approval", couponAmountCents: 2000 },
+      idempotencyKey: "secret_idem_self_approval",
+      operatorId: "admin_1",
+    });
+    const blocked = await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_1",
+      reasonCode: "merchant_approved",
+    });
+
+    assert.strictEqual(blocked.status, "blocked");
+    assert.match(blocked.operatorVisibleResult, /two-person review/i);
+    assert.strictEqual(persistence.writeRequests[0].status, "approval_required");
+    assert.strictEqual(persistence.writeRequests[0].reviewerOperatorId, null);
+    assert.strictEqual(persistence.auditEntries.length, 2);
+    assert.strictEqual(
+      persistence.auditEntries[1].action,
+      "provider_write.blocked",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries[1]).includes("secret_order_self_approval"),
+      false,
+    );
+  });
+
+  it("rejects queued provider write requests without provider execution", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["urge_logistics"],
+      },
+    ]);
+    const adapter = new PoisonTaobaoAdapter();
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "urge_logistics",
+      payload: { logisticsId: "secret_logistics_reject" },
+      idempotencyKey: "secret_idem_reject",
+      operatorId: "operator_1",
+    });
+    const rejected = await service.rejectProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "insufficient_context",
+    });
+
+    assert.strictEqual(rejected.status, "rejected");
+    assert.strictEqual(rejected.networkExecution, "not_started");
+    assert.strictEqual(rejected.providerMutationExecuted, false);
+    assert.strictEqual(rejected.customerVisibleMessageSent, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(persistence.writeRequests[0].status, "rejected");
+    assert.strictEqual(
+      persistence.writeRequests[0].reviewReasonCode,
+      "insufficient_context",
+    );
+    assert.strictEqual(
+      persistence.auditEntries.at(-1)?.action,
+      "provider_write.rejected",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence).includes("secret_logistics_reject"),
+      false,
+    );
+  });
+
+  it("fails closed when reviewing provider write requests outside the tenant or terminal state", async () => {
+    process.env.PROVIDER_WRITE_REVIEW_ADAPTERS = JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+    const queued = await service.requestProviderWrite({
+      caseId: "case_1",
+      tenantId: "tenant_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "secret_order_terminal", couponAmountCents: 2000 },
+      idempotencyKey: "secret_idem_terminal",
+      operatorId: "operator_1",
+    });
+
+    const crossTenant = await service.approveProviderWriteRequest({
+      tenantId: "tenant_2",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+    const approved = await service.approveProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_2",
+      reasonCode: "policy_verified",
+    });
+    const repeated = await service.rejectProviderWriteRequest({
+      tenantId: "tenant_1",
+      requestId: queued.writeRequestId,
+      reviewerOperatorId: "admin_3",
+      reasonCode: "duplicate_request",
+    });
+
+    assert.strictEqual(crossTenant.status, "failed");
+    assert.match(crossTenant.operatorVisibleResult, /not found/i);
+    assert.strictEqual(approved.status, "approved");
+    assert.strictEqual(repeated.status, "failed");
+    assert.match(repeated.operatorVisibleResult, /already reviewed/i);
+    assert.strictEqual(persistence.writeRequests[0].status, "approved");
+    assert.strictEqual(
+      JSON.stringify(persistence.auditEntries).includes("secret_order_terminal"),
+      false,
     );
   });
 
@@ -1503,6 +1750,12 @@ type ProviderWriteRequestRecord = {
   customerVisibleMessageSent: boolean;
   operatorVisibleResult: string;
   policyReason: string | null;
+  reviewerOperatorId: string | null;
+  reviewedAt: Date | null;
+  reviewReasonCode: string | null;
+  reviewFingerprint: string | null;
+  payloadEscrowStatus: string;
+  payloadEscrowFingerprint: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -1713,6 +1966,23 @@ function createProviderOperationPersistence(
         },
       },
       providerWriteRequest: {
+        findMany: async ({
+          where,
+          orderBy,
+          take,
+        }: {
+          where?: ProviderWriteRequestWhere;
+          orderBy?: { createdAt?: "asc" | "desc" };
+          take?: number;
+        }) => {
+          const sorted = filterWriteRequests(writeRequests, where).sort(
+            (left, right) => {
+              const direction = orderBy?.createdAt === "asc" ? 1 : -1;
+              return direction * (left.createdAt.getTime() - right.createdAt.getTime());
+            },
+          );
+          return take === undefined ? sorted : sorted.slice(0, take);
+        },
         findUnique: async ({
           where,
         }: {
@@ -1729,6 +1999,11 @@ function createProviderOperationPersistence(
               item.idempotencyKeyHash ===
                 where.tenantId_idempotencyKeyHash.idempotencyKeyHash,
           ) ?? null,
+        findFirst: async ({
+          where,
+        }: {
+          where?: ProviderWriteRequestWhere;
+        }) => filterWriteRequests(writeRequests, where)[0] ?? null,
         create: async ({
           data,
         }: {
@@ -1752,6 +2027,21 @@ function createProviderOperationPersistence(
           };
           writeRequests.push(row);
           return row;
+        },
+        updateMany: async ({
+          where,
+          data,
+        }: {
+          where?: ProviderWriteRequestWhere;
+          data: Partial<ProviderWriteRequestRecord>;
+        }) => {
+          const matches = filterWriteRequests(writeRequests, where);
+          for (const row of matches) {
+            Object.assign(row, data, {
+              updatedAt: new Date("2026-06-06T00:01:00.000Z"),
+            });
+          }
+          return { count: matches.length };
         },
       },
     } as unknown as PrismaService,
@@ -1891,6 +2181,26 @@ function filterRuns(
     if (where?.createdAt?.lte && run.createdAt > where.createdAt.lte) {
       return false;
     }
+    return true;
+  });
+}
+
+type ProviderWriteRequestWhere = {
+  id?: string;
+  tenantId?: string;
+  status?: string;
+  channel?: string;
+};
+
+function filterWriteRequests(
+  writeRequests: ProviderWriteRequestRecord[],
+  where: ProviderWriteRequestWhere | undefined,
+) {
+  return writeRequests.filter((request) => {
+    if (where?.id && request.id !== where.id) return false;
+    if (where?.tenantId && request.tenantId !== where.tenantId) return false;
+    if (where?.status && request.status !== where.status) return false;
+    if (where?.channel && request.channel !== where.channel) return false;
     return true;
   });
 }

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Get,
   Headers,
+  Param,
   Post,
   Query,
   UnauthorizedException,
@@ -15,13 +16,17 @@ import {
   CompensationDeclinedRequestSchema,
   ExecuteActionRequestSchema,
   HandoffRequestSchema,
+  ProviderWriteApprovalRequestSchema,
   ProviderReadRequestSchema,
+  ProviderWriteRejectionRequestSchema,
   ProviderWriteRequestSchema,
   type ChannelMessageIngest,
   type CompensationDeclinedRequest,
   type ExecuteActionRequest,
   type HandoffRequest,
+  type ProviderWriteApprovalRequest,
   type ProviderReadRequest,
+  type ProviderWriteRejectionRequest,
   type ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import {
@@ -38,7 +43,9 @@ const providerReadRunsQuerySchema = z.object({
 
 const providerWriteRequestsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
-  status: z.enum(["approval_required", "blocked", "failed"]).optional(),
+  status: z
+    .enum(["approval_required", "approved", "rejected", "blocked", "failed"])
+    .optional(),
 });
 
 const providerReadSummaryQuerySchema = z.object({
@@ -170,6 +177,40 @@ export class OpsController {
       ...request,
       tenantId: context.tenantId,
       operatorId: context.operatorId,
+    });
+  }
+
+  @Post("provider-writes/requests/:id/approve")
+  approveProviderWriteRequest(
+    @Param("id") id: string,
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderWriteApprovalRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const request = ProviderWriteApprovalRequestSchema.parse(body);
+    return this.opsService.approveProviderWriteRequest({
+      tenantId: context.tenantId,
+      requestId: id,
+      reviewerOperatorId: context.operatorId,
+      reasonCode: request.reasonCode,
+    });
+  }
+
+  @Post("provider-writes/requests/:id/reject")
+  rejectProviderWriteRequest(
+    @Param("id") id: string,
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderWriteRejectionRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const request = ProviderWriteRejectionRequestSchema.parse(body);
+    return this.opsService.rejectProviderWriteRequest({
+      tenantId: context.tenantId,
+      requestId: id,
+      reviewerOperatorId: context.operatorId,
+      reasonCode: request.reasonCode,
     });
   }
 

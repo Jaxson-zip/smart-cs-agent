@@ -19,6 +19,8 @@ import {
   GET as listProviderWriteRequests,
   POST as requestProviderWrite,
 } from "./provider-writes/requests/route";
+import { POST as approveProviderWriteRequest } from "./provider-writes/requests/[id]/approve/route";
+import { POST as rejectProviderWriteRequest } from "./provider-writes/requests/[id]/reject/route";
 import {
   GET as listOperators,
   POST as createOperator,
@@ -1243,10 +1245,12 @@ describe("operator BFF routes", () => {
         loginResponse.headers.get("set-cookie") ?? "",
         {
           caseId: "case_1",
+          tenantId: "must_not_cross_bff",
           channel: "taobao",
           action: "issue_coupon",
           payload: { orderId: "order_1", couponAmountCents: 2000 },
           idempotencyKey: "write_1",
+          operatorId: "must_not_cross_bff",
         },
       ),
     );
@@ -1259,7 +1263,13 @@ describe("operator BFF routes", () => {
     assert.strictEqual(proxiedMethod, "POST");
     assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer session_api_key");
     assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
-    assert.strictEqual(JSON.parse(proxiedBody).operatorApiKey, undefined);
+    assert.deepStrictEqual(JSON.parse(proxiedBody), {
+      caseId: "case_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      payload: { orderId: "order_1", couponAmountCents: 2000 },
+      idempotencyKey: "write_1",
+    });
     assert.deepStrictEqual(await response.json(), {
       writeRequestId: "provider_write_request_1",
       status: "approval_required",
@@ -1316,6 +1326,236 @@ describe("operator BFF routes", () => {
     });
   });
 
+  it("rejects provider write request responses that are already approved", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"alice","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"session_api_key"}]';
+
+    globalThis.fetch = async () =>
+      Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "approved",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "unsafe",
+        requiresHuman: true,
+        retryable: false,
+      });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "alice",
+        password: "secret",
+      }),
+    );
+    const response = await requestProviderWrite(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          caseId: "case_1",
+          channel: "taobao",
+          action: "issue_coupon",
+          payload: { orderId: "order_1", couponAmountCents: 2000 },
+          idempotencyKey: "write_1",
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 502);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write request response is invalid",
+    });
+  });
+
+  it("proxies provider write approvals through an admin session without leaking keys or raw payload", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedMethod = "";
+    let proxiedBody = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedMethod = init?.method ?? "GET";
+      proxiedHeaders = new Headers(init?.headers);
+      proxiedBody = String(init?.body ?? "");
+      return Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "approved",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "approved",
+        requiresHuman: true,
+        retryable: false,
+        providerPayload: { secret: true },
+        operatorApiKey: "operator_api_key_must_not_leak",
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await approveProviderWriteRequest(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/approve",
+        loginResponse.headers.get("set-cookie") ?? "",
+        {
+          reasonCode: "policy_verified",
+        },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/requests/write_1/approve",
+    );
+    assert.strictEqual(proxiedMethod, "POST");
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    assert.strictEqual(proxiedHeaders.get("content-type"), "application/json");
+    assert.deepStrictEqual(JSON.parse(proxiedBody), {
+      reasonCode: "policy_verified",
+    });
+    const body = await response.json();
+    assert.deepStrictEqual(body, {
+      writeRequestId: "provider_write_request_1",
+      status: "approved",
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult: "approved",
+      requiresHuman: true,
+      retryable: false,
+    });
+    assert.strictEqual(JSON.stringify(body).includes("operator_api_key_must_not_leak"), false);
+  });
+
+  it("rejects unsafe provider write approval responses from the API", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+
+    globalThis.fetch = async () =>
+      Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "approved",
+        networkExecution: "not_started",
+        providerMutationExecuted: true,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "unsafe",
+        requiresHuman: true,
+        retryable: false,
+      });
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await approveProviderWriteRequest(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/approve",
+        loginResponse.headers.get("set-cookie") ?? "",
+        { reasonCode: "policy_verified" },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(response.status, 502);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write request response is invalid",
+    });
+  });
+
+  it("blocks non-admin provider write approvals and proxies rejections for admins", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"},{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+    let proxiedUrl = "";
+
+    globalThis.fetch = async (input) => {
+      fetchCalled = true;
+      proxiedUrl = String(input);
+      return Response.json({
+        writeRequestId: "provider_write_request_1",
+        status: "rejected",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult: "rejected",
+        requiresHuman: true,
+        retryable: false,
+      });
+    };
+
+    const agentLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const blocked = await approveProviderWriteRequest(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/approve",
+        agentLogin.headers.get("set-cookie") ?? "",
+        { reasonCode: "policy_verified" },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(blocked.status, 403);
+    assert.deepStrictEqual(await blocked.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+
+    const adminLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const rejected = await rejectProviderWriteRequest(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/requests/write_1/reject",
+        adminLogin.headers.get("set-cookie") ?? "",
+        { reasonCode: "insufficient_context" },
+      ),
+      { params: Promise.resolve({ id: "write_1" }) },
+    );
+
+    assert.strictEqual(rejected.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/requests/write_1/reject",
+    );
+    assert.deepStrictEqual(await rejected.json(), {
+      writeRequestId: "provider_write_request_1",
+      status: "rejected",
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult: "rejected",
+      requiresHuman: true,
+      retryable: false,
+    });
+  });
+
   it("lets admin sessions list sanitized provider write requests through the BFF", async () => {
     process.env.API_URL = "http://api.internal:4100";
     process.env.OPERATOR_SESSION_SECRET = "test_secret";
@@ -1344,6 +1584,12 @@ describe("operator BFF routes", () => {
           },
           payloadFingerprint: "abcdef123456",
           requestFingerprint: "123456abcdef",
+          reviewerOperatorId: null,
+          reviewedAt: null,
+          reviewReasonCode: null,
+          reviewFingerprint: "",
+          payloadEscrowStatus: "not_stored",
+          payloadEscrowFingerprint: "fedcba654321",
           policyReason: null,
           createdAt: "2026-06-06T08:00:00.000Z",
           updatedAt: "2026-06-06T08:00:00.000Z",
@@ -1396,6 +1642,12 @@ describe("operator BFF routes", () => {
         },
         payloadFingerprint: "abcdef123456",
         requestFingerprint: "123456abcdef",
+        reviewerOperatorId: null,
+        reviewedAt: null,
+        reviewReasonCode: null,
+        reviewFingerprint: "",
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowFingerprint: "fedcba654321",
         policyReason: null,
         createdAt: "2026-06-06T08:00:00.000Z",
         updatedAt: "2026-06-06T08:00:00.000Z",

@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR59 Provider Write Approval State Machine
+
+Provider write approval state is now checked by:
+
+```bash
+npm run verify:provider-write-approval-state
+```
+
+This gate adds admin-only approve/reject transitions for queued `ProviderWriteRequest` rows. It enforces tenant scoping, Operator API key auth, two-person review, self-approval blocking, controlled reason codes, sanitized review fingerprints, and `payloadEscrowStatus=not_stored` as the no-raw-payload escrow boundary. Approved and rejected requests still return `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`. This verifier still does not call provider APIs, execute provider writes, read provider credentials, decrypt payload escrow, store raw order/address/logistics/provider payload values, send customer-visible replies, or enable automatic commerce actions.
+
 ## PR58 Provider Write Request Queue
 
 Provider write requests are now checked by:

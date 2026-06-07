@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR58 - Provider Write Request Queue
+## Current Stage: PR59 - Provider Write Approval State Machine
 
-Status: in progress
+Status: verified locally; commit pending
 
-Previous Stage: PR57 - Production Provider Write Approval Gate was verified locally. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR58 - Provider Write Request Queue was verified locally and committed as `1cb116d`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+Provider Write Request Stage: PR58 - Provider Write Request Queue was verified with review-only `ProviderWriteRequest` rows, sanitized hashes/status fields, no raw payload storage, and no provider/customer-visible execution. It must stay connected to provider write approvals, launch checks, and static CI.
 
 Provider Write Approval Stage: PR57 - Production Provider Write Approval Gate was verified with sanitized approval evidence shape and must stay connected to provider write request queues, production launch checks, and static CI.
 
@@ -56,19 +58,19 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR58 adds the first provider write request queue. It lets authenticated operators request low-risk provider actions for human review, but it still keeps every real provider mutation disabled. `ProviderWriteRequest` rows are tenant-scoped, idempotent on `tenantId + idempotencyKeyHash`, tied to an owned `AfterSalesCase`, and store only hashes, status fields, and payload-key booleans. Accepted responses must keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`.
+PR59 adds the provider write approval state machine on top of the request queue. Admin operators can approve or reject queued low-risk provider write requests, but approval still means "ready for a future executor" only. It must enforce two-person review, block self-approval, audit every transition, return only sanitized fingerprints/status fields, and keep `networkExecution=not_started`, `providerMutationExecuted=false`, `customerVisibleMessageSent=false`, and `requiresHuman=true`.
 
-### PR58 Scope
+### PR59 Scope
 
-- Add shared provider write request/response contracts for `modify_address`, `issue_coupon`, and `urge_logistics`.
-- Add `ProviderWriteRequest` persistence with sanitized hashes, payload-key booleans, tenant/case/operator context, and idempotency on `tenantId + idempotencyKeyHash`.
-- Add `PROVIDER_WRITE_REVIEW_ADAPTERS` parsing as an allowlist only, without credentials or token material.
-- Add API routes `POST /v2/provider-writes/request` and `GET /v2/provider-writes/requests`.
-- Add Web BFF routes `POST /api/operator/provider-writes/requests` and `GET /api/operator/provider-writes/requests` without exposing operator keys to the browser.
-- Add `npm run verify:provider-write-requests` and connect it to docs, public API surface, production launch, and static CI.
-- Keep the verifier and runtime local/no-execution: no provider API calls, no provider credentials, no provider writes, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+- Add shared provider write approval request/response contracts and approved/rejected status values.
+- Add persistence fields for reviewer identity, review timestamps, approval/rejection reasons, and an approval fingerprint/envelope that does not expose raw provider payload.
+- Add API routes for `POST /v2/provider-writes/requests/:id/approve` and `POST /v2/provider-writes/requests/:id/reject`.
+- Enforce tenant scoping, admin-only approval/rejection, operator API key auth, and two-person review: the requester cannot approve their own request.
+- Add Web BFF routes for approve/reject that use HttpOnly sessions and reject unsafe upstream response shapes.
+- Add `npm run verify:provider-write-approval-state` and connect it to docs, public API surface, production launch, and static CI.
+- Keep approval local/no-execution: no provider API calls, no provider credentials, no provider writes, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
 
-### Out Of Scope For PR58
+### Out Of Scope For PR59
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -89,8 +91,7 @@ PR58 adds the first provider write request queue. It lets authenticated operator
 - Provider-specific production API callbacks beyond sandbox-shaped payloads.
 - Real customer replies or real commerce actions from the review pool.
 - Bulk review, assignment, SLA routing, and notification workflows.
-- Approval state transitions for provider write requests.
-- Secure payload escrow and decrypt-on-approval behavior.
+- Secure payload decrypt-on-approval behavior.
 - Live provider write executor, provider-specific write clients, live kill switch enforcement immediately before network calls, execution attempts, compensation rollback, and production canary coverage for provider writes.
 
 ## Phases
@@ -158,11 +159,12 @@ PR58 adds the first provider write request queue. It lets authenticated operator
 - [x] PR55 production static CI gate.
 - [x] PR56 production branch protection gate.
 - [x] PR57 production provider write approval gate.
-- [ ] PR58 provider write request queue.
+- [x] PR58 provider write request queue.
+- [x] PR59 provider write approval state machine.
 
 ## Verification Gate
 
-Do not claim PR58 provider write request queue complete until these pass:
+PR59 provider write approval state machine is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -225,6 +227,9 @@ Do not claim PR58 provider write request queue complete until these pass:
 - `npm.cmd run verify:production-provider-write-approval`
 - `node --check scripts/verify-provider-write-requests.mjs`
 - `npm.cmd run verify:provider-write-requests`
+- `node --check scripts/verify-provider-write-approval-state.mjs`
+- `node --test scripts/verify-provider-write-approval-state.test.mjs`
+- `npm.cmd run verify:provider-write-approval-state`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -253,6 +258,17 @@ Do not claim PR58 provider write request queue complete until these pass:
 - `npm.cmd run verify:operator-bootstrap`
 - Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
 - Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
+
+### PR59 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed when run from the repository cwd. A prior parallel run failed from a Codex sandbox temp cwd with existing `tsx/esbuild` decorator project-path errors; the same API suite passed immediately when run alone from `G:\vibe-coding\smart-cs-agent`.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false` passed.
+- `npm.cmd run lint --workspaces --if-present -- --max-warnings=0` passed when run alone from the repository cwd. A prior parallel run failed from a Codex sandbox temp cwd with existing ESLint project-path errors.
+- `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 99 pass / 1 skipped after adding the PR59 negative verifier test. The skipped test is the existing Windows symlink-permission case.
+- `npm.cmd run verify:provider-write-approval-state`, `npm.cmd run verify:provider-write-requests`, `npm.cmd run verify:production-static-ci`, `npm.cmd run verify:production-launch`, and `git diff --check` passed.
+- Two read-only subagent reviews found no P0/P1 blocker. One P2 finding was fixed: the Web BFF now parses provider write create payloads and rebuilds a controlled body instead of forwarding browser JSON wholesale. The remaining known risks are future work: DB-level status/check constraints, true human identity matching beyond `operatorId`, and a real concurrent race integration test.
 - Production identity check: Web BFF login rejects `OPERATOR_IDENTITY_PROVIDER=env` and `OPERATOR_ACCOUNT_SOURCE=env` when `NODE_ENV=production`, while database-backed accounts still work.
 - Kill-switch check: signed real-channel webhook intake returns HTTP 503 when `REAL_CHANNEL_WEBHOOK_KILL_SWITCH=true`, writes no `ChannelWebhookReceipt` or `NormalizedChannelEvent`, does not call Agent/Action/customer-visible replies, and does not consume application rate-limit quota.
 - Readiness check: `GET /health/ready` reports `checks.channelWebhooks.status=disabled_by_kill_switch` without tenant IDs, secrets, signatures, raw body, payloads, or customer messages.

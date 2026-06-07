@@ -13,8 +13,11 @@ import {
   type IntegrationStatus,
   type ProviderReadRequest,
   type ProviderReadResponse,
+  type ProviderWriteApprovalRequest,
   type ProviderWriteRequest,
+  type ProviderWriteRejectionRequest,
   type ProviderWriteResponse,
+  type ProviderWriteStatus,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
 import {
@@ -340,6 +343,18 @@ export class OpsService {
     return this.persistProviderWriteRequest(request, response, metadata, null);
   }
 
+  async approveProviderWriteRequest(
+    input: ProviderWriteApprovalInput,
+  ): Promise<ProviderWriteResponse> {
+    return this.reviewProviderWriteRequest(input, "approved");
+  }
+
+  async rejectProviderWriteRequest(
+    input: ProviderWriteRejectionInput,
+  ): Promise<ProviderWriteResponse> {
+    return this.reviewProviderWriteRequest(input, "rejected");
+  }
+
   private async findProviderReadRun(
     tenantId: string | undefined,
     idempotencyKey: string,
@@ -362,6 +377,168 @@ export class OpsService {
         tenantId_idempotencyKeyHash: { tenantId, idempotencyKeyHash },
       },
     }) as Promise<ProviderWriteRequestRecord | null>;
+  }
+
+  private async findProviderWriteRequestById(
+    tenantId: string,
+    requestId: string,
+  ): Promise<ProviderWriteRequestRecord | null> {
+    if (!this.prisma) return null;
+    return this.prisma.providerWriteRequest.findFirst({
+      where: {
+        id: requestId,
+        tenantId,
+      },
+    }) as Promise<ProviderWriteRequestRecord | null>;
+  }
+
+  private async reviewProviderWriteRequest(
+    input: ProviderWriteReviewInput,
+    decision: "approved" | "rejected",
+  ): Promise<ProviderWriteResponse> {
+    if (!this.prisma) {
+      return providerWriteReviewResponse(
+        input.requestId,
+        "failed",
+        "Provider write review failed because persistence is unavailable.",
+      );
+    }
+
+    const request = await this.findProviderWriteRequestById(
+      input.tenantId,
+      input.requestId,
+    );
+    if (!request) {
+      const response = providerWriteReviewResponse(
+        input.requestId,
+        "failed",
+        "Provider write request was not found for the authenticated tenant.",
+      );
+      await this.auditProviderWriteReview(
+        null,
+        input,
+        response,
+        decision,
+        null,
+        "request_not_found",
+      );
+      return response;
+    }
+
+    if (request.operatorId === input.reviewerOperatorId) {
+      const response = providerWriteReviewResponse(
+        request.id,
+        "blocked",
+        "Provider write approval requires two-person review.",
+      );
+      await this.auditProviderWriteReview(
+        request.caseId ?? null,
+        input,
+        response,
+        decision,
+        request,
+        "self_approval_blocked",
+      );
+      return response;
+    }
+
+    if (request.status !== "approval_required") {
+      const response = providerWriteReviewResponse(
+        request.id,
+        "failed",
+        "Provider write request was already reviewed or is not reviewable.",
+      );
+      await this.auditProviderWriteReview(
+        request.caseId ?? null,
+        input,
+        response,
+        decision,
+        request,
+        "terminal_state",
+      );
+      return response;
+    }
+
+    const reviewedAt = input.reviewedAt ?? new Date();
+    const reviewFingerprint = providerWriteReviewFingerprint(
+      request,
+      input,
+      decision,
+      reviewedAt,
+    );
+    const payloadEscrowFingerprint =
+      request.payloadEscrowFingerprint ??
+      providerWritePayloadEscrowFingerprint(request.requestHash);
+    const operatorVisibleResult =
+      decision === "approved"
+        ? "Provider write approved for a future executor; provider network execution is disabled in this build."
+        : "Provider write rejected by human reviewer; provider network execution was not started.";
+
+    const updateResult = await this.prisma.providerWriteRequest.updateMany({
+      where: {
+        id: request.id,
+        tenantId: input.tenantId,
+        status: "approval_required",
+      },
+      data: {
+        status: decision,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        operatorVisibleResult,
+        reviewerOperatorId: input.reviewerOperatorId,
+        reviewedAt,
+        reviewReasonCode: input.reasonCode,
+        reviewFingerprint,
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowFingerprint,
+      },
+    });
+
+    if (updateResult.count !== 1) {
+      const current = await this.findProviderWriteRequestById(
+        input.tenantId,
+        input.requestId,
+      );
+      const response = providerWriteReviewResponse(
+        input.requestId,
+        "failed",
+        "Provider write request was already reviewed or is not reviewable.",
+      );
+      await this.auditProviderWriteReview(
+        current?.caseId ?? request.caseId ?? null,
+        input,
+        response,
+        decision,
+        current ?? request,
+        "concurrent_review_conflict",
+      );
+      return response;
+    }
+
+    const updated =
+      (await this.findProviderWriteRequestById(input.tenantId, input.requestId)) ??
+      {
+        ...request,
+        status: decision,
+        operatorVisibleResult,
+        reviewerOperatorId: input.reviewerOperatorId,
+        reviewedAt,
+        reviewReasonCode: input.reasonCode,
+        reviewFingerprint,
+        payloadEscrowStatus: "not_stored",
+        payloadEscrowFingerprint,
+      };
+    const response = providerWriteResponseFromRequest(updated);
+    await this.auditProviderWriteReview(
+      updated.caseId ?? null,
+      input,
+      response,
+      decision,
+      updated,
+      null,
+    );
+    return response;
   }
 
   private async persistProviderReadRun(
@@ -470,6 +647,14 @@ export class OpsService {
           customerVisibleMessageSent: false,
           operatorVisibleResult: response.operatorVisibleResult,
           policyReason,
+          reviewerOperatorId: null,
+          reviewedAt: null,
+          reviewReasonCode: null,
+          reviewFingerprint: null,
+          payloadEscrowStatus: "not_stored",
+          payloadEscrowFingerprint: providerWritePayloadEscrowFingerprint(
+            metadata.requestHash,
+          ),
         },
       })) as ProviderWriteRequestRecord;
     } catch (error) {
@@ -639,6 +824,37 @@ export class OpsService {
     });
   }
 
+  private async auditProviderWriteReview(
+    caseId: string | null,
+    input: ProviderWriteReviewInput,
+    response: ProviderWriteResponse,
+    attemptedDecision: "approved" | "rejected",
+    request: ProviderWriteRequestRecord | null,
+    policyReason: string | null,
+  ) {
+    await this.auditService?.log(caseId, `provider_write.${response.status}`, {
+      providerWriteRequestId: input.requestId,
+      tenantId: input.tenantId,
+      requesterOperatorId: request?.operatorId ?? null,
+      reviewerOperatorId: input.reviewerOperatorId,
+      channel: request?.channel ?? null,
+      action: request?.action ?? null,
+      attemptedDecision,
+      reasonCode: input.reasonCode,
+      payloadHash: request?.payloadHash ?? null,
+      payloadKeys: sanitizePayloadKeys(request?.payloadKeys),
+      requestHash: request?.requestHash ?? null,
+      reviewFingerprint: request?.reviewFingerprint ?? null,
+      payloadEscrowStatus: request?.payloadEscrowStatus ?? "not_stored",
+      payloadEscrowFingerprint: request?.payloadEscrowFingerprint ?? null,
+      status: response.status,
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      policyReason,
+    });
+  }
+
   handleCompensationDeclined(
     request: CompensationDeclinedRequest,
   ): CompensationDeclinedResponse {
@@ -706,6 +922,26 @@ type ProviderWriteMetadata = {
   requestHash: string;
 };
 
+type ProviderWriteApprovalInput = {
+  tenantId: string;
+  requestId: string;
+  reviewerOperatorId: string;
+  reasonCode: ProviderWriteApprovalRequest["reasonCode"];
+  reviewedAt?: Date;
+};
+
+type ProviderWriteRejectionInput = {
+  tenantId: string;
+  requestId: string;
+  reviewerOperatorId: string;
+  reasonCode: ProviderWriteRejectionRequest["reasonCode"];
+  reviewedAt?: Date;
+};
+
+type ProviderWriteReviewInput =
+  | ProviderWriteApprovalInput
+  | ProviderWriteRejectionInput;
+
 type ProviderReadCredentialAuditMetadata = {
   credentialResolutionStatus: ProviderCredentialResolution["status"];
   credentialSource: ProviderCredentialResolution["source"];
@@ -737,6 +973,7 @@ type ProviderReadRunRecord = {
 
 type ProviderWriteRequestRecord = {
   id: string;
+  tenantId?: string;
   caseId?: string;
   operatorId?: string | null;
   channel?: string;
@@ -750,6 +987,12 @@ type ProviderWriteRequestRecord = {
   payloadKeys?: unknown;
   requestHash: string;
   policyReason?: string | null;
+  reviewerOperatorId?: string | null;
+  reviewedAt?: Date | null;
+  reviewReasonCode?: string | null;
+  reviewFingerprint?: string | null;
+  payloadEscrowStatus?: string;
+  payloadEscrowFingerprint?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -825,6 +1068,38 @@ function providerWriteMetadata(
   };
 }
 
+function providerWritePayloadEscrowFingerprint(requestHash: string) {
+  return sha256(
+    stableJson({
+      kind: "provider_write_payload_escrow_absent",
+      payloadEscrowStatus: "not_stored",
+      requestHash,
+    }),
+  );
+}
+
+function providerWriteReviewFingerprint(
+  request: ProviderWriteRequestRecord,
+  input: ProviderWriteReviewInput,
+  decision: "approved" | "rejected",
+  reviewedAt: Date,
+) {
+  return sha256(
+    stableJson({
+      kind: "provider_write_review",
+      providerWriteRequestId: request.id,
+      requestHash: request.requestHash,
+      reviewerOperatorId: input.reviewerOperatorId,
+      decision,
+      reasonCode: input.reasonCode,
+      reviewedAt: reviewedAt.toISOString(),
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+    }),
+  );
+}
+
 function providerReadResponseFromRun(
   run: ProviderReadRunRecord,
 ): ProviderReadResponse {
@@ -849,6 +1124,23 @@ function providerWriteResponseFromRequest(
     providerMutationExecuted: false,
     customerVisibleMessageSent: false,
     operatorVisibleResult: request.operatorVisibleResult,
+    requiresHuman: true,
+    retryable: false,
+  });
+}
+
+function providerWriteReviewResponse(
+  writeRequestId: string,
+  status: Extract<ProviderWriteStatus, "blocked" | "failed">,
+  operatorVisibleResult: string,
+): ProviderWriteResponse {
+  return ProviderWriteResponseSchema.parse({
+    writeRequestId,
+    status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    operatorVisibleResult,
     requiresHuman: true,
     retryable: false,
   });
@@ -944,6 +1236,14 @@ function toSanitizedProviderWriteRequest(run: ProviderWriteRequestRecord) {
     payloadKeys: sanitizePayloadKeys(run.payloadKeys),
     payloadFingerprint: fingerprint(run.payloadHash),
     requestFingerprint: fingerprint(run.requestHash),
+    reviewerOperatorId: run.reviewerOperatorId ?? null,
+    reviewedAt: run.reviewedAt?.toISOString() ?? null,
+    reviewReasonCode: run.reviewReasonCode ?? null,
+    reviewFingerprint: fingerprint(run.reviewFingerprint ?? undefined),
+    payloadEscrowStatus: run.payloadEscrowStatus ?? "not_stored",
+    payloadEscrowFingerprint: fingerprint(
+      run.payloadEscrowFingerprint ?? undefined,
+    ),
     policyReason: run.policyReason ?? null,
     createdAt: run.createdAt?.toISOString() ?? "",
     updatedAt: run.updatedAt?.toISOString() ?? "",

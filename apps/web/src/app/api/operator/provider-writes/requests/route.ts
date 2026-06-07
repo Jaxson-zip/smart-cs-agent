@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { ProviderWriteResponseSchema } from "@smart-cs-agent/shared";
+import {
+  ProviderWriteRequestSchema,
+  ProviderWriteResponseSchema,
+  type ProviderWriteRequest,
+} from "@smart-cs-agent/shared";
 import { readOperatorSession } from "../../operator-session";
 import { proxyOperatorApi } from "../../operator-proxy";
 
@@ -87,9 +91,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const providerWriteRequest = await readSafeProviderWriteRequest(request);
+  if (!providerWriteRequest.ok) return providerWriteRequest.response;
+
   const response = await proxyOperatorApi(request, "/v2/provider-writes/request", {
     method: "POST",
-    body: await request.text(),
+    body: JSON.stringify(toProviderWriteRequestBody(providerWriteRequest.value)),
     contentType: "application/json",
   });
   if (!response.ok) return response;
@@ -102,17 +109,62 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(toProviderWriteResponse(body));
+    return NextResponse.json(
+      toProviderWriteResponse(body, ["approval_required", "blocked", "failed"]),
+    );
   } catch {
     return invalidRequestResponse();
   }
 }
 
-function toProviderWriteResponse(value: unknown) {
+async function readSafeProviderWriteRequest(request: Request) {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: "Provider write request payload is invalid" },
+        { status: 400 },
+      ),
+    };
+  }
+
+  const parsed = ProviderWriteRequestSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: "Provider write request payload is invalid" },
+        { status: 400 },
+      ),
+    };
+  }
+
+  return { ok: true as const, value: parsed.data };
+}
+
+function toProviderWriteRequestBody(request: ProviderWriteRequest) {
+  return {
+    caseId: request.caseId,
+    channel: request.channel,
+    action: request.action,
+    payload: {
+      orderId: request.payload.orderId,
+      logisticsId: request.payload.logisticsId,
+      addressFingerprint: request.payload.addressFingerprint,
+      couponAmountCents: request.payload.couponAmountCents,
+    },
+    idempotencyKey: request.idempotencyKey,
+  };
+}
+
+function toProviderWriteResponse(value: unknown, allowedStatuses: string[]) {
   if (!isRecord(value)) throw new Error("Invalid provider write response");
   return ProviderWriteResponseSchema.parse({
     writeRequestId: readString(value, "writeRequestId"),
-    status: readProviderWriteStatus(value),
+    status: readProviderWriteStatus(value, allowedStatuses),
     networkExecution: readLiteralString(value, "networkExecution", "not_started"),
     providerMutationExecuted: readLiteralBoolean(
       value,
@@ -140,7 +192,13 @@ function toProviderWriteRequest(value: unknown) {
     operatorId: readNullableString(value, "operatorId"),
     channel: readString(value, "channel"),
     action: readString(value, "action"),
-    status: readProviderWriteStatus(value),
+    status: readProviderWriteStatus(value, [
+      "approval_required",
+      "approved",
+      "rejected",
+      "blocked",
+      "failed",
+    ]),
     networkExecution: readLiteralString(value, "networkExecution", "not_started"),
     providerMutationExecuted: readLiteralBoolean(
       value,
@@ -160,6 +218,16 @@ function toProviderWriteRequest(value: unknown) {
     },
     payloadFingerprint: readString(value, "payloadFingerprint"),
     requestFingerprint: readString(value, "requestFingerprint"),
+    reviewerOperatorId: readNullableString(value, "reviewerOperatorId"),
+    reviewedAt: readNullableString(value, "reviewedAt"),
+    reviewReasonCode: readNullableString(value, "reviewReasonCode"),
+    reviewFingerprint: readString(value, "reviewFingerprint"),
+    payloadEscrowStatus: readLiteralString(
+      value,
+      "payloadEscrowStatus",
+      "not_stored",
+    ),
+    payloadEscrowFingerprint: readString(value, "payloadEscrowFingerprint"),
     policyReason: readNullableString(value, "policyReason"),
     createdAt: readString(value, "createdAt"),
     updatedAt: readString(value, "updatedAt"),
@@ -197,13 +265,12 @@ function readNullableString(value: Record<string, unknown>, key: string) {
   return field;
 }
 
-function readProviderWriteStatus(value: Record<string, unknown>) {
+function readProviderWriteStatus(
+  value: Record<string, unknown>,
+  allowedStatuses: string[],
+) {
   const status = readString(value, "status");
-  if (
-    status !== "approval_required" &&
-    status !== "blocked" &&
-    status !== "failed"
-  ) {
+  if (!allowedStatuses.includes(status)) {
     throw new Error("Invalid provider write status");
   }
   return status;
