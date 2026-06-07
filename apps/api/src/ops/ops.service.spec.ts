@@ -9,6 +9,8 @@ import {
   ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptRequestSchema,
   ProviderWriteExecutionAttemptResponseSchema,
+  ProviderWriteKillSwitchStatusSchema,
+  ProviderWriteKillSwitchUpdateRequestSchema,
   ProviderWriteLiveExecutorStatusSchema,
   ProviderWriteRequestSchema,
   ProviderWriteRejectionRequestSchema,
@@ -16,6 +18,7 @@ import {
   type CommerceChannel,
   type ExecuteActionRequest,
   type ProviderReadRequest,
+  type ProviderWriteKillSwitchUpdateRequest,
   type ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import type { ProviderAdapterContract } from "../adapters/adapters.interface";
@@ -695,6 +698,150 @@ describe("OpsService provider adapter contract", () => {
     assert.strictEqual(serialized.includes("tenant_1"), false);
     assert.strictEqual(serialized.includes("aaaaaaaa"), false);
     assert.strictEqual(serialized.includes("bbbbbbbb"), false);
+  });
+
+  it("reports provider write kill switch status without provider writes or secret material", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "true";
+    const persistence = createProviderOperationPersistence();
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    ProviderWriteKillSwitchStatusSchema.parse({
+      envKillSwitchEnabled: true,
+      emergencyStopEngaged: false,
+      effectiveKillSwitchEnabled: true,
+      source: "env",
+      latestEvent: null,
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+    });
+    const status = await service.getProviderWriteKillSwitchStatus("tenant_1");
+
+    assert.strictEqual(status.envKillSwitchEnabled, true);
+    assert.strictEqual(status.emergencyStopEngaged, false);
+    assert.strictEqual(status.effectiveKillSwitchEnabled, true);
+    assert.strictEqual(status.source, "env");
+    assert.strictEqual(status.latestEvent, null);
+    assert.strictEqual(status.networkExecution, "not_started");
+    assert.strictEqual(status.providerMutationExecuted, false);
+    assert.strictEqual(status.customerVisibleMessageSent, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(JSON.stringify(status).includes("secret://"), false);
+    assert.strictEqual(JSON.stringify(status).includes("rawPayload"), false);
+  });
+
+  it("records provider write emergency stop events idempotently with sanitized audit details", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    const persistence = createProviderOperationPersistence();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+    const request: ProviderWriteKillSwitchUpdateRequest =
+      ProviderWriteKillSwitchUpdateRequestSchema.parse({
+        action: "engage",
+        reasonCode: "incident_response",
+        idempotencyKey: "secret_kill_switch_idempotency_key_1",
+      });
+
+    const first = await service.updateProviderWriteKillSwitch({
+      tenantId: "tenant_1",
+      operatorId: "admin_1",
+      ...request,
+    });
+    const second = await service.updateProviderWriteKillSwitch({
+      tenantId: "tenant_1",
+      operatorId: "admin_1",
+      ...request,
+    });
+
+    assert.strictEqual(first.emergencyStopEngaged, true);
+    assert.strictEqual(first.effectiveKillSwitchEnabled, true);
+    assert.strictEqual(first.source, "emergency_stop");
+    assert.strictEqual(first.latestEvent?.action, "engage");
+    assert.strictEqual(first.latestEvent?.reasonCode, "incident_response");
+    assert.strictEqual(first.latestEvent?.operatorId, "admin_1");
+    assert.match(first.latestEvent?.stateFingerprint ?? "", /^[a-f0-9]{12}$/);
+    assert.deepStrictEqual(second, first);
+    assert.strictEqual(persistence.killSwitchEvents.length, 1);
+    assert.strictEqual(persistence.auditEntries.length, 1);
+    assert.strictEqual(
+      persistence.auditEntries[0].action,
+      "provider_write_kill_switch.engage",
+    );
+    const serialized = JSON.stringify({
+      first,
+      second,
+      rows: persistence.killSwitchEvents,
+      audit: persistence.auditEntries,
+    });
+    assert.strictEqual(
+      serialized.includes("secret_kill_switch_idempotency_key_1"),
+      false,
+    );
+    assert.strictEqual(serialized.includes("providerPayload"), false);
+    assert.strictEqual(serialized.includes("credentialRef"), false);
+  });
+
+  it("blocks provider write execution attempts while the persisted emergency stop is engaged", async () => {
+    process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH = "false";
+    const persistence = createProviderOperationPersistence();
+    persistence.seedWriteRequest({
+      id: "provider_write_request_1",
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "approved",
+      requestHash: testSha256("request_1"),
+      reviewFingerprint: testSha256("review_1"),
+    });
+    persistence.seedKillSwitchEvent({
+      tenantId: "tenant_1",
+      operatorId: "admin_1",
+      action: "engage",
+      reasonCode: "provider_anomaly",
+      idempotencyKeyHash: testSha256("ks_1"),
+    });
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const response = await service.executeProviderWriteAttempt({
+      tenantId: "tenant_1",
+      requestId: "provider_write_request_1",
+      operatorId: "admin_2",
+      idempotencyKey: "secret_execution_idem_1",
+    });
+
+    assert.strictEqual(response.status, "blocked");
+    assert.match(response.operatorVisibleResult, /emergency stop/i);
+    assert.strictEqual(response.networkExecution, "not_started");
+    assert.strictEqual(response.providerMutationExecuted, false);
+    assert.strictEqual(response.customerVisibleMessageSent, false);
+    assert.strictEqual(response.payloadEscrowOpened, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    assert.strictEqual(persistence.writeExecutionAttempts.length, 1);
+    assert.strictEqual(
+      persistence.writeExecutionAttempts[0].policyReason,
+      "emergency_stop_engaged",
+    );
+    assert.strictEqual(
+      JSON.stringify(persistence.writeExecutionAttempts).includes(
+        "secret_execution_idem_1",
+      ),
+      false,
+    );
   });
 
   it("reuses provider write requests for duplicate idempotency keys", async () => {
@@ -2673,6 +2820,28 @@ type ProviderWriteExecutionAttemptRecord = {
   updatedAt: Date;
 };
 
+type ProviderWriteKillSwitchEventRecord = {
+  id: string;
+  tenantId: string;
+  operatorId: string | null;
+  action: "engage" | "release";
+  reasonCode:
+    | "incident_response"
+    | "provider_anomaly"
+    | "operator_error"
+    | "launch_rehearsal"
+    | "post_incident_restore";
+  idempotencyKeyHash: string;
+  stateFingerprint: string;
+  envKillSwitchEnabled: boolean;
+  emergencyStopEngaged: boolean;
+  effectiveKillSwitchEnabled: boolean;
+  networkExecution: string;
+  providerMutationExecuted: boolean;
+  customerVisibleMessageSent: boolean;
+  createdAt: Date;
+};
+
 type ProviderReadCaseRecord = {
   id: string;
   merchantId: string;
@@ -2706,6 +2875,27 @@ type SeedProviderWriteExecutionAttemptInput = {
   attemptFingerprint: string;
   policyReason: string | null;
   createdAt: Date;
+};
+
+type SeedProviderWriteRequestInput = {
+  id: string;
+  tenantId: string;
+  operatorId: string | null;
+  caseId: string;
+  channel: string;
+  action: string;
+  status: string;
+  requestHash: string;
+  reviewFingerprint: string | null;
+};
+
+type SeedProviderWriteKillSwitchEventInput = {
+  tenantId: string;
+  operatorId: string | null;
+  action: "engage" | "release";
+  reasonCode: ProviderWriteKillSwitchEventRecord["reasonCode"];
+  idempotencyKeyHash: string;
+  createdAt?: Date;
 };
 
 function createProviderReadPersistence(
@@ -2870,6 +3060,7 @@ function createProviderOperationPersistence(
 ) {
   const writeRequests: ProviderWriteRequestRecord[] = [];
   const writeExecutionAttempts: ProviderWriteExecutionAttemptRecord[] = [];
+  const killSwitchEvents: ProviderWriteKillSwitchEventRecord[] = [];
   const cases = options.cases ?? [{ id: "case_1", merchantId: "tenant_1" }];
   const auditEntries: Array<{
     caseId: string | null;
@@ -2901,12 +3092,80 @@ function createProviderOperationPersistence(
       updatedAt: input.createdAt,
     });
   };
+  const seedWriteRequest = (input: SeedProviderWriteRequestInput) => {
+    writeRequests.push({
+      id: input.id,
+      tenantId: input.tenantId,
+      operatorId: input.operatorId,
+      caseId: input.caseId,
+      channel: input.channel,
+      action: input.action,
+      idempotencyKeyHash: testSha256(`${input.id}:idempotency`),
+      payloadHash: testSha256(`${input.id}:payload`),
+      payloadKeys: {
+        hasOrderId: false,
+        hasLogisticsId: false,
+        hasAddressFingerprint: false,
+        hasCouponAmountCents: input.action === "issue_coupon",
+      },
+      requestHash: input.requestHash,
+      status: input.status,
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      operatorVisibleResult: "seeded",
+      policyReason: null,
+      reviewerOperatorId: "reviewer_1",
+      reviewedAt: new Date("2026-06-06T00:01:00.000Z"),
+      reviewReasonCode: "policy_verified",
+      reviewFingerprint: input.reviewFingerprint,
+      payloadEscrowStatus: "not_stored",
+      payloadEscrowFingerprint: testSha256(`${input.id}:escrow`),
+      payloadEscrowEnvelopeFingerprint: null,
+      payloadEscrowMode: "disabled",
+      payloadEscrowCreatedAt: null,
+      createdAt: new Date("2026-06-06T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-06T00:01:00.000Z"),
+    });
+  };
+  const seedKillSwitchEvent = (input: SeedProviderWriteKillSwitchEventInput) => {
+    const emergencyStopEngaged = input.action === "engage";
+    const envKillSwitchEnabled = process.env.PROVIDER_WRITE_EXECUTION_KILL_SWITCH !== "false";
+    const effectiveKillSwitchEnabled =
+      envKillSwitchEnabled || emergencyStopEngaged;
+    killSwitchEvents.push({
+      id: `provider_write_kill_switch_event_${killSwitchEvents.length + 1}`,
+      tenantId: input.tenantId,
+      operatorId: input.operatorId,
+      action: input.action,
+      reasonCode: input.reasonCode,
+      idempotencyKeyHash: input.idempotencyKeyHash,
+      stateFingerprint: testSha256(
+        stableTestJson({
+          tenantId: input.tenantId,
+          action: input.action,
+          reasonCode: input.reasonCode,
+          idempotencyKeyHash: input.idempotencyKeyHash,
+        }),
+      ),
+      envKillSwitchEnabled,
+      emergencyStopEngaged,
+      effectiveKillSwitchEnabled,
+      networkExecution: "not_started",
+      providerMutationExecuted: false,
+      customerVisibleMessageSent: false,
+      createdAt: input.createdAt ?? new Date("2026-06-06T00:03:00.000Z"),
+    });
+  };
 
   const persistence = {
     writeRequests,
     writeExecutionAttempts,
+    killSwitchEvents,
     auditEntries,
     seedWriteExecutionAttempt,
+    seedWriteRequest,
+    seedKillSwitchEvent,
     prisma: {
       afterSalesCase: {
         findFirst: async ({
@@ -3070,6 +3329,62 @@ function createProviderOperationPersistence(
             updatedAt: new Date("2026-06-06T00:02:00.000Z"),
           };
           writeExecutionAttempts.push(row);
+          return row;
+        },
+      },
+      providerWriteKillSwitchEvent: {
+        findFirst: async ({
+          where,
+          orderBy,
+        }: {
+          where: { tenantId: string };
+          orderBy?: { createdAt?: "asc" | "desc" };
+        }) => {
+          const matches = killSwitchEvents
+            .filter((item) => item.tenantId === where.tenantId)
+            .sort((left, right) => {
+              const direction = orderBy?.createdAt === "asc" ? 1 : -1;
+              return direction * (left.createdAt.getTime() - right.createdAt.getTime());
+            });
+          return matches[0] ?? null;
+        },
+        findUnique: async ({
+          where,
+        }: {
+          where: {
+            tenantId_idempotencyKeyHash: {
+              tenantId: string;
+              idempotencyKeyHash: string;
+            };
+          };
+        }) =>
+          killSwitchEvents.find(
+            (item) =>
+              item.tenantId === where.tenantId_idempotencyKeyHash.tenantId &&
+              item.idempotencyKeyHash ===
+                where.tenantId_idempotencyKeyHash.idempotencyKeyHash,
+          ) ?? null,
+        create: async ({
+          data,
+        }: {
+          data: Omit<ProviderWriteKillSwitchEventRecord, "id" | "createdAt">;
+        }) => {
+          const existing = killSwitchEvents.find(
+            (item) =>
+              item.tenantId === data.tenantId &&
+              item.idempotencyKeyHash === data.idempotencyKeyHash,
+          );
+          if (existing) {
+            const error = new Error("Unique constraint failed");
+            Object.assign(error, { code: "P2002" });
+            throw error;
+          }
+          const row = {
+            id: `provider_write_kill_switch_event_${killSwitchEvents.length + 1}`,
+            ...data,
+            createdAt: new Date("2026-06-06T00:03:00.000Z"),
+          };
+          killSwitchEvents.push(row);
           return row;
         },
       },

@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR66 Provider Write Kill Switch Control Plane
+
+Provider write emergency-stop control-plane safety is now checked by:
+
+```bash
+npm run verify:provider-write-kill-switch-control-plane
+```
+
+`ProviderWriteKillSwitchStatusSchema` is the only allowed response shape for emergency-stop status. Admin operators may read and update the persisted emergency stop through `GET /v2/provider-writes/kill-switch/status`, `POST /v2/provider-writes/kill-switch/status`, `GET /api/operator/provider-writes/kill-switch/status`, and `POST /api/operator/provider-writes/kill-switch/status`. The control plane stores only sanitized event metadata and hashed idempotency keys. If the latest persisted event is `engage`, provider write execution attempts must fail closed with `policyReason=emergency_stop_engaged`, even if the env execution kill switch is off. This gate still does not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, store raw provider/customer payloads, or send customer-visible replies.
+
 ## PR65 Provider Write Live Executor Control Plane
 
 Provider write live executor control-plane visibility is now checked by:

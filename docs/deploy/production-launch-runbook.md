@@ -26,6 +26,8 @@ Provider write live executor startup guard is still closed in this launch track.
 
 Provider write live executor control plane is read-only in this launch track. Admins may inspect `ProviderWriteLiveExecutorStatusSchema` through `GET /v2/provider-writes/live-executor/status` or `GET /api/operator/provider-writes/live-executor/status`, but the status surface does not execute provider writes, does not expose evidence hashes, does not expose credential refs, and does not expose provider payloads, provider responses, raw order IDs, logistics IDs, addresses, idempotency keys, operator API keys, provider tokens, webhook secrets, tenant secrets, or customer messages.
 
+Provider write kill switch control plane is an emergency-stop surface in this launch track. Admins may inspect and update `ProviderWriteKillSwitchStatusSchema` through `GET /v2/provider-writes/kill-switch/status`, `POST /v2/provider-writes/kill-switch/status`, `GET /api/operator/provider-writes/kill-switch/status`, or `POST /api/operator/provider-writes/kill-switch/status`. It records sanitized state events with hashed idempotency keys only. When engaged, provider write execution attempts must fail closed with `policyReason=emergency_stop_engaged`; releasing the persisted emergency stop does not change env variables and does not enable real provider writes.
+
 Provider write execution attempt visibility is support-only in this launch track. Admins may inspect sanitized `ProviderWriteExecutionAttemptListItem` rows through `GET /v2/provider-writes/execution-attempts` or `GET /api/operator/provider-writes/execution-attempts`, but these routes must remain read-only and must not expose raw hashes, raw order IDs, logistics IDs, addresses, provider payloads, provider responses, customer messages, operator API keys, provider tokens, webhook secrets, or tenant secrets. Provider write execution attempt visibility does not prove that any real provider write has run.
 
 ## Launch Decision
@@ -44,6 +46,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:provider-write-dry-run-rehearsal:safe` passes before any real provider write pilot approval is accepted, with sanitized dry-run evidence bound by `dryRunRehearsalSha256`.
 - `npm run verify:provider-write-live-executor-startup-guard` passes when `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`, live executor evidence hashes, sealed metadata startup gating, review allowlists, credential ref requirements, or live executor docs change.
 - `npm run verify:provider-write-live-executor-control-plane` passes when `ProviderWriteLiveExecutorStatusSchema`, API/BFF live executor status routes, admin-only status visibility, or live executor control-plane docs change.
+- `npm run verify:provider-write-kill-switch-control-plane` passes when `ProviderWriteKillSwitchStatusSchema`, `ProviderWriteKillSwitchEvent`, API/BFF emergency-stop routes, persisted kill-switch execution blocking, or kill-switch control-plane docs change.
 - Database migrations have been reviewed and `npm run db:migrate:deploy` has completed in the target environment.
 - `npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>` passes for real-channel launch windows.
 - `npm run verify:merchant-launch-preflight:safe` passes for every tenant/channel pair included in the launch allowlist after the launch target has been injected through secure environment variables.
@@ -95,6 +98,8 @@ npm run verify:provider-write-payload-escrow-boundary
 npm run verify:provider-write-dry-run-rehearsal
 npm run verify:provider-write-dry-run-rehearsal:safe
 npm run verify:provider-write-live-executor-startup-guard
+npm run verify:provider-write-live-executor-control-plane
+npm run verify:provider-write-kill-switch-control-plane
 npm run verify:production-provider-write-approval:safe
 npm run verify:production-readiness -- --env-file=<secure-production-env> --require-real-channel --api=<public-api-url>
 npm run verify:merchant-launch-preflight:safe
@@ -251,6 +256,10 @@ Run `npm run verify:provider-write-payload-escrow-boundary` alongside it when Pr
 Run `npm run verify:provider-write-dry-run-rehearsal` alongside it when provider write dry-run rehearsal evidence shape, static CI wiring, launch evidence guidance, or approval evidence binding changes. Use `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE` and `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true` with `npm run verify:provider-write-dry-run-rehearsal:safe` after release owners export sanitized dry-run evidence. This verifier keeps rehearsal no-network and checks that evidence does not contain raw provider/customer data, credentials, idempotency keys, or customer-visible messages. See `docs/deploy/provider-write-dry-run-rehearsal.md`.
 
 Run `npm run verify:provider-write-live-executor-startup-guard` alongside it when provider write live executor startup config, evidence hashes, sealed metadata gating, kill switch requirements, review allowlists, credential ref requirements, static CI wiring, or launch guidance changes. This verifier keeps live provider writes disabled by default and checks that PR64 does not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, or send customer-visible replies. See `docs/deploy/provider-write-requests.md`.
+
+Run `npm run verify:provider-write-live-executor-control-plane` alongside it when provider write live executor status contracts, admin-only API/BFF status routes, startup snapshot visibility, static CI wiring, or launch guidance changes. This verifier keeps PR65 read-only and checks that it does not expose evidence hashes, credential refs, provider payloads, provider responses, raw order/address/logistics data, operator API keys, provider tokens, webhook secrets, tenant secrets, or customer messages.
+
+Run `npm run verify:provider-write-kill-switch-control-plane` alongside it when provider write emergency-stop contracts, `ProviderWriteKillSwitchEvent`, admin-only API/BFF status/update routes, persisted execution blocking, static CI wiring, or launch guidance changes. This verifier keeps PR66 no-network and checks that it does not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, or send customer-visible replies.
 
 Run `npm run verify:production-image-builds` alongside it when Docker build scripts, image-build CI examples, or image build guidance changes. Run `npm run verify:production-image-builds:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 

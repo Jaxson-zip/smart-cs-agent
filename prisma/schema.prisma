@@ -215,6 +215,26 @@ model ProviderWriteExecutionAttempt {
   @@index([tenantId, status, createdAt])
 }
 
+model ProviderWriteKillSwitchEvent {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  operatorId                 String?
+  action                     String
+  reasonCode                 String
+  idempotencyKeyHash         String
+  stateFingerprint           String
+  envKillSwitchEnabled       Boolean  @default(true)
+  emergencyStopEngaged       Boolean
+  effectiveKillSwitchEnabled Boolean
+  networkExecution           String   @default("not_started")
+  providerMutationExecuted   Boolean  @default(false)
+  customerVisibleMessageSent Boolean  @default(false)
+  createdAt                  DateTime @default(now())
+
+  @@unique([tenantId, idempotencyKeyHash])
+  @@index([tenantId, createdAt])
+}
+
 model CaseMessage {
   id         String         @id @default(cuid())
   caseId     String

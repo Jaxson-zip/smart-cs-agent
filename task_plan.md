@@ -2,11 +2,33 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR65 - Provider Write Live Executor Control Plane
+## Current Stage: PR66 - Provider Write Kill Switch Control Plane
 
-Status: verified locally; local commit pending. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: verified locally. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR64 - Provider Write Live Executor Startup Guard was verified locally and committed as `3ff08c0`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR65 - Provider Write Live Executor Control Plane was verified locally and committed as `d5a5580`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR66 adds an admin-only emergency-stop control plane for future provider write execution. Admins may read and update safe kill-switch status through API and Web BFF routes, while execution attempts fail closed with `policyReason=emergency_stop_engaged` when the persisted emergency stop is engaged. PR66 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR66 Scope
+
+- Add `ProviderWriteKillSwitchStatusSchema`, update request schema, action enum, and reason-code enum to shared contracts.
+- Add `ProviderWriteKillSwitchEvent` persistence with tenant-scoped idempotency, safe state fingerprints, and no-network database constraints.
+- Add admin-only `GET /v2/provider-writes/kill-switch/status` and `POST /v2/provider-writes/kill-switch/status`.
+- Add admin-only `GET /api/operator/provider-writes/kill-switch/status` and `POST /api/operator/provider-writes/kill-switch/status` with strict Web BFF request/response parsing and unsafe-field rejection.
+- Wire persisted emergency stop state into provider write execution attempts so engaged emergency stop events block attempts before any future executor path can run.
+- Add `npm run verify:provider-write-kill-switch-control-plane` and connect it to static CI, production launch, provider write docs, production readiness, public API surface, task tracking, and progress notes.
+- Keep PR66 no-network/no-secret: no provider API calls, no provider writes, no provider credentials, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR66
+
+- Live Taobao/Douyin provider write clients.
+- Runtime toggling of `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Changing environment variables from the app.
+- Reading credential material from a vault or secret manager.
+- Opening, decrypting, or releasing payload escrow.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR65 adds a read-only control-plane status surface for any future live provider write executor. Admins may inspect safe booleans, counts, missing startup gate names, and no-network invariants through API and Web BFF routes. PR65 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose evidence hashes, expose credential refs, store raw provider/customer payloads, or send customer-visible replies.
 
@@ -272,10 +294,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR63 - Provider Write Dry-Run Rehearsal Evidence Gate.
 - [x] PR64 - Provider Write Live Executor Startup Guard.
 - [x] PR65 - Provider Write Live Executor Control Plane.
+- [x] PR66 - Provider Write Kill Switch Control Plane.
 
 ## Verification Gate
 
-PR65 provider write live executor control plane is tracked against this gate inventory:
+PR66 provider write kill switch control plane is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -361,6 +384,9 @@ PR65 provider write live executor control plane is tracked against this gate inv
 - `node --check scripts/verify-provider-write-live-executor-control-plane.mjs`
 - `node --test scripts/verify-provider-write-live-executor-control-plane.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-control-plane`
+- `node --check scripts/verify-provider-write-kill-switch-control-plane.mjs`
+- `node --test scripts/verify-provider-write-kill-switch-control-plane.test.mjs`
+- `npm.cmd run verify:provider-write-kill-switch-control-plane`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -439,6 +465,18 @@ PR65 provider write live executor control plane is tracked against this gate inv
 - Read-only launch/static CI review found no P0/P1/P2 findings; its P3 checklist consistency finding was fixed by adding `node --check scripts/verify-provider-write-live-executor-control-plane.mjs` to the PR65 gate inventory.
 - Read-only security review found no P0; its P1 runtime env-read finding was fixed by serving live executor status from an `ApiConfigService` startup snapshot instead of re-reading evidence hashes or credential refs on the control-plane request path.
 - PR65 remains read-only/no-network: no provider API calls, no provider writes, no provider credential material reads, no payload escrow opening/decrypting, no raw provider/customer payload storage, and no customer-visible replies have been enabled.
+
+### PR66 Final Verification Notes
+
+- `npm.cmd run db:generate` passed.
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 211 tests when rerun alone from the repository cwd. An earlier broad parallel run hit the known Codex sandbox cwd / `experimentalDecorators` false failure and is not counted as a pass.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 80 tests.
+- `node --check scripts/verify-provider-write-kill-switch-control-plane.mjs`, `node --check scripts/verify-provider-write-kill-switch-control-plane.test.mjs`, `node --test scripts/verify-provider-write-kill-switch-control-plane.test.mjs`, and `npm.cmd run verify:provider-write-kill-switch-control-plane` passed.
+- `npm.cmd run verify:provider-write-execution-attempts`, `npm.cmd run verify:provider-write-live-executor-startup-guard`, `npm.cmd run verify:provider-write-live-executor-control-plane`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 131 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- PR66 remains emergency-stop/no-network: persisted `engage` events block provider write execution attempts with `policyReason=emergency_stop_engaged`, release events do not modify env variables or enable real provider writes, and no provider API calls, provider writes, credential material reads, payload escrow opening/decrypting, raw provider/customer payload storage, raw idempotency-key output, or customer-visible replies have been enabled.
 
 ### PR60 Final Verification Notes
 

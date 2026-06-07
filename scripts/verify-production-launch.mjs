@@ -62,6 +62,8 @@ const files = {
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
     "scripts/verify-provider-write-live-executor-control-plane.mjs",
+  providerWriteKillSwitchControlPlaneVerifier:
+    "scripts/verify-provider-write-kill-switch-control-plane.mjs",
   providerWriteRequestsVerifier:
     "scripts/verify-provider-write-requests.mjs",
   providerWriteApprovalStateVerifier:
@@ -134,6 +136,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-dry-run-rehearsal:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
+  "verify:provider-write-kill-switch-control-plane",
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
@@ -205,6 +208,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-dry-run-rehearsal:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
+  "npm run verify:provider-write-kill-switch-control-plane",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
@@ -405,6 +409,16 @@ mustContainAll("Provider write live executor control plane", content.launchRunbo
   "npm run verify:provider-write-live-executor-control-plane",
   "does not expose evidence hashes",
   "does not expose credential refs",
+]);
+
+mustContainAll("Provider write kill switch control plane", content.launchRunbook, [
+  "Provider write kill switch control plane",
+  "GET /v2/provider-writes/kill-switch/status",
+  "POST /v2/provider-writes/kill-switch/status",
+  "GET /api/operator/provider-writes/kill-switch/status",
+  "POST /api/operator/provider-writes/kill-switch/status",
+  "npm run verify:provider-write-kill-switch-control-plane",
+  "emergency_stop_engaged",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -738,6 +752,13 @@ mustContainAll("provider write live executor control-plane verifier source", con
   "GET /v2/provider-writes/live-executor/status",
   "control-plane execution boundary no live provider writes",
 ]);
+mustContainAll("provider write kill switch control-plane verifier source", content.providerWriteKillSwitchControlPlaneVerifier, [
+  "verify:provider-write-kill-switch-control-plane",
+  "ProviderWriteKillSwitchStatusSchema",
+  "GET /v2/provider-writes/kill-switch/status",
+  "POST /v2/provider-writes/kill-switch/status",
+  "Provider write kill switch control-plane",
+]);
 mustContainAll("provider write requests verifier source", content.providerWriteRequestsVerifier, [
   "verify:provider-write-requests",
   "ProviderWriteRequest",
@@ -1056,6 +1077,14 @@ mustContainAll("provider write live executor control-plane docs reference", cont
   "GET /api/operator/provider-writes/live-executor/status",
   "npm run verify:provider-write-live-executor-control-plane",
 ]);
+mustContainAll("provider write kill switch control-plane docs reference", content.providerWriteRequests, [
+  "PR66 Provider Write Kill Switch Control Plane",
+  "GET /v2/provider-writes/kill-switch/status",
+  "POST /v2/provider-writes/kill-switch/status",
+  "GET /api/operator/provider-writes/kill-switch/status",
+  "POST /api/operator/provider-writes/kill-switch/status",
+  "npm run verify:provider-write-kill-switch-control-plane",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
@@ -1064,6 +1093,8 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/requests/:id/execution-attempts",
   "GET /v2/provider-writes/execution-attempts",
   "GET /v2/provider-writes/live-executor/status",
+  "GET /v2/provider-writes/kill-switch/status",
+  "POST /v2/provider-writes/kill-switch/status",
   "POST /api/operator/provider-writes/requests",
   "GET /api/operator/provider-writes/requests",
   "POST /api/operator/provider-writes/requests/:id/approve",
@@ -1071,10 +1102,13 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /api/operator/provider-writes/requests/:id/execution-attempts",
   "GET /api/operator/provider-writes/execution-attempts",
   "GET /api/operator/provider-writes/live-executor/status",
+  "GET /api/operator/provider-writes/kill-switch/status",
+  "POST /api/operator/provider-writes/kill-switch/status",
   "ProviderWriteRequest",
   "ProviderWriteExecutionAttempt",
   "ProviderWriteExecutionAttemptListItem",
   "ProviderWriteLiveExecutorStatusSchema",
+  "ProviderWriteKillSwitchStatusSchema",
   "idempotencyKeyHash",
   "payloadEscrowOpened=false",
   "providerMutationExecuted=false",
@@ -1098,6 +1132,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
+  "npm run verify:provider-write-kill-switch-control-plane",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

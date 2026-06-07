@@ -348,6 +348,49 @@ export const ProviderWriteLiveExecutorStatusSchema = z
   })
   .strict();
 
+export const ProviderWriteKillSwitchActionSchema = z.enum([
+  "engage",
+  "release",
+]);
+
+export const ProviderWriteKillSwitchReasonCodeSchema = z.enum([
+  "incident_response",
+  "provider_anomaly",
+  "operator_error",
+  "launch_rehearsal",
+  "post_incident_restore",
+]);
+
+export const ProviderWriteKillSwitchUpdateRequestSchema = z
+  .object({
+    action: ProviderWriteKillSwitchActionSchema,
+    reasonCode: ProviderWriteKillSwitchReasonCodeSchema,
+    idempotencyKey: z.string().min(8).max(128),
+  })
+  .strict();
+
+export const ProviderWriteKillSwitchStatusSchema = z
+  .object({
+    envKillSwitchEnabled: z.boolean(),
+    emergencyStopEngaged: z.boolean(),
+    effectiveKillSwitchEnabled: z.boolean(),
+    source: z.enum(["env", "emergency_stop", "env_and_emergency_stop", "none"]),
+    latestEvent: z
+      .object({
+        action: ProviderWriteKillSwitchActionSchema,
+        reasonCode: ProviderWriteKillSwitchReasonCodeSchema,
+        operatorId: z.string().nullable(),
+        stateFingerprint: z.string(),
+        createdAt: z.string(),
+      })
+      .strict()
+      .nullable(),
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+  })
+  .strict();
+
 export const CompensationDeclinedRequestSchema = z.object({
   caseId: z.string().min(1),
   customerReason: z.enum([
@@ -442,6 +485,18 @@ export type ProviderWriteLiveExecutorMissingGate = z.infer<
 >;
 export type ProviderWriteLiveExecutorStatus = z.infer<
   typeof ProviderWriteLiveExecutorStatusSchema
+>;
+export type ProviderWriteKillSwitchAction = z.infer<
+  typeof ProviderWriteKillSwitchActionSchema
+>;
+export type ProviderWriteKillSwitchReasonCode = z.infer<
+  typeof ProviderWriteKillSwitchReasonCodeSchema
+>;
+export type ProviderWriteKillSwitchUpdateRequest = z.infer<
+  typeof ProviderWriteKillSwitchUpdateRequestSchema
+>;
+export type ProviderWriteKillSwitchStatus = z.infer<
+  typeof ProviderWriteKillSwitchStatusSchema
 >;
 export type CompensationDeclinedRequest = z.infer<
   typeof CompensationDeclinedRequestSchema

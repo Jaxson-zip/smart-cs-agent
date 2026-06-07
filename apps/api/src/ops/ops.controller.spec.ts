@@ -9,6 +9,7 @@ import type {
   ExecuteActionRequest,
   IntegrationStatus,
   ProviderReadRequest,
+  ProviderWriteKillSwitchUpdateRequest,
   ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
@@ -497,6 +498,194 @@ describe("OpsController", () => {
           "x-tenant-id": "tenant_1",
           "x-operator-id": "operator_1",
         }),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+  });
+
+  it("lets admin operators read provider write kill switch status", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    let capturedTenantId = "";
+    const controller = new OpsController({
+      getProviderWriteKillSwitchStatus: async (tenantId: string) => {
+        capturedTenantId = tenantId;
+        return {
+          envKillSwitchEnabled: true,
+          emergencyStopEngaged: false,
+          effectiveKillSwitchEnabled: true,
+          source: "env",
+          latestEvent: null,
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    const response = await controller.getProviderWriteKillSwitchStatus({
+      authorization: "Bearer admin_key_123",
+    });
+
+    assert.strictEqual(capturedTenantId, "tenant_1");
+    assert.strictEqual(response.effectiveKillSwitchEnabled, true);
+    assert.strictEqual(response.networkExecution, "not_started");
+  });
+
+  it("lets admin operators update provider write kill switch status with request context", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    let capturedRequest:
+      | (ProviderWriteKillSwitchUpdateRequest & {
+          tenantId: string;
+          operatorId: string;
+        })
+      | undefined;
+    const controller = new OpsController({
+      updateProviderWriteKillSwitch: async (
+        request: ProviderWriteKillSwitchUpdateRequest & {
+          tenantId: string;
+          operatorId: string;
+        },
+      ) => {
+        capturedRequest = request;
+        return {
+          envKillSwitchEnabled: false,
+          emergencyStopEngaged: true,
+          effectiveKillSwitchEnabled: true,
+          source: "emergency_stop",
+          latestEvent: {
+            action: request.action,
+            reasonCode: request.reasonCode,
+            operatorId: request.operatorId,
+            stateFingerprint: "abcdef123456",
+            createdAt: "2026-06-08T00:00:00.000Z",
+          },
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+        };
+      },
+    } as unknown as OpsService);
+
+    const response = await controller.updateProviderWriteKillSwitch(
+      { authorization: "Bearer admin_key_123" },
+      {
+        action: "engage",
+        reasonCode: "incident_response",
+        idempotencyKey: "ks_1234567890",
+      },
+    );
+
+    assert.deepStrictEqual(capturedRequest, {
+      tenantId: "tenant_1",
+      operatorId: "admin_1",
+      action: "engage",
+      reasonCode: "incident_response",
+      idempotencyKey: "ks_1234567890",
+    });
+    assert.strictEqual(response.emergencyStopEngaged, true);
+    assert.strictEqual(response.networkExecution, "not_started");
+  });
+
+  it("rejects non-admin provider write kill switch visibility and updates", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      getProviderWriteKillSwitchStatus: async () => {
+        throw new Error("must not read kill switch status");
+      },
+      updateProviderWriteKillSwitch: async () => {
+        throw new Error("must not update kill switch status");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.getProviderWriteKillSwitchStatus({
+          authorization: "Bearer operator_key_123",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+    assert.throws(
+      () =>
+        controller.updateProviderWriteKillSwitch(
+          { authorization: "Bearer operator_key_123" },
+          {
+            action: "engage",
+            reasonCode: "incident_response",
+            idempotencyKey: "ks_1234567890",
+          },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
+  it("rejects insecure header fallback for provider write kill switch operations", async () => {
+    delete process.env.OPERATOR_API_KEYS;
+    const controller = new OpsController({
+      getProviderWriteKillSwitchStatus: async () => {
+        throw new Error("must not read kill switch status from insecure headers");
+      },
+      updateProviderWriteKillSwitch: async () => {
+        throw new Error("must not update kill switch status from insecure headers");
+      },
+    } as unknown as OpsService);
+
+    assert.throws(
+      () =>
+        controller.getProviderWriteKillSwitchStatus({
+          "x-tenant-id": "tenant_1",
+          "x-operator-id": "operator_1",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthorizedException);
+        assert.strictEqual(error.getStatus(), 401);
+        return true;
+      },
+    );
+    assert.throws(
+      () =>
+        controller.updateProviderWriteKillSwitch(
+          {
+            "x-tenant-id": "tenant_1",
+            "x-operator-id": "operator_1",
+          },
+          {
+            action: "engage",
+            reasonCode: "incident_response",
+            idempotencyKey: "ks_1234567890",
+          },
+        ),
       (error: unknown) => {
         assert.ok(error instanceof UnauthorizedException);
         assert.strictEqual(error.getStatus(), 401);

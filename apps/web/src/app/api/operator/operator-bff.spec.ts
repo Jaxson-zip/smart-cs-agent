@@ -16,6 +16,10 @@ import { GET as getOperatorMe } from "./me/route";
 import { GET as listProviderReadRuns } from "./provider-reads/runs/route";
 import { GET as getProviderReadSummary } from "./provider-reads/summary/route";
 import { GET as listProviderWriteExecutionAttempts } from "./provider-writes/execution-attempts/route";
+import {
+  GET as getProviderWriteKillSwitchStatus,
+  POST as updateProviderWriteKillSwitch,
+} from "./provider-writes/kill-switch/status/route";
 import { GET as getProviderWriteLiveExecutorStatus } from "./provider-writes/live-executor/status/route";
 import {
   GET as listProviderWriteRequests,
@@ -1963,6 +1967,188 @@ describe("operator BFF routes", () => {
     assert.deepStrictEqual(await unsafe.json(), {
       error: "Provider write live executor status response is invalid",
     });
+  });
+
+  it("lets admin sessions read and update provider write kill switch status through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    const proxied: Array<{ url: string; method: string; body: string | null }> = [];
+
+    globalThis.fetch = async (input, init) => {
+      proxied.push({
+        url: String(input),
+        method: init?.method ?? "GET",
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return Response.json({
+        envKillSwitchEnabled: false,
+        emergencyStopEngaged: true,
+        effectiveKillSwitchEnabled: true,
+        source: "emergency_stop",
+        latestEvent: {
+          action: "engage",
+          reasonCode: "incident_response",
+          operatorId: "admin_1",
+          stateFingerprint: "abcdef123456",
+          createdAt: "2026-06-08T00:00:00.000Z",
+        },
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+      });
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+    const read = await getProviderWriteKillSwitchStatus(
+      new Request("http://localhost/api/operator/provider-writes/kill-switch/status", {
+        headers: { cookie },
+      }),
+    );
+    const update = await updateProviderWriteKillSwitch(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/kill-switch/status",
+        cookie,
+        {
+          action: "engage",
+          reasonCode: "incident_response",
+          idempotencyKey: "ks_1234567890",
+        },
+      ),
+    );
+
+    assert.strictEqual(read.status, 200);
+    assert.strictEqual(update.status, 200);
+    assert.deepStrictEqual(proxied, [
+      {
+        url: "http://api.internal:4100/v2/provider-writes/kill-switch/status",
+        method: "GET",
+        body: null,
+      },
+      {
+        url: "http://api.internal:4100/v2/provider-writes/kill-switch/status",
+        method: "POST",
+        body: JSON.stringify({
+          action: "engage",
+          reasonCode: "incident_response",
+          idempotencyKey: "ks_1234567890",
+        }),
+      },
+    ]);
+    const body = await update.json();
+    assert.strictEqual(body.effectiveKillSwitchEnabled, true);
+    assert.strictEqual(JSON.stringify(body).includes("admin_api_key"), false);
+  });
+
+  it("rejects unsafe provider write kill switch status and blocks non-admin sessions", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"},{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({
+        envKillSwitchEnabled: false,
+        emergencyStopEngaged: true,
+        effectiveKillSwitchEnabled: true,
+        source: "emergency_stop",
+        latestEvent: {
+          action: "engage",
+          reasonCode: "incident_response",
+          operatorId: "admin_1",
+          stateFingerprint: "abcdef123456",
+          createdAt: "2026-06-08T00:00:00.000Z",
+        },
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        providerPayload: { secret: true },
+        credentialRef: "secret://smartcs/taobao/tenant_1",
+        operatorApiKey: "admin_api_key",
+      });
+    };
+
+    const agentLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const blocked = await updateProviderWriteKillSwitch(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/kill-switch/status",
+        agentLogin.headers.get("set-cookie") ?? "",
+        {
+          action: "engage",
+          reasonCode: "incident_response",
+          idempotencyKey: "ks_1234567890",
+        },
+      ),
+    );
+
+    assert.strictEqual(blocked.status, 403);
+    assert.deepStrictEqual(await blocked.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+
+    const adminLogin = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const unsafe = await getProviderWriteKillSwitchStatus(
+      new Request("http://localhost/api/operator/provider-writes/kill-switch/status", {
+        headers: { cookie: adminLogin.headers.get("set-cookie") ?? "" },
+      }),
+    );
+
+    assert.strictEqual(unsafe.status, 502);
+    assert.deepStrictEqual(await unsafe.json(), {
+      error: "Provider write kill switch status response is invalid",
+    });
+  });
+
+  it("rejects malformed provider write kill switch update payloads in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json({});
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await updateProviderWriteKillSwitch(
+      jsonRequestWithCookie(
+        "http://localhost/api/operator/provider-writes/kill-switch/status",
+        loginResponse.headers.get("set-cookie") ?? "",
+        { action: "engage", idempotencyKey: "short" },
+      ),
+    );
+
+    assert.strictEqual(response.status, 400);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write kill switch payload is invalid",
+    });
+    assert.strictEqual(fetchCalled, false);
   });
 
   it("lets admin sessions list sanitized provider write requests through the BFF", async () => {

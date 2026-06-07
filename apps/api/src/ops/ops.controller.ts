@@ -19,6 +19,7 @@ import {
   ProviderWriteApprovalRequestSchema,
   ProviderWriteExecutionAttemptRequestSchema,
   ProviderWriteExecutionAttemptStatusSchema,
+  ProviderWriteKillSwitchUpdateRequestSchema,
   ProviderReadRequestSchema,
   ProviderWriteRejectionRequestSchema,
   ProviderWriteRequestSchema,
@@ -28,6 +29,7 @@ import {
   type HandoffRequest,
   type ProviderWriteApprovalRequest,
   type ProviderWriteExecutionAttemptRequest,
+  type ProviderWriteKillSwitchUpdateRequest,
   type ProviderReadRequest,
   type ProviderWriteRejectionRequest,
   type ProviderWriteRequest,
@@ -162,6 +164,28 @@ export class OpsController {
     const context = requireRequestContext(headers);
     requireProviderWriteAdminAccess(context);
     return this.opsService.getProviderWriteLiveExecutorStatus();
+  }
+
+  @Get("provider-writes/kill-switch/status")
+  getProviderWriteKillSwitchStatus(@Headers() headers: RequestHeaders) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    return this.opsService.getProviderWriteKillSwitchStatus(context.tenantId);
+  }
+
+  @Post("provider-writes/kill-switch/status")
+  updateProviderWriteKillSwitch(
+    @Headers() headers: RequestHeaders,
+    @Body() body: ProviderWriteKillSwitchUpdateRequest,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const request = ProviderWriteKillSwitchUpdateRequestSchema.parse(body);
+    return this.opsService.updateProviderWriteKillSwitch({
+      tenantId: context.tenantId,
+      operatorId: context.operatorId,
+      ...request,
+    });
   }
 
   @Post("channel-events")

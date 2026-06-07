@@ -5,6 +5,7 @@ import {
   ProviderReadResponseSchema,
   ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptResponseSchema,
+  ProviderWriteKillSwitchStatusSchema,
   ProviderWriteResponseSchema,
   type AgentCaseDecision,
   type CompensationDeclinedRequest,
@@ -20,6 +21,10 @@ import {
   type ProviderWriteExecutionAttemptListItem,
   type ProviderWriteExecutionAttemptResponse,
   type ProviderWriteExecutionAttemptStatus,
+  type ProviderWriteKillSwitchAction,
+  type ProviderWriteKillSwitchReasonCode,
+  type ProviderWriteKillSwitchStatus,
+  type ProviderWriteKillSwitchUpdateRequest,
   type ProviderWriteLiveExecutorStatus,
   type ProviderWriteRequest,
   type ProviderWriteRejectionRequest,
@@ -83,6 +88,103 @@ export class OpsService {
       this.apiConfig?.getProviderWriteLiveExecutorStatus() ??
       DISABLED_PROVIDER_WRITE_LIVE_EXECUTOR_STATUS
     );
+  }
+
+  async getProviderWriteKillSwitchStatus(
+    tenantId: string,
+  ): Promise<ProviderWriteKillSwitchStatus> {
+    const latestEvent = await this.findLatestProviderWriteKillSwitchEvent(tenantId);
+    return providerWriteKillSwitchStatusFromEvent(latestEvent);
+  }
+
+  async updateProviderWriteKillSwitch(
+    input: ProviderWriteKillSwitchUpdateInput,
+  ): Promise<ProviderWriteKillSwitchStatus> {
+    const envKillSwitchEnabled = providerWriteExecutionKillSwitchEnabled();
+    const idempotencyKeyHash = sha256(
+      stableJson({
+        kind: "provider_write_kill_switch_idempotency_key",
+        value: input.idempotencyKey,
+      }),
+    );
+
+    const existing = await this.findProviderWriteKillSwitchEventByIdempotencyKey(
+      input.tenantId,
+      idempotencyKeyHash,
+    );
+    if (existing) {
+      return providerWriteKillSwitchStatusFromEvent(existing);
+    }
+
+    const emergencyStopEngaged = input.action === "engage";
+    const effectiveKillSwitchEnabled =
+      envKillSwitchEnabled || emergencyStopEngaged;
+    const stateFingerprint = sha256(
+      stableJson({
+        kind: "provider_write_kill_switch_state",
+        tenantId: input.tenantId,
+        operatorId: input.operatorId,
+        action: input.action,
+        reasonCode: input.reasonCode,
+        idempotencyKeyHash,
+        envKillSwitchEnabled,
+        emergencyStopEngaged,
+        effectiveKillSwitchEnabled,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+      }),
+    );
+
+    if (!this.prisma) {
+      return providerWriteKillSwitchStatusFromEvent({
+        id: `provider_write_kill_switch_${Date.now()}`,
+        tenantId: input.tenantId,
+        operatorId: input.operatorId ?? null,
+        action: input.action,
+        reasonCode: input.reasonCode,
+        idempotencyKeyHash,
+        stateFingerprint,
+        envKillSwitchEnabled,
+        emergencyStopEngaged,
+        effectiveKillSwitchEnabled,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        createdAt: new Date(),
+      });
+    }
+
+    let created: ProviderWriteKillSwitchEventRecord;
+    try {
+      created = (await this.prisma.providerWriteKillSwitchEvent.create({
+        data: {
+          tenantId: input.tenantId,
+          operatorId: input.operatorId ?? null,
+          action: input.action,
+          reasonCode: input.reasonCode,
+          idempotencyKeyHash,
+          stateFingerprint,
+          envKillSwitchEnabled,
+          emergencyStopEngaged,
+          effectiveKillSwitchEnabled,
+          networkExecution: "not_started",
+          providerMutationExecuted: false,
+          customerVisibleMessageSent: false,
+        },
+      })) as ProviderWriteKillSwitchEventRecord;
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const raced = await this.findProviderWriteKillSwitchEventByIdempotencyKey(
+        input.tenantId,
+        idempotencyKeyHash,
+      );
+      if (raced) return providerWriteKillSwitchStatusFromEvent(raced);
+      throw error;
+    }
+
+    await this.auditProviderWriteKillSwitch(input, created);
+    return providerWriteKillSwitchStatusFromEvent(created);
   }
 
   async listProviderReadRuns(input: ListProviderReadRunsInput) {
@@ -477,7 +579,13 @@ export class OpsService {
       return response;
     }
 
-    const decision = providerWriteExecutionDecision(request);
+    const emergencyStopEngaged = await this.providerWriteEmergencyStopEngaged(
+      input.tenantId,
+    );
+    const decision = providerWriteExecutionDecision(
+      request,
+      emergencyStopEngaged,
+    );
     const response = providerWriteExecutionAttemptResponse(
       `attempt_${Date.now()}`,
       request.id,
@@ -547,6 +655,33 @@ export class OpsService {
         },
       },
     }) as Promise<ProviderWriteExecutionAttemptRecord | null>;
+  }
+
+  private async findLatestProviderWriteKillSwitchEvent(
+    tenantId: string,
+  ): Promise<ProviderWriteKillSwitchEventRecord | null> {
+    if (!this.prisma) return null;
+    return this.prisma.providerWriteKillSwitchEvent.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: "desc" },
+    }) as Promise<ProviderWriteKillSwitchEventRecord | null>;
+  }
+
+  private async findProviderWriteKillSwitchEventByIdempotencyKey(
+    tenantId: string,
+    idempotencyKeyHash: string,
+  ): Promise<ProviderWriteKillSwitchEventRecord | null> {
+    if (!this.prisma) return null;
+    return this.prisma.providerWriteKillSwitchEvent.findUnique({
+      where: {
+        tenantId_idempotencyKeyHash: { tenantId, idempotencyKeyHash },
+      },
+    }) as Promise<ProviderWriteKillSwitchEventRecord | null>;
+  }
+
+  private async providerWriteEmergencyStopEngaged(tenantId: string) {
+    const latestEvent = await this.findLatestProviderWriteKillSwitchEvent(tenantId);
+    return latestEvent?.action === "engage";
   }
 
   private async reviewProviderWriteRequest(
@@ -1143,6 +1278,31 @@ export class OpsService {
     );
   }
 
+  private async auditProviderWriteKillSwitch(
+    input: ProviderWriteKillSwitchUpdateInput,
+    event: ProviderWriteKillSwitchEventRecord,
+  ) {
+    await this.auditService?.log(
+      null,
+      `provider_write_kill_switch.${input.action}`,
+      {
+        providerWriteKillSwitchEventId: event.id,
+        tenantId: input.tenantId,
+        operatorId: input.operatorId ?? null,
+        action: input.action,
+        reasonCode: input.reasonCode,
+        idempotencyKeyFingerprint: fingerprint(event.idempotencyKeyHash),
+        stateFingerprint: fingerprint(event.stateFingerprint),
+        envKillSwitchEnabled: event.envKillSwitchEnabled,
+        emergencyStopEngaged: event.emergencyStopEngaged,
+        effectiveKillSwitchEnabled: event.effectiveKillSwitchEnabled,
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+      },
+    );
+  }
+
   handleCompensationDeclined(
     request: CompensationDeclinedRequest,
   ): CompensationDeclinedResponse {
@@ -1243,6 +1403,12 @@ type ProviderWriteExecutionAttemptInput = {
   idempotencyKey: ProviderWriteExecutionAttemptRequest["idempotencyKey"];
 };
 
+type ProviderWriteKillSwitchUpdateInput =
+  ProviderWriteKillSwitchUpdateRequest & {
+    tenantId: string;
+    operatorId: string;
+  };
+
 type ProviderReadCredentialAuditMetadata = {
   credentialResolutionStatus: ProviderCredentialResolution["status"];
   credentialSource: ProviderCredentialResolution["source"];
@@ -1321,6 +1487,23 @@ type ProviderWriteExecutionAttemptRecord = {
   policyReason?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
+};
+
+type ProviderWriteKillSwitchEventRecord = {
+  id: string;
+  tenantId: string;
+  operatorId?: string | null;
+  action: ProviderWriteKillSwitchAction;
+  reasonCode: ProviderWriteKillSwitchReasonCode;
+  idempotencyKeyHash: string;
+  stateFingerprint: string;
+  envKillSwitchEnabled: boolean;
+  emergencyStopEngaged: boolean;
+  effectiveKillSwitchEnabled: boolean;
+  networkExecution: string;
+  providerMutationExecuted: boolean;
+  customerVisibleMessageSent: boolean;
+  createdAt?: Date;
 };
 
 type ListProviderReadRunsInput = {
@@ -1557,6 +1740,7 @@ function providerWriteExecutionAttemptMetadata(
 
 function providerWriteExecutionDecision(
   request: ProviderWriteRequestRecord,
+  emergencyStopEngaged = false,
 ): {
   status: ProviderWriteExecutionAttemptStatus;
   operatorVisibleResult: string;
@@ -1570,6 +1754,16 @@ function providerWriteExecutionDecision(
         "Provider write execution attempt blocked because the request is not approved.",
       policyReason: "request_not_approved",
       retryable: false,
+    };
+  }
+
+  if (emergencyStopEngaged) {
+    return {
+      status: "blocked",
+      operatorVisibleResult:
+        "Provider write execution attempt blocked by the provider write emergency stop.",
+      policyReason: "emergency_stop_engaged",
+      retryable: true,
     };
   }
 
@@ -1600,6 +1794,52 @@ function providerWriteExecutionDecision(
     policyReason: null,
     retryable: false,
   };
+}
+
+function providerWriteKillSwitchStatusFromEvent(
+  event: ProviderWriteKillSwitchEventRecord | null,
+): ProviderWriteKillSwitchStatus {
+  const envKillSwitchEnabled = event
+    ? event.envKillSwitchEnabled
+    : providerWriteExecutionKillSwitchEnabled();
+  const emergencyStopEngaged = event?.action === "engage";
+  const effectiveKillSwitchEnabled =
+    envKillSwitchEnabled || emergencyStopEngaged;
+  const source = providerWriteKillSwitchSource(
+    envKillSwitchEnabled,
+    emergencyStopEngaged,
+  );
+
+  return ProviderWriteKillSwitchStatusSchema.parse({
+    envKillSwitchEnabled,
+    emergencyStopEngaged,
+    effectiveKillSwitchEnabled,
+    source,
+    latestEvent: event
+      ? {
+          action: event.action,
+          reasonCode: event.reasonCode,
+          operatorId: event.operatorId ?? null,
+          stateFingerprint: fingerprint(event.stateFingerprint),
+          createdAt: event.createdAt?.toISOString() ?? "",
+        }
+      : null,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+  });
+}
+
+function providerWriteKillSwitchSource(
+  envKillSwitchEnabled: boolean,
+  emergencyStopEngaged: boolean,
+): ProviderWriteKillSwitchStatus["source"] {
+  if (envKillSwitchEnabled && emergencyStopEngaged) {
+    return "env_and_emergency_stop";
+  }
+  if (envKillSwitchEnabled) return "env";
+  if (emergencyStopEngaged) return "emergency_stop";
+  return "none";
 }
 
 function providerReadResponseFromRun(

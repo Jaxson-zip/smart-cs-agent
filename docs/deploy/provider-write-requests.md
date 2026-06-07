@@ -2,6 +2,27 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR66 Provider Write Kill Switch Control Plane
+
+PR66 adds an admin-only emergency-stop control plane for future provider write execution. It records sanitized `ProviderWriteKillSwitchEvent` rows, exposes only `ProviderWriteKillSwitchStatusSchema`, and makes provider write execution attempts fail closed with `policyReason=emergency_stop_engaged` when the persisted emergency stop is engaged. Releasing the persisted emergency stop does not change environment variables and does not enable real provider writes.
+
+New control routes:
+
+- `GET /v2/provider-writes/kill-switch/status`: admin-only API route that returns the current safe kill-switch status for the authenticated tenant.
+- `POST /v2/provider-writes/kill-switch/status`: admin-only API route that records an `engage` or `release` event with a controlled reason code and a hashed idempotency key.
+- `GET /api/operator/provider-writes/kill-switch/status`: Web BFF admin route that uses the HttpOnly admin session and keeps operator API keys server-side.
+- `POST /api/operator/provider-writes/kill-switch/status`: Web BFF admin route that validates the update body before proxying it through the server-side operator API key.
+
+The response may show only safe control-plane facts: env kill-switch enabled, persisted emergency stop engaged, effective kill-switch enabled, source, latest safe event metadata, and no-network invariants. It must not expose raw idempotency keys, provider payloads, provider responses, raw order IDs, logistics IDs, addresses, credential refs, credential material, operator API keys, provider tokens, webhook secrets, tenant secrets, or customer messages.
+
+Run:
+
+```bash
+npm run verify:provider-write-kill-switch-control-plane
+```
+
+This verifier checks the shared status/update contracts, Prisma event table and constraints, admin-only API/BFF routes, execution-attempt blocking, idempotency, audit safety, docs, static CI wiring, and production launch references. It also checks that the control plane does not call provider APIs, does not execute provider writes, does not read credential material, does not open or decrypt payload escrow, and does not send customer-visible replies.
+
 ## PR65 Provider Write Live Executor Control Plane
 
 PR65 adds read-only status visibility for the future live provider write executor. It still does not call provider APIs, does not execute provider writes, does not read credential material, does not open payload escrow, and does not send customer-visible replies. Runtime status responses are served from the sanitized startup config snapshot rather than re-reading evidence hash or credential-ref environment values on each request.
