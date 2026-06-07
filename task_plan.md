@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR56 - Production Branch Protection Gate
+## Current Stage: PR57 - Production Provider Write Approval Gate
 
 Status: verified
 
-Previous Stage: PR55 - Production Static CI Gate was verified locally, but remote push is waiting for GitHub `workflow` scope authorization because the branch now contains `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR56 - Production Branch Protection Gate was verified locally. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+Branch Protection Stage: PR56 - Production Branch Protection Gate was verified with `production-branch-protection-artifacts/` evidence shape and must stay connected to provider write approval and production launch checks.
 
 Static CI Stage: PR55 - Production Static CI Gate was verified with `.github/workflows/production-static-gates.yml` and must stay connected to production launch and branch protection checks.
 
@@ -52,17 +54,18 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR56 adds a production branch protection gate. It gives release owners a local evidence verifier for the repository protection baseline: the production branch must be protected, `Static production gates` must be a required status check, pull request review controls must be enabled, force pushes/deletions must be disabled, and bypass actors must be empty, without calling the GitHub API or mutating branch protection.
+PR57 adds a production provider write approval gate. It gives release owners a local evidence verifier for the first possible real provider write pilot: a single merchant/channel, `human_review_required`, `approvalStatus=approved`, distinct reviewer fingerprints, artifact hash bindings, low-risk action allowlist, idempotency, audit, provider write kill switch, customer-visible reply approval, limits, rollback owner, and no automatic provider writes, without calling provider APIs or executing customer-visible actions.
 
-### PR56 Scope
+### PR57 Scope
 
-- Add `npm run verify:production-branch-protection` for static branch protection checks.
-- Add `npm run verify:production-branch-protection:safe` to verify sanitized branch protection evidence from `SMARTCS_PRODUCTION_BRANCH_PROTECTION_*`.
-- Add `docs/deploy/production-branch-protection.md`.
-- Connect branch protection checks into production readiness, static CI docs, launch runbook, and `verify:production-launch`.
-- Keep the verifier local and no-mutation: no GitHub API calls, no GitHub tokens, no branch protection mutation, no production deployment, no registry publish, no real channel/provider actions, and no customer-visible actions.
+- Add `npm run verify:production-provider-write-approval` for static provider write approval checks.
+- Add `npm run verify:production-provider-write-approval:safe` to verify sanitized write approval evidence from `SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_*`.
+- Add `docs/deploy/production-provider-write-approval.md`.
+- Connect provider write approval checks into provider adapter docs, production readiness, launch runbook, and `verify:production-launch`.
+- Connect provider write approval tests and the static verifier into `.github/workflows/production-static-gates.yml`.
+- Keep the verifier local and no-execution: no provider API calls, no provider credentials, no provider writes, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
 
-### Out Of Scope For PR56
+### Out Of Scope For PR57
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -148,10 +151,11 @@ PR56 adds a production branch protection gate. It gives release owners a local e
 - [x] PR54 production launch binding gate.
 - [x] PR55 production static CI gate.
 - [x] PR56 production branch protection gate.
+- [x] PR57 production provider write approval gate.
 
 ## Verification Gate
 
-Do not claim PR56 production branch protection gate complete until these pass:
+Do not claim PR57 production provider write approval gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -209,6 +213,9 @@ Do not claim PR56 production branch protection gate complete until these pass:
 - `node --check scripts/verify-production-branch-protection.mjs`
 - `node --test scripts/verify-production-branch-protection.test.mjs`
 - `npm.cmd run verify:production-branch-protection`
+- `node --check scripts/verify-production-provider-write-approval.mjs`
+- `node --test scripts/verify-production-provider-write-approval.test.mjs`
+- `npm.cmd run verify:production-provider-write-approval`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

@@ -13,6 +13,8 @@ const files = {
   productionStaticCi: "docs/deploy/production-static-ci.md",
   productionBranchProtection:
     "docs/deploy/production-branch-protection.md",
+  productionProviderWriteApproval:
+    "docs/deploy/production-provider-write-approval.md",
   productionStaticCiWorkflow:
     ".github/workflows/production-static-gates.yml",
   productionDeploymentArtifacts:
@@ -46,6 +48,8 @@ const files = {
   productionStaticCiVerifier: "scripts/verify-production-static-ci.mjs",
   productionBranchProtectionVerifier:
     "scripts/verify-production-branch-protection.mjs",
+  productionProviderWriteApprovalVerifier:
+    "scripts/verify-production-provider-write-approval.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -102,6 +106,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-static-ci",
   "verify:production-branch-protection",
   "verify:production-branch-protection:safe",
+  "verify:production-provider-write-approval",
+  "verify:production-provider-write-approval:safe",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -162,6 +168,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-static-ci",
   "npm run verify:production-branch-protection",
   "npm run verify:production-branch-protection:safe",
+  "npm run verify:production-provider-write-approval",
+  "npm run verify:production-provider-write-approval:safe",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -212,6 +220,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_BRANCH_PROTECTION_FILE",
   "SMARTCS_PRODUCTION_BRANCH_PROTECTION_REQUIRE_PASS=true",
+  "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
+  "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -408,6 +418,12 @@ mustContainAll("production readiness references branch protection", content.prod
   "npm run verify:production-branch-protection:safe",
 ]);
 
+mustContainAll("production readiness references provider write approval", content.productionReadiness, [
+  "PR57 Production Provider Write Approval Gate",
+  "npm run verify:production-provider-write-approval",
+  "npm run verify:production-provider-write-approval:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -485,11 +501,17 @@ mustContainAll("task plan references PR56", content.taskPlan, [
   "verify:production-branch-protection",
 ]);
 
+mustContainAll("task plan references PR57", content.taskPlan, [
+  "PR57 - Production Provider Write Approval Gate",
+  "verify:production-provider-write-approval",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-static-ci",
   "verify:production-branch-protection",
+  "verify:production-provider-write-approval",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -529,6 +551,15 @@ mustContainAll("production branch protection verifier source", content.productio
   "Static production gates",
   "githubApiCalledByVerifier",
   "branchProtectionMutatedByVerifier",
+]);
+mustContainAll("production provider write approval verifier source", content.productionProviderWriteApprovalVerifier, [
+  "verify:production-provider-write-approval",
+  "production-provider-write-approval-artifacts",
+  "human_review_required",
+  "approvalStatus",
+  "artifactBindings",
+  "providerWriteKillSwitchReady",
+  "automaticProviderWritesEnabled",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -730,6 +761,17 @@ mustContainAll("production branch protection docs", content.productionBranchProt
   "does not call the GitHub API",
   "does not mutate branch protection",
 ]);
+mustContainAll("production provider write approval docs", content.productionProviderWriteApproval, [
+  "PR57 Production Provider Write Approval Gate",
+  "npm run verify:production-provider-write-approval",
+  "npm run verify:production-provider-write-approval:safe",
+  "smart-cs-agent.production-provider-write-approval.v1",
+  "human_review_required",
+  "approvalStatus",
+  "artifactBindings",
+  "does not call provider APIs",
+  "does not execute provider writes",
+]);
 mustContainAll("production static CI workflow", content.productionStaticCiWorkflow, [
   "permissions:",
   "contents: read",
@@ -775,6 +817,7 @@ mustNotContainUnsafeExamples({
   productionReadiness: content.productionReadiness,
   productionStaticCi: content.productionStaticCi,
   productionBranchProtection: content.productionBranchProtection,
+  productionProviderWriteApproval: content.productionProviderWriteApproval,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
   productionDeploymentArtifacts: content.productionDeploymentArtifacts,
   productionImageBuilds: content.productionImageBuilds,

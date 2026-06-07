@@ -61,6 +61,8 @@ jobs:
           node --test scripts/verify-production-change-approval.test.mjs
           node --test scripts/verify-production-launch-binding.test.mjs
           node --test scripts/verify-production-static-ci.test.mjs
+          node --test scripts/verify-production-branch-protection.test.mjs
+          node --test scripts/verify-production-provider-write-approval.test.mjs
 
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present -- --pretty false
@@ -87,6 +89,8 @@ jobs:
           npm run verify:production-release-evidence
           npm run verify:production-change-approval
           npm run verify:production-launch-binding
+          npm run verify:production-branch-protection
+          npm run verify:production-provider-write-approval
           npm run verify:production-launch
 
       - name: Verify provider safety gates

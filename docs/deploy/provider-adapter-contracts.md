@@ -206,6 +206,7 @@ A future adapter must not start with real writes enabled. Before any real write 
 - Emergency kill switch behavior.
 - Canary and alert coverage.
 - Rollback runbook evidence.
+- Sanitized production provider write approval evidence under `production-provider-write-approval-artifacts/`, verified by `npm run verify:production-provider-write-approval` and `npm run verify:production-provider-write-approval:safe`.
 
 `writePolicy=human_review_required` is the first possible real-write policy. `human_review_required` still does not mean fully automatic execution. It means the system may queue a reviewed provider action only after operator approval and provider-specific safeguards.
 

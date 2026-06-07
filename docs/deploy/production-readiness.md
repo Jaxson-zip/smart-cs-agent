@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR57 Production Provider Write Approval Gate
+
+Production provider write approval is now checked by:
+
+```bash
+npm run verify:production-provider-write-approval
+npm run verify:production-provider-write-approval:safe
+```
+
+The gate defines the sanitized approval package required before a real provider write pilot can be considered. The first pilot must be single-merchant, `human_review_required`, explicitly limited to low-risk actions such as address change, coupon issue, and logistics urge, and must include `approvalStatus=approved`, distinct reviewer fingerprints, artifact hash bindings, human approval, two-person review, idempotency, audit, provider write kill switch, daily limits, coupon limits, dry-run rehearsal, and rollback ownership. This verifier still does not call provider APIs, execute provider writes, read provider credentials, send customer-visible replies, or enable automatic commerce actions.
+
 ## PR56 Production Branch Protection Gate
 
 Production branch protection is now checked by:
