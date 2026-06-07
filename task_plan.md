@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR55 - Production Static CI Gate
+## Current Stage: PR56 - Production Branch Protection Gate
 
 Status: verified
 
-Previous Stage: PR54 - Production Launch Binding Gate was verified.
+Previous Stage: PR55 - Production Static CI Gate was verified locally, but remote push is waiting for GitHub `workflow` scope authorization because the branch now contains `.github/workflows/production-static-gates.yml`.
+
+Static CI Stage: PR55 - Production Static CI Gate was verified with `.github/workflows/production-static-gates.yml` and must stay connected to production launch and branch protection checks.
 
 Launch Binding Stage: PR54 - Production Launch Binding Gate was verified with `production-launch-binding.yml.example` and must stay connected to production launch and static CI checks.
 
@@ -50,17 +52,17 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR55 adds a production static CI gate. It gives the repository a real GitHub Actions workflow for pull requests and pushes, plus a static verifier that proves the workflow runs tests, typecheck, lint, build, production static gates, and provider safety gates without secrets, production databases, live canaries, launch artifacts, Docker publish, registry login, deployment commands, real channels, provider network execution, or customer-visible actions.
+PR56 adds a production branch protection gate. It gives release owners a local evidence verifier for the repository protection baseline: the production branch must be protected, `Static production gates` must be a required status check, pull request review controls must be enabled, force pushes/deletions must be disabled, and bypass actors must be empty, without calling the GitHub API or mutating branch protection.
 
-### PR55 Scope
+### PR56 Scope
 
-- Add `.github/workflows/production-static-gates.yml` for real PR/push static CI.
-- Add `npm run verify:production-static-ci` to validate workflow command coverage and safety boundaries.
-- Add `docs/deploy/production-static-ci.md`.
-- Connect static CI checks into production readiness, launch runbook, and `verify:production-launch`.
-- Keep the static CI workflow no-secret and no-deploy: no production API calls, no production database migrations, no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no launch artifact safe commands, no real channel/provider actions, and no customer-visible actions.
+- Add `npm run verify:production-branch-protection` for static branch protection checks.
+- Add `npm run verify:production-branch-protection:safe` to verify sanitized branch protection evidence from `SMARTCS_PRODUCTION_BRANCH_PROTECTION_*`.
+- Add `docs/deploy/production-branch-protection.md`.
+- Connect branch protection checks into production readiness, static CI docs, launch runbook, and `verify:production-launch`.
+- Keep the verifier local and no-mutation: no GitHub API calls, no GitHub tokens, no branch protection mutation, no production deployment, no registry publish, no real channel/provider actions, and no customer-visible actions.
 
-### Out Of Scope For PR55
+### Out Of Scope For PR56
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -145,10 +147,11 @@ PR55 adds a production static CI gate. It gives the repository a real GitHub Act
 - [x] PR53 production change approval gate.
 - [x] PR54 production launch binding gate.
 - [x] PR55 production static CI gate.
+- [x] PR56 production branch protection gate.
 
 ## Verification Gate
 
-Do not claim PR55 production static CI gate complete until these pass:
+Do not claim PR56 production branch protection gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -203,6 +206,9 @@ Do not claim PR55 production static CI gate complete until these pass:
 - `node --check scripts/verify-production-static-ci.mjs`
 - `node --test scripts/verify-production-static-ci.test.mjs`
 - `npm.cmd run verify:production-static-ci`
+- `node --check scripts/verify-production-branch-protection.mjs`
+- `node --test scripts/verify-production-branch-protection.test.mjs`
+- `npm.cmd run verify:production-branch-protection`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

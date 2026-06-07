@@ -14,6 +14,14 @@ Run the static CI guard locally:
 npm run verify:production-static-ci
 ```
 
+Run the branch protection guard after this workflow exists, so the repository can prove `Static production gates` is configured as a required status check before launch:
+
+```bash
+npm run verify:production-branch-protection
+```
+
+See `docs/deploy/production-branch-protection.md` for the required branch protection evidence boundary.
+
 The verifier checks that the workflow:
 
 - Uses `permissions: contents: read`.

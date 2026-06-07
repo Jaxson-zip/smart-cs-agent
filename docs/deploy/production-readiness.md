@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR56 Production Branch Protection Gate
+
+Production branch protection is now checked by:
+
+```bash
+npm run verify:production-branch-protection
+npm run verify:production-branch-protection:safe
+```
+
+The gate defines the sanitized branch protection evidence required before commercial launch: the production branch must be protected, `Static production gates` must be configured as a required status check, pull request review controls must be enabled, stale reviews must be dismissed, code owner and last-push approval must be required, force pushes and deletions must be disabled, and bypass actors must be empty. This verifier still does not call the GitHub API, mutate branch protection, read GitHub secrets, deploy, publish images, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR55 Production Static CI Gate
 
 Production static CI is now checked by:

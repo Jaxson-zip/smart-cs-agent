@@ -11,6 +11,8 @@ const files = {
   channelRunbook: "docs/deploy/channel-queue-runbook.md",
   productionAlerting: "docs/deploy/production-alerting.md",
   productionStaticCi: "docs/deploy/production-static-ci.md",
+  productionBranchProtection:
+    "docs/deploy/production-branch-protection.md",
   productionStaticCiWorkflow:
     ".github/workflows/production-static-gates.yml",
   productionDeploymentArtifacts:
@@ -42,6 +44,8 @@ const files = {
     "docs/deploy/production-launch-binding.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionStaticCiVerifier: "scripts/verify-production-static-ci.mjs",
+  productionBranchProtectionVerifier:
+    "scripts/verify-production-branch-protection.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
   productionImageBuildsVerifier:
@@ -96,6 +100,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-static-ci",
+  "verify:production-branch-protection",
+  "verify:production-branch-protection:safe",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-image-builds:docker",
@@ -154,6 +160,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run lint --workspaces --if-present -- --max-warnings=0",
   "npm run build --workspaces --if-present",
   "npm run verify:production-static-ci",
+  "npm run verify:production-branch-protection",
+  "npm run verify:production-branch-protection:safe",
   "npm run verify:production-readiness",
   "--env-file=<secure-production-env>",
   "--require-real-channel",
@@ -202,6 +210,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_CHANGE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_LAUNCH_MANIFEST_FILE",
   "SMARTCS_PRODUCTION_LAUNCH_BINDING_REQUIRE_PASS=true",
+  "SMARTCS_PRODUCTION_BRANCH_PROTECTION_FILE",
+  "SMARTCS_PRODUCTION_BRANCH_PROTECTION_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -392,6 +402,12 @@ mustContainAll("production readiness references static CI", content.productionRe
   "npm run verify:production-static-ci",
 ]);
 
+mustContainAll("production readiness references branch protection", content.productionReadiness, [
+  "PR56 Production Branch Protection Gate",
+  "npm run verify:production-branch-protection",
+  "npm run verify:production-branch-protection:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -464,10 +480,16 @@ mustContainAll("task plan references PR55", content.taskPlan, [
   "verify:production-static-ci",
 ]);
 
+mustContainAll("task plan references PR56", content.taskPlan, [
+  "PR56 - Production Branch Protection Gate",
+  "verify:production-branch-protection",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
   "verify:production-static-ci",
+  "verify:production-branch-protection",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -500,6 +522,13 @@ mustContainAll("production static CI verifier source", content.productionStaticC
   "production-static-gates.yml",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
+]);
+mustContainAll("production branch protection verifier source", content.productionBranchProtectionVerifier, [
+  "verify:production-branch-protection",
+  "production-branch-protection-artifacts",
+  "Static production gates",
+  "githubApiCalledByVerifier",
+  "branchProtectionMutatedByVerifier",
 ]);
 mustContainAll("provider adapter verifier source", content.providerAdapterVerifier, [
   "verify:provider-adapters",
@@ -688,7 +717,18 @@ mustContainAll("production static CI docs", content.productionStaticCi, [
   "PR55 Production Static CI Gate",
   ".github/workflows/production-static-gates.yml",
   "npm run verify:production-static-ci",
+  "npm run verify:production-branch-protection",
+  "docs/deploy/production-branch-protection.md",
   "does not call production APIs",
+]);
+mustContainAll("production branch protection docs", content.productionBranchProtection, [
+  "PR56 Production Branch Protection Gate",
+  "npm run verify:production-branch-protection",
+  "npm run verify:production-branch-protection:safe",
+  "smart-cs-agent.production-branch-protection.v1",
+  "Static production gates",
+  "does not call the GitHub API",
+  "does not mutate branch protection",
 ]);
 mustContainAll("production static CI workflow", content.productionStaticCiWorkflow, [
   "permissions:",
@@ -734,6 +774,7 @@ mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
   productionStaticCi: content.productionStaticCi,
+  productionBranchProtection: content.productionBranchProtection,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
   productionDeploymentArtifacts: content.productionDeploymentArtifacts,
   productionImageBuilds: content.productionImageBuilds,

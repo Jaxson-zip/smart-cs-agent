@@ -22,6 +22,8 @@
     "verify:channel-runbook": "node scripts/verify-channel-queue-runbook.mjs",
     "verify:operator-bootstrap": "node scripts/verify-operator-bootstrap.mjs",
     "verify:production-static-ci": "node scripts/verify-production-static-ci.mjs",
+    "verify:production-branch-protection": "node scripts/verify-production-branch-protection.mjs",
+    "verify:production-branch-protection:safe": "node scripts/verify-production-branch-protection.mjs --from-env",
     "verify:production-alerting": "node scripts/verify-production-alerting.mjs",
     "verify:production-canary": "node scripts/verify-production-canary.mjs",
     "verify:production-deploy-artifacts": "node scripts/verify-production-deploy-artifacts.mjs",
