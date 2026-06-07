@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR64 Provider Write Live Executor Startup Guard
+
+Provider write live executor startup safety is now checked by:
+
+```bash
+npm run verify:provider-write-live-executor-startup-guard
+```
+
+`PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` defaults to `false`. If production ever sets it to `true`, startup requires non-placeholder `PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256` and `PROVIDER_WRITE_APPROVAL_SHA256` evidence hashes, `PROVIDER_WRITE_EXECUTION_KILL_SWITCH=true`, `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE=sealed_metadata`, at least one `PROVIDER_WRITE_REVIEW_ADAPTERS` allowlist, and `PROVIDER_CREDENTIALS` records that contain only credential refs. This guard still does not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, store raw provider/customer payloads, or send customer-visible replies.
+
 ## PR63 Provider Write Dry-Run Rehearsal Evidence Gate
 
 Provider write dry-run rehearsal evidence is now checked by:

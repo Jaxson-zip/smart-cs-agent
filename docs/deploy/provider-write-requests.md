@@ -2,6 +2,28 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR64 Provider Write Live Executor Startup Guard
+
+PR64 adds a production startup guard for any future live provider write executor. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.
+
+The live executor remains disabled by default:
+
+```bash
+PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false
+PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256=""
+PROVIDER_WRITE_APPROVAL_SHA256=""
+```
+
+If production sets `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=true`, startup fails closed unless `PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256` and `PROVIDER_WRITE_APPROVAL_SHA256` are non-placeholder SHA-256 evidence hashes, `PROVIDER_WRITE_EXECUTION_KILL_SWITCH=true`, `PROVIDER_WRITE_PAYLOAD_ESCROW_MODE=sealed_metadata`, `PROVIDER_WRITE_REVIEW_ADAPTERS` has at least one low-risk allowlist, and `PROVIDER_CREDENTIALS` contains credential ref records without inline secret material. The app may store or log evidence hashes and credential fingerprints, but it must not store raw order IDs, logistics IDs, addresses, provider payloads, provider responses, idempotency keys, operator API keys, provider tokens, webhook secrets, or tenant secrets.
+
+Run:
+
+```bash
+npm run verify:provider-write-live-executor-startup-guard
+```
+
+This verifier checks the startup guard config, production launch docs, static CI wiring, and execution slices. It ensures PR64 does not call provider APIs, does not execute provider writes, does not read credential material, does not decrypt/open payload escrow, and does not send customer-visible replies.
+
 ## PR63 Provider Write Dry-Run Rehearsal Evidence Gate
 
 PR63 adds a sanitized evidence gate for rehearsing the provider write request, human review, and no-network execution-attempt chain. It validates `smart-cs-agent.provider-write-dry-run-rehearsal.v1` packages under `provider-write-dry-run-rehearsal-artifacts/`, but it does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies.

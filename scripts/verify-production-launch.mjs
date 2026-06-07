@@ -58,6 +58,8 @@ const files = {
     "scripts/verify-production-provider-write-approval.mjs",
   providerWriteDryRunRehearsalVerifier:
     "scripts/verify-provider-write-dry-run-rehearsal.mjs",
+  providerWriteLiveExecutorStartupGuardVerifier:
+    "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteRequestsVerifier:
     "scripts/verify-provider-write-requests.mjs",
   providerWriteApprovalStateVerifier:
@@ -128,6 +130,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-provider-write-approval:safe",
   "verify:provider-write-dry-run-rehearsal",
   "verify:provider-write-dry-run-rehearsal:safe",
+  "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-requests",
   "verify:provider-write-approval-state",
   "verify:provider-write-execution-attempts",
@@ -197,6 +200,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-provider-write-approval:safe",
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-dry-run-rehearsal:safe",
+  "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-requests",
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
@@ -254,6 +258,9 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
+  "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
+  "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
+  "PROVIDER_WRITE_APPROVAL_SHA256",
   "npm run verify:channel-runbook",
 ]);
 
@@ -375,6 +382,16 @@ mustContainAll("launch runbook customer-action boundary", content.launchRunbook,
   "customerVisibleMessageSent=false",
   "networkExecution=not_started",
   "requiresHuman=true",
+]);
+
+mustContainAll("Provider write live executor startup guard", content.launchRunbook, [
+  "Provider write live executor startup guard",
+  "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
+  "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
+  "PROVIDER_WRITE_APPROVAL_SHA256",
+  "npm run verify:provider-write-live-executor-startup-guard",
+  "does not call provider APIs",
+  "does not execute provider writes",
 ]);
 
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
@@ -502,6 +519,12 @@ mustContainAll("production readiness references provider write dry-run rehearsal
   "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-dry-run-rehearsal:safe",
+]);
+
+mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
+  "PR64 Provider Write Live Executor Startup Guard",
+  "npm run verify:provider-write-live-executor-startup-guard",
+  "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
 ]);
 
 mustContainAll("channel runbook references launch", content.channelRunbook, [
@@ -682,6 +705,13 @@ mustContainAll("provider write dry-run rehearsal verifier source", content.provi
   "providerMutationExecuted",
   "customerVisibleMessageSent",
   "payloadEscrowOpened",
+]);
+mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
+  "verify:provider-write-live-executor-startup-guard",
+  "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
+  "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
+  "PROVIDER_WRITE_APPROVAL_SHA256",
+  "execution boundary no live provider writes",
 ]);
 mustContainAll("provider write requests verifier source", content.providerWriteRequestsVerifier, [
   "verify:provider-write-requests",
@@ -990,6 +1020,11 @@ mustContainAll("provider write dry-run rehearsal docs reference", content.provid
   "npm run verify:provider-write-dry-run-rehearsal",
   "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
 ]);
+mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
+  "PR64 Provider Write Live Executor Startup Guard",
+  "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
+  "npm run verify:provider-write-live-executor-startup-guard",
+]);
 mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/request",
   "GET /v2/provider-writes/requests",
@@ -1027,6 +1062,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-execution-attempt-visibility",
   "npm run verify:provider-write-payload-escrow-boundary",
   "npm run verify:provider-write-dry-run-rehearsal",
+  "npm run verify:provider-write-live-executor-startup-guard",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

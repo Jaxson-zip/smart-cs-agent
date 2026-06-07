@@ -2,11 +2,30 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR63 - Provider Write Dry-Run Rehearsal Evidence Gate
+## Current Stage: PR64 - Provider Write Live Executor Startup Guard
 
-Status: verified locally; local commit pending. Remote push remains blocked until GitHub OAuth has workflow scope.
+Status: verified locally
 
-Previous Stage: PR62 - Provider Write Payload Escrow Boundary was verified locally and committed as `787ee42`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR63 - Provider Write Dry-Run Rehearsal Evidence Gate was verified locally and committed as `0983f94`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR64 adds a production startup guard for any future live provider write executor. `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` defaults to `false`; if production sets it to `true`, startup requires dry-run rehearsal and provider write approval evidence hashes, sealed metadata readiness, a review allowlist, credential ref records, and the execution kill switch still enabled. PR64 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, store raw provider/customer payloads, or send customer-visible replies.
+
+### PR64 Scope
+
+- Add `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`, `PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256`, and `PROVIDER_WRITE_APPROVAL_SHA256` config parsing.
+- Reject invalid or placeholder evidence hashes.
+- Fail closed in production when live provider write executor startup lacks dry-run evidence, approval evidence, kill-switch protection, sealed metadata readiness, review allowlists, or credential refs.
+- Add `npm run verify:provider-write-live-executor-startup-guard` and connect it to static CI, production launch, provider write docs, production readiness, task tracking, and progress notes.
+- Keep PR64 config-only/no-network: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR64
+
+- Live Taobao/Douyin provider write clients.
+- Runtime toggling of the execution kill switch through a control plane.
+- Reading credential material from a vault or secret manager.
+- Opening, decrypting, or releasing payload escrow.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR63 adds a sanitized provider write dry-run rehearsal evidence gate. `smart-cs-agent.provider-write-dry-run-rehearsal.v1` evidence lives under `provider-write-dry-run-rehearsal-artifacts/` and proves only that the request, human review, and no-network execution-attempt chain was rehearsed with fingerprints and safety booleans. PR63 must not call provider APIs, execute provider writes, read provider credentials, open or decrypt payload escrow, store raw tenant/customer/provider data, store raw idempotency keys, or send customer-visible replies.
 
@@ -230,10 +249,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR61 - Provider Write Execution Attempt Invariants And Visibility.
 - [x] PR62 - Provider Write Payload Escrow Boundary.
 - [x] PR63 - Provider Write Dry-Run Rehearsal Evidence Gate.
+- [x] PR64 - Provider Write Live Executor Startup Guard.
 
 ## Verification Gate
 
-PR63 provider write dry-run rehearsal evidence gate is tracked against this gate inventory:
+PR64 provider write live executor startup guard is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -313,6 +333,9 @@ PR63 provider write dry-run rehearsal evidence gate is tracked against this gate
 - `node --test scripts/verify-provider-write-dry-run-rehearsal.test.mjs`
 - `npm.cmd run verify:provider-write-dry-run-rehearsal`
 - `npm.cmd run verify:provider-write-dry-run-rehearsal:safe`
+- `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
+- `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
+- `npm.cmd run verify:provider-write-live-executor-startup-guard`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
@@ -367,6 +390,18 @@ PR63 provider write dry-run rehearsal evidence gate is tracked against this gate
 - `git diff --check` passed with CRLF warnings only.
 - Read-only security review found no P0/P1/P2/P3 findings. Read-only launch/static CI review found no P0/P1/P2 findings; its P3 test-hardening finding was fixed by checking the exact verifier ordering assertion block.
 - PR63 remains no-network evidence only: no provider API calls, no provider credentials, no vault/decrypt access, no payload escrow opening, no real Taobao/Douyin mutation, no raw provider/customer payload storage, no raw idempotency-key output, and no customer-visible message send has been enabled.
+
+### PR64 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 198 tests when rerun alone from the repository cwd, avoiding the known broad parallel sandbox cwd false failure mode.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 75 tests.
+- `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs` passed with 3 tests.
+- `npm.cmd run verify:provider-write-live-executor-startup-guard`, `npm.cmd run verify:provider-write-dry-run-rehearsal`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 124 pass / 1 skipped. The skipped test is the existing Windows symlink-permission case.
+- `git diff --check` passed with CRLF warnings only.
+- Read-only security review and read-only launch/static CI review found no P0/P1/P2/P3 findings.
+- PR64 remains config-only/no-network: `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED` defaults to `false`; production startup fails closed without dry-run and approval evidence hashes, sealed metadata readiness, review allowlists, credential refs, and the execution kill switch still enabled. No provider API calls, provider writes, credential material reads, payload escrow opening/decrypting, raw provider/customer payload storage, or customer-visible replies have been enabled.
 
 ### PR60 Final Verification Notes
 

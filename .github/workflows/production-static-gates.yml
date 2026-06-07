@@ -69,6 +69,7 @@ jobs:
           node --test scripts/verify-provider-write-execution-attempt-visibility.test.mjs
           node --test scripts/verify-provider-write-payload-escrow-boundary.test.mjs
           node --test scripts/verify-provider-write-dry-run-rehearsal.test.mjs
+          node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs
 
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present -- --pretty false
@@ -112,6 +113,7 @@ jobs:
           npm run verify:provider-write-execution-attempt-visibility
           npm run verify:provider-write-payload-escrow-boundary
           npm run verify:provider-write-dry-run-rehearsal
+          npm run verify:provider-write-live-executor-startup-guard
           npm run verify:provider-credential-boundary
           npm run verify:provider-credential-store
           npm run verify:provider-read-harness

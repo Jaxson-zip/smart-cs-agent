@@ -4,6 +4,7 @@ import {
   loadApiConfig,
   loadProviderCredentialRefs,
   providerWriteExecutionKillSwitchEnabled,
+  providerWriteLiveExecutorEnabled,
   providerWritePayloadEscrowMode,
   loadProviderWriteReviewAdapterConfigs,
   loadWebOrigin,
@@ -29,6 +30,9 @@ describe("loadApiConfig", () => {
       providerReadonlyAdapters: [],
       providerWriteReviewAdapters: [],
       providerWriteExecutionKillSwitch: true,
+      providerWriteLiveExecutorEnabled: false,
+      providerWriteDryRunRehearsalSha256: "",
+      providerWriteApprovalSha256: "",
       providerWritePayloadEscrowMode: "disabled",
       providerReadTimeoutMs: 5000,
       providerReadMaxRetries: 0,
@@ -127,6 +131,164 @@ describe("loadApiConfig", () => {
       }),
       true,
     );
+  });
+
+  it("keeps provider write live executor disabled unless explicitly configured", () => {
+    assert.strictEqual(providerWriteLiveExecutorEnabled({}), false);
+    assert.strictEqual(
+      providerWriteLiveExecutorEnabled({
+        PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "false",
+      }),
+      false,
+    );
+    assert.strictEqual(
+      providerWriteLiveExecutorEnabled({
+        PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "true",
+      }),
+      true,
+    );
+    assert.strictEqual(
+      providerWriteLiveExecutorEnabled({
+        PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "not-a-boolean",
+      }),
+      false,
+    );
+  });
+
+  it("rejects unsafe provider write live executor evidence hashes", () => {
+    for (const [field, value] of [
+      ["PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256", "0".repeat(64)],
+      ["PROVIDER_WRITE_APPROVAL_SHA256", "not-a-sha256"],
+      ["PROVIDER_WRITE_APPROVAL_SHA256", "A".repeat(64)],
+    ] as const) {
+      assert.throws(
+        () =>
+          loadApiConfig(
+            {
+              DATABASE_URL:
+                "postgresql://user:pass@localhost:5432/smart_cs_agent",
+              [field]: value,
+            },
+            { includeDotEnv: false },
+          ),
+        new RegExp(field),
+      );
+    }
+  });
+
+  it("fails closed when production live provider writes are enabled without every startup guard", () => {
+    const cases: Array<{
+      env: Record<string, string>;
+      expected: RegExp;
+    }> = [
+      {
+        env: {
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "",
+        },
+        expected: /PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256/,
+      },
+      {
+        env: {
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+          PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+          PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "false",
+          PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+          PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+            {
+              channel: "taobao",
+              tenantId: "tenant_1",
+              allowedActions: ["issue_coupon"],
+            },
+          ]),
+          PROVIDER_CREDENTIALS: JSON.stringify([
+            { credentialRef: "secret://smartcs/taobao/tenant_1" },
+          ]),
+        },
+        expected: /PROVIDER_WRITE_EXECUTION_KILL_SWITCH/,
+      },
+      {
+        env: {
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+          PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+          PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+          PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "disabled",
+          PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+            {
+              channel: "taobao",
+              tenantId: "tenant_1",
+              allowedActions: ["issue_coupon"],
+            },
+          ]),
+          PROVIDER_CREDENTIALS: JSON.stringify([
+            { credentialRef: "secret://smartcs/taobao/tenant_1" },
+          ]),
+        },
+        expected: /PROVIDER_WRITE_PAYLOAD_ESCROW_MODE/,
+      },
+      {
+        env: {
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+          PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+          PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+          PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+          PROVIDER_WRITE_REVIEW_ADAPTERS: "[]",
+          PROVIDER_CREDENTIALS: JSON.stringify([
+            { credentialRef: "secret://smartcs/taobao/tenant_1" },
+          ]),
+        },
+        expected: /PROVIDER_WRITE_REVIEW_ADAPTERS/,
+      },
+      {
+        env: {
+          PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+          PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+          PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+          PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+          PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+            {
+              channel: "taobao",
+              tenantId: "tenant_1",
+              allowedActions: ["issue_coupon"],
+            },
+          ]),
+          PROVIDER_CREDENTIALS: "[]",
+        },
+        expected: /PROVIDER_CREDENTIALS/,
+      },
+    ];
+
+    for (const item of cases) {
+      assert.throws(
+        () =>
+          loadApiConfig(
+            {
+              ...providerWriteLiveExecutorProductionEnv(),
+              ...item.env,
+            },
+            { includeDotEnv: false },
+          ),
+        item.expected,
+      );
+    }
+  });
+
+  it("accepts production live provider write startup only with all guard evidence and kill switch enabled", () => {
+    const config = loadApiConfig(providerWriteLiveExecutorProductionEnv(), {
+      includeDotEnv: false,
+    });
+
+    assert.strictEqual(config.providerWriteLiveExecutorEnabled, true);
+    assert.strictEqual(config.providerWriteExecutionKillSwitch, true);
+    assert.strictEqual(config.providerWritePayloadEscrowMode, "sealed_metadata");
+    assert.strictEqual(config.providerWriteDryRunRehearsalSha256, "a".repeat(64));
+    assert.strictEqual(config.providerWriteApprovalSha256, "b".repeat(64));
+    assert.deepStrictEqual(config.providerWriteReviewAdapters, [
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]);
   });
 
   it("lets explicit environment values override local .env defaults", () => {
@@ -563,3 +725,25 @@ describe("loadApiConfig", () => {
     assert.strictEqual(config.realChannelWebhookRateLimitPerMinute, 60);
   });
 });
+
+function providerWriteLiveExecutorProductionEnv() {
+  return {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://user:pass@localhost:5432/smart_cs_agent",
+    PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: "true",
+    PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: "a".repeat(64),
+    PROVIDER_WRITE_APPROVAL_SHA256: "b".repeat(64),
+    PROVIDER_WRITE_EXECUTION_KILL_SWITCH: "true",
+    PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: "sealed_metadata",
+    PROVIDER_WRITE_REVIEW_ADAPTERS: JSON.stringify([
+      {
+        channel: "taobao",
+        tenantId: "tenant_1",
+        allowedActions: ["issue_coupon"],
+      },
+    ]),
+    PROVIDER_CREDENTIALS: JSON.stringify([
+      { credentialRef: "secret://smartcs/taobao/tenant_1" },
+    ]),
+  };
+}

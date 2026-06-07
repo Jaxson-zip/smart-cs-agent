@@ -128,6 +128,21 @@ const providerWritePayloadEscrowModeEnvSchema = z
   .optional()
   .default("disabled");
 
+const sha256EvidenceSchema = (fieldName: string) =>
+  z
+    .string()
+    .optional()
+    .default("")
+    .superRefine((value, context) => {
+      if (value === "") return;
+      if (!/^[a-f0-9]{64}$/.test(value) || /^0+$/.test(value)) {
+        context.addIssue({
+          code: "custom",
+          message: `${fieldName} must be a non-placeholder lowercase sha256 hash`,
+        });
+      }
+    });
+
 const apiConfigSchema = z.object({
   NODE_ENV: z.string().optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(4100),
@@ -183,6 +198,17 @@ const apiConfigSchema = z.object({
     .optional()
     .default("true")
     .transform((value) => value === "true"),
+  PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
+  PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: sha256EvidenceSchema(
+    "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
+  ),
+  PROVIDER_WRITE_APPROVAL_SHA256: sha256EvidenceSchema(
+    "PROVIDER_WRITE_APPROVAL_SHA256",
+  ),
   PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: providerWritePayloadEscrowModeEnvSchema,
 });
 
@@ -202,6 +228,9 @@ export type ApiConfig = {
   providerReadonlyAdapters: ProviderReadonlyAdapterConfig[];
   providerWriteReviewAdapters: ProviderWriteReviewAdapterConfig[];
   providerWriteExecutionKillSwitch: boolean;
+  providerWriteLiveExecutorEnabled: boolean;
+  providerWriteDryRunRehearsalSha256: string;
+  providerWriteApprovalSha256: string;
   providerWritePayloadEscrowMode: ProviderWritePayloadEscrowMode;
   providerReadTimeoutMs: number;
   providerReadMaxRetries: number;
@@ -261,7 +290,10 @@ export function loadApiConfig(
     throw new Error(`Invalid API configuration: ${details}`);
   }
 
-  const productionGateIssues = productionRealChannelIntakeIssues(mergedEnv);
+  const productionGateIssues = [
+    ...productionRealChannelIntakeIssues(mergedEnv),
+    ...productionProviderWriteLiveExecutorIssues(parsed.data, mergedEnv),
+  ];
   if (productionGateIssues.length > 0) {
     throw new Error(
       `Invalid API configuration: ${productionGateIssues.join("; ")}`,
@@ -285,6 +317,12 @@ export function loadApiConfig(
     providerWriteReviewAdapters: parsed.data.PROVIDER_WRITE_REVIEW_ADAPTERS,
     providerWriteExecutionKillSwitch:
       parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH,
+    providerWriteLiveExecutorEnabled:
+      parsed.data.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED,
+    providerWriteDryRunRehearsalSha256:
+      parsed.data.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256,
+    providerWriteApprovalSha256:
+      parsed.data.PROVIDER_WRITE_APPROVAL_SHA256,
     providerWritePayloadEscrowMode:
       parsed.data.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE,
     providerReadTimeoutMs: parsed.data.PROVIDER_READ_TIMEOUT_MS,
@@ -301,6 +339,17 @@ export function providerWriteExecutionKillSwitchEnabled(
 
   if (!parsed.success) return true;
   return parsed.data.PROVIDER_WRITE_EXECUTION_KILL_SWITCH;
+}
+
+export function providerWriteLiveExecutorEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const parsed = apiConfigSchema.pick({
+    PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED: true,
+  }).safeParse(env);
+
+  if (!parsed.success) return false;
+  return parsed.data.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED;
 }
 
 export function providerWritePayloadEscrowMode(
@@ -513,6 +562,60 @@ function productionRealChannelIntakeIssues(
   if (readRequiredPositiveInt(env.CHANNEL_QUEUE_STALE_AFTER_MINUTES) === undefined) {
     issues.push(
       "CHANNEL_QUEUE_STALE_AFTER_MINUTES: production real-channel intake requires a stale-processing age window",
+    );
+  }
+
+  return issues;
+}
+
+type ParsedApiConfigEnv = z.infer<typeof apiConfigSchema>;
+
+function productionProviderWriteLiveExecutorIssues(
+  config: ParsedApiConfigEnv,
+  env: Record<string, string | undefined>,
+) {
+  if (
+    env.NODE_ENV !== "production" ||
+    !config.PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED
+  ) {
+    return [];
+  }
+
+  const issues: string[] = [];
+
+  if (!config.PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256) {
+    issues.push(
+      "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256: production live provider write executor requires sanitized dry-run rehearsal evidence hash",
+    );
+  }
+  if (!config.PROVIDER_WRITE_APPROVAL_SHA256) {
+    issues.push(
+      "PROVIDER_WRITE_APPROVAL_SHA256: production live provider write executor requires sanitized provider write approval evidence hash",
+    );
+  }
+  if (!config.PROVIDER_WRITE_EXECUTION_KILL_SWITCH) {
+    issues.push(
+      "PROVIDER_WRITE_EXECUTION_KILL_SWITCH: production live provider write executor must start with the kill switch enabled",
+    );
+  }
+  if (config.PROVIDER_WRITE_PAYLOAD_ESCROW_MODE !== "sealed_metadata") {
+    issues.push(
+      "PROVIDER_WRITE_PAYLOAD_ESCROW_MODE: production live provider write executor requires sealed_metadata escrow readiness",
+    );
+  }
+  if (config.PROVIDER_WRITE_REVIEW_ADAPTERS.length === 0) {
+    issues.push(
+      "PROVIDER_WRITE_REVIEW_ADAPTERS: production live provider write executor requires at least one review allowlist",
+    );
+  }
+
+  const providerCredentials = loadProviderCredentialRefs(env);
+  if (
+    providerCredentials.status !== "configured" ||
+    providerCredentials.records.length === 0
+  ) {
+    issues.push(
+      "PROVIDER_CREDENTIALS: production live provider write executor requires at least one credential ref record without inline secret material",
     );
   }
 
