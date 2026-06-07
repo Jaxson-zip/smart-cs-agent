@@ -36,7 +36,7 @@ The scanner containers receive image tags and a local artifacts directory only. 
 
 The verifier does not print scanner stdout, scanner stderr, report bodies, response bodies, metric bodies, or generated evidence paths. Failure output uses fixed labels so a future scanner output cannot leak sensitive values into CI logs.
 
-The workflow example does not read GitHub secrets, does not authenticate to a registry, does not publish images, and does not promote artifacts. If a later release process adds registry publishing, signing, SBOM attestation, provenance, or vulnerability waivers, it must happen in a separate reviewed stage.
+The workflow example does not read GitHub secrets, does not authenticate to a registry, does not publish images, and does not promote artifacts. Release provenance and promotion-readiness checks belong to `npm run verify:production-release-provenance` and `docs/deploy/production-release-provenance.yml.example`, which still consume only sanitized evidence and do not publish images.
 
 ## Scanner Inputs
 
@@ -58,8 +58,9 @@ Do not include tokens, usernames, passwords, registry credentials, query strings
 After image security evidence passes, continue to run:
 
 ```bash
+npm run verify:production-release-provenance
 npm run verify:production-readiness -- --env-file=<secure-production-env> --api=<public-api-url>
 npm run verify:production-canary -- --api=<public-api-url> --max-stale-processing=0 --max-oldest-pending-age-seconds=900
 ```
 
-Those gates prove deployment-specific readiness. PR50 only proves the local release images have SBOM and vulnerability evidence before they are eligible for publishing or deployment.
+Those gates prove release provenance and deployment-specific readiness. PR50 only proves the local release images have SBOM and vulnerability evidence before they are eligible for publishing or deployment.

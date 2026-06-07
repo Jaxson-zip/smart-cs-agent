@@ -30,6 +30,8 @@
     "verify:production-container-smoke:docker": "node scripts/verify-production-container-smoke.mjs --docker",
     "verify:production-image-security": "node scripts/verify-production-image-security.mjs",
     "verify:production-image-security:docker": "node scripts/verify-production-image-security.mjs --docker",
+    "verify:production-release-provenance": "node scripts/verify-production-release-provenance.mjs",
+    "verify:production-release-provenance:safe": "node scripts/verify-production-release-provenance.mjs --from-env",
     "verify:production-launch": "node scripts/verify-production-launch.mjs",
     "verify:provider-adapters": "node scripts/verify-provider-adapters.mjs",
     "verify:provider-readonly": "node scripts/verify-provider-readonly.mjs",

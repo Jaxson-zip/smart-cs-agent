@@ -34,6 +34,7 @@ Launch may proceed only when all of these are true:
 - `npm run verify:production-image-builds` passes from the release branch, and `npm run verify:production-image-builds:docker` passes in a Docker-enabled CI job before publishing or deploying images.
 - `npm run verify:production-container-smoke` passes from the release branch, and `npm run verify:production-container-smoke:docker` passes in a Docker-enabled CI job to prove the built API/Web containers start before publishing or deploying images.
 - `npm run verify:production-image-security` passes from the release branch, and `npm run verify:production-image-security:docker` passes in a Docker-enabled CI job to produce SBOM and vulnerability evidence before publishing or deploying images.
+- `npm run verify:production-release-provenance` passes from the release branch, and `npm run verify:production-release-provenance:safe` verifies sanitized promotion evidence with `SMARTCS_RELEASE_PROVENANCE_FILE` and `SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true`.
 - `npm run verify:production-alerting` and `npm run verify:channel-runbook` pass from the release branch.
 - `npm run verify:provider-adapters` passes, and the Provider adapter contract still shows no real provider network calls, no real commerce writes, and no customer-visible actions for current Taobao/Douyin adapters.
 - `npm run verify:provider-readonly` passes when `PROVIDER_READONLY_ADAPTERS` or provider contract projection changes.
@@ -71,6 +72,7 @@ npm run verify:production-deploy-artifacts
 npm run verify:production-image-builds
 npm run verify:production-container-smoke
 npm run verify:production-image-security
+npm run verify:production-release-provenance
 npm run verify:production-alerting
 npm run verify:provider-adapters
 npm run verify:provider-readonly
@@ -83,7 +85,7 @@ npm run verify:provider-read-harness
 npm run verify:channel-runbook
 ```
 
-Inject `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_MANIFEST_FILE`, `SMARTCS_LAUNCH_EVIDENCE_DIR`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true`, `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true`, and `SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true` through the CI secret/environment layer before running the safe commands. Use `SMARTCS_LAUNCH_EVIDENCE_OUT` for generation, `SMARTCS_LAUNCH_EVIDENCE_FILE` for single archive verification, and `SMARTCS_LAUNCH_MANIFEST_FILE` plus `SMARTCS_LAUNCH_EVIDENCE_DIR` for multi-merchant manifest verification. Do not pass raw tenant IDs, env-file paths, evidence output paths, evidence archive paths, manifest paths, or evidence directories as npm command arguments in recorded launch logs.
+Inject `SMARTCS_LAUNCH_ENV_FILE`, `SMARTCS_LAUNCH_TENANT`, `SMARTCS_LAUNCH_CHANNEL`, `SMARTCS_LAUNCH_EVIDENCE_OUT`, `SMARTCS_LAUNCH_EVIDENCE_FILE`, `SMARTCS_LAUNCH_MANIFEST_FILE`, `SMARTCS_LAUNCH_EVIDENCE_DIR`, `SMARTCS_LAUNCH_REQUIRE_REAL_CHANNEL=true`, `SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true`, `SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true`, `SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true`, `SMARTCS_RELEASE_PROVENANCE_FILE`, and `SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true` through the CI secret/environment layer before running the safe commands. Use `SMARTCS_LAUNCH_EVIDENCE_OUT` for generation, `SMARTCS_LAUNCH_EVIDENCE_FILE` for single archive verification, `SMARTCS_LAUNCH_MANIFEST_FILE` plus `SMARTCS_LAUNCH_EVIDENCE_DIR` for multi-merchant manifest verification, and `SMARTCS_RELEASE_PROVENANCE_FILE` for sanitized release provenance verification. Do not pass raw tenant IDs, env-file paths, evidence output paths, evidence archive paths, manifest paths, evidence directories, or release provenance paths as npm command arguments in recorded launch logs.
 
 Do not put operator API keys, webhook secrets, signatures, raw request bodies, customer messages, provider payloads, tenant IDs, or API URLs with query-string secrets into the deploy ticket, CI logs, Prometheus labels, alert annotations, or this repository.
 
@@ -197,6 +199,10 @@ See `docs/deploy/production-container-smoke.md` for the runtime smoke gate and `
 Run `npm run verify:production-image-security` alongside it when SBOM/vulnerability scan scripts, image security CI examples, scanner policy, or security evidence guidance changes. Run `npm run verify:production-image-security:docker` in CI or another Docker-enabled environment before publishing image artifacts.
 
 See `docs/deploy/production-image-security.md` for the image security evidence gate and `docs/deploy/production-image-security.yml.example` for the GitHub Actions template.
+
+Run `npm run verify:production-release-provenance` alongside it when release provenance scripts, promotion evidence shape, image digest policy, signing/provenance/SBOM attestation checks, or release promotion guidance changes. Run `npm run verify:production-release-provenance:safe` in CI or a launch terminal after `SMARTCS_RELEASE_PROVENANCE_FILE` and `SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true` are injected.
+
+See `docs/deploy/production-release-provenance.md` for the release provenance boundary and `docs/deploy/production-release-provenance.yml.example` for the GitHub Actions template.
 
 Run `npm run verify:provider-readonly` alongside it when `PROVIDER_READONLY_ADAPTERS`, provider readonly config parsing, or `readCapabilities` changes.
 

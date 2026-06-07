@@ -13,6 +13,7 @@
 # testing
 /coverage
 production-image-security-artifacts/
+production-release-provenance-artifacts/
 
 # next.js
 /.next/

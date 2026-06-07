@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR51 Production Release Provenance And Promotion Boundary
+
+Production release provenance is now checked by:
+
+```bash
+npm run verify:production-release-provenance
+npm run verify:production-release-provenance:safe
+```
+
+The default command validates the release provenance gate, docs, workflow example, and launch references. The safe command reads a sanitized `smart-cs-agent.release-provenance.v1` evidence bundle from `SMARTCS_RELEASE_PROVENANCE_FILE` and can require passing image build, container smoke, image security, signature, provenance, SBOM attestation, and promotion approval facts through `SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true`. Use `docs/deploy/production-release-provenance.yml.example` after the image build, container smoke, and image security workflows. This gate still does not publish images, authenticate to a registry, read deployment secrets, sign artifacts, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR50 Production Image Security Evidence Gate
 
 Production image security evidence is now checked by:

@@ -21,6 +21,10 @@ const files = {
   productionImageSecurity: "docs/deploy/production-image-security.md",
   productionImageSecurityWorkflow:
     "docs/deploy/production-image-security.yml.example",
+  productionReleaseProvenance:
+    "docs/deploy/production-release-provenance.md",
+  productionReleaseProvenanceWorkflow:
+    "docs/deploy/production-release-provenance.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
@@ -30,6 +34,8 @@ const files = {
     "scripts/verify-production-container-smoke.mjs",
   productionImageSecurityVerifier:
     "scripts/verify-production-image-security.mjs",
+  productionReleaseProvenanceVerifier:
+    "scripts/verify-production-release-provenance.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -74,6 +80,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-container-smoke:docker",
   "verify:production-image-security",
   "verify:production-image-security:docker",
+  "verify:production-release-provenance",
+  "verify:production-release-provenance:safe",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -124,6 +132,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-image-builds",
   "npm run verify:production-container-smoke",
   "npm run verify:production-image-security",
+  "npm run verify:production-release-provenance",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -149,6 +158,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_LAUNCH_REQUIRE_PROVIDER_READONLY=true",
   "SMARTCS_LAUNCH_EVIDENCE_REQUIRE_PASS=true",
   "SMARTCS_LAUNCH_MANIFEST_REQUIRE_PASS=true",
+  "SMARTCS_RELEASE_PROVENANCE_FILE",
+  "SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -177,6 +188,15 @@ mustContainAll("launch runbook image security", content.launchRunbook, [
   "docs/deploy/production-image-security.yml.example",
   "npm run verify:production-image-security",
   "npm run verify:production-image-security:docker",
+]);
+
+mustContainAll("launch runbook release provenance", content.launchRunbook, [
+  "docs/deploy/production-release-provenance.md",
+  "docs/deploy/production-release-provenance.yml.example",
+  "npm run verify:production-release-provenance",
+  "npm run verify:production-release-provenance:safe",
+  "SMARTCS_RELEASE_PROVENANCE_FILE",
+  "SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true",
 ]);
 
 mustContainAll("launch runbook rollback controls", content.launchRunbook, [
@@ -278,6 +298,13 @@ mustContainAll("production readiness references image security", content.product
   "npm run verify:production-image-security:docker",
 ]);
 
+mustContainAll("production readiness references release provenance", content.productionReadiness, [
+  "PR51 Production Release Provenance And Promotion Boundary",
+  "docs/deploy/production-release-provenance.yml.example",
+  "npm run verify:production-release-provenance",
+  "npm run verify:production-release-provenance:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -321,6 +348,12 @@ mustContainAll("task plan references PR50", content.taskPlan, [
   "production-image-security.yml.example",
 ]);
 
+mustContainAll("task plan references PR51", content.taskPlan, [
+  "PR51 - Production Release Provenance And Promotion Boundary",
+  "verify:production-release-provenance",
+  "production-release-provenance.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -328,6 +361,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-image-builds",
   "verify:production-container-smoke",
   "verify:production-image-security",
+  "verify:production-release-provenance",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -407,6 +441,14 @@ mustContainAll("production image security verifier source", content.productionIm
   "spdx-json",
   "--severity",
 ]);
+mustContainAll("production release provenance verifier source", content.productionReleaseProvenanceVerifier, [
+  "verify:production-release-provenance",
+  "smart-cs-agent.release-provenance.v1",
+  "signatureVerified",
+  "provenanceVerified",
+  "sbomAttestationVerified",
+  "promotion.approval",
+]);
 mustContainAll("production image build docs", content.productionImageBuilds, [
   "PR48 Production Image Build Gate",
   "npm run verify:production-image-builds",
@@ -439,6 +481,20 @@ mustContainAll("production image security workflow", content.productionImageSecu
   "permissions:",
   "contents: read",
   "npm run verify:production-image-security:docker",
+  "actions/upload-artifact@v4",
+]);
+mustContainAll("production release provenance docs", content.productionReleaseProvenance, [
+  "PR51 Production Release Provenance And Promotion Boundary",
+  "npm run verify:production-release-provenance",
+  "npm run verify:production-release-provenance:safe",
+  "smart-cs-agent.release-provenance.v1",
+  "does not publish images",
+]);
+mustContainAll("production release provenance workflow", content.productionReleaseProvenanceWorkflow, [
+  "permissions:",
+  "contents: read",
+  "npm run verify:production-release-provenance",
+  "npm run verify:production-release-provenance:safe",
   "actions/upload-artifact@v4",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
@@ -481,6 +537,8 @@ mustNotContainUnsafeExamples({
   productionContainerSmokeWorkflow: content.productionContainerSmokeWorkflow,
   productionImageSecurity: content.productionImageSecurity,
   productionImageSecurityWorkflow: content.productionImageSecurityWorkflow,
+  productionReleaseProvenance: content.productionReleaseProvenance,
+  productionReleaseProvenanceWorkflow: content.productionReleaseProvenanceWorkflow,
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,

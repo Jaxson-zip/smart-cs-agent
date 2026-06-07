@@ -1,0 +1,57 @@
+name: smart-cs-agent production release provenance
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-provenance:
+    name: Verify production release provenance boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify deployment artifact metadata
+        run: npm run verify:production-deploy-artifacts
+
+      - name: Build production images without publishing
+        run: npm run verify:production-image-builds:docker
+
+      - name: Smoke production containers without publishing
+        run: npm run verify:production-container-smoke:docker
+
+      - name: Generate SBOM and vulnerability evidence
+        run: npm run verify:production-image-security:docker -- --artifacts-dir=production-image-security-artifacts
+
+      - name: Verify release provenance static boundary
+        run: npm run verify:production-release-provenance
+
+      - name: Import sanitized release provenance evidence
+        env:
+          SMARTCS_RELEASE_PROVENANCE_FILE: production-release-provenance-artifacts/release-provenance.json
+        run: test -f "$SMARTCS_RELEASE_PROVENANCE_FILE"
+
+      - name: Verify sanitized release provenance evidence
+        env:
+          SMARTCS_RELEASE_PROVENANCE_FILE: production-release-provenance-artifacts/release-provenance.json
+          SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS: "true"
+        run: npm run verify:production-release-provenance:safe
+
+      - name: Upload release provenance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-release-provenance-artifacts
+          path: production-release-provenance-artifacts
+          if-no-files-found: error

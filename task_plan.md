@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR50 - Production Image Security Evidence Gate
+## Current Stage: PR51 - Production Release Provenance And Promotion Boundary
 
 Status: verified
 
-Previous Stage: PR49 - Production Container Runtime Smoke Gate was verified.
+Previous Stage: PR50 - Production Image Security Evidence Gate was verified.
+
+Image Security Stage: PR50 - Production Image Security Evidence Gate was verified with `production-image-security.yml.example` and must stay connected to production launch and release provenance checks.
 
 Container Runtime Stage: PR49 - Production Container Runtime Smoke Gate was verified with `production-container-smoke.yml.example` and must stay connected to production launch and image security checks.
 
@@ -40,22 +42,22 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR50 adds a production image security evidence gate. It gives release owners a static image-security verifier, a Docker-backed command that generates SBOM and vulnerability reports for API/Web images, and a GitHub Actions example that uploads sanitized evidence without publishing images.
+PR51 adds a production release provenance and promotion boundary. It gives release owners a static release-provenance verifier, a safe env-mode verifier for sanitized provenance bundles, and a GitHub Actions example that checks image digest, signing/provenance/SBOM-attestation facts, prior image gates, and promotion approval without publishing images or reading secrets.
 
-### PR50 Scope
+### PR51 Scope
 
-- Add `npm run verify:production-image-security` for static image-security evidence checks.
-- Add `npm run verify:production-image-security:docker` to run SBOM and vulnerability scans against local API and Web image tags without publishing them.
-- Add `docs/deploy/production-image-security.md`.
-- Add `docs/deploy/production-image-security.yml.example` as a build-smoke-scan GitHub Actions template.
-- Connect image security checks into production readiness, deployment artifact docs, image build docs, container smoke docs, launch runbook, and `verify:production-launch`.
-- Keep the image security gate evidence-only: no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in scan commands or CI examples.
+- Add `npm run verify:production-release-provenance` for static release-provenance and promotion-boundary checks.
+- Add `npm run verify:production-release-provenance:safe` to verify sanitized `smart-cs-agent.release-provenance.v1` evidence from `SMARTCS_RELEASE_PROVENANCE_FILE`.
+- Add `docs/deploy/production-release-provenance.md`.
+- Add `docs/deploy/production-release-provenance.yml.example` as a build-smoke-scan-provenance GitHub Actions template.
+- Connect release provenance checks into production readiness, deployment artifact docs, image security docs, launch runbook, and `verify:production-launch`.
+- Keep the release provenance gate evidence-only: no registry login, no image push, no GitHub secrets, no registry credentials, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in release provenance commands or CI examples.
 
-### Out Of Scope For PR50
+### Out Of Scope For PR51
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
-- Signing images, SBOM attestation, provenance signing, vulnerability waiver policy, or promotion rules.
+- Performing real image signing, SBOM attestation upload, provenance signing, registry publish, vulnerability waiver approval, or deployment promotion.
 - Choosing a final cloud vendor, Kubernetes chart, Terraform stack, or managed secret store.
 - Live Taobao/Douyin order or logistics API calls.
 - Returning real provider order, logistics, customer, or payload data.
@@ -131,10 +133,11 @@ PR50 adds a production image security evidence gate. It gives release owners a s
 - [x] PR48 production image build gate.
 - [x] PR49 production container runtime smoke gate.
 - [x] PR50 production image security evidence gate.
+- [x] PR51 production release provenance and promotion boundary.
 
 ## Verification Gate
 
-Do not claim PR50 production image security evidence gate complete until these pass:
+Do not claim PR51 production release provenance and promotion boundary complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -174,6 +177,9 @@ Do not claim PR50 production image security evidence gate complete until these p
 - `node --check scripts/verify-production-image-security.mjs`
 - `node --test scripts/verify-production-image-security.test.mjs`
 - `npm.cmd run verify:production-image-security`
+- `node --check scripts/verify-production-release-provenance.mjs`
+- `node --test scripts/verify-production-release-provenance.test.mjs`
+- `npm.cmd run verify:production-release-provenance`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`
