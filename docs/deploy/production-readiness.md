@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR53 Production Change Approval Gate
+
+Production change approval is now checked by:
+
+```bash
+npm run verify:production-change-approval
+npm run verify:production-change-approval:safe
+```
+
+The default command validates the change approval gate, docs, workflow example, and launch references. The safe command reads a sanitized `smart-cs-agent.production-change-approval.v1` package from `SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE` and can require approved product/engineering/security/operations signoff, rollback owner, kill-switch readiness, rollback drill, operator coverage, freeze window, communication readiness, and safety facts through `SMARTCS_PRODUCTION_CHANGE_APPROVAL_REQUIRE_PASS=true`. Use `docs/deploy/production-change-approval.yml.example` after release evidence has been exported. This gate still does not call the API, connect to a database, publish images, authenticate to a registry, read deployment secrets, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
+
 ## PR52 Production Release Evidence Archive
 
 Production release evidence is now checked by:

@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR52 - Production Release Evidence Archive
+## Current Stage: PR53 - Production Change Approval Gate
 
 Status: verified
 
-Previous Stage: PR51 - Production Release Provenance And Promotion Boundary was verified.
+Previous Stage: PR52 - Production Release Evidence Archive was verified.
+
+Release Evidence Stage: PR52 - Production Release Evidence Archive was verified with `production-release-evidence.yml.example` and must stay connected to production launch and change approval checks.
 
 Release Provenance Stage: PR51 - Production Release Provenance And Promotion Boundary was verified with `production-release-provenance.yml.example` and must stay connected to production launch and release evidence checks.
 
@@ -44,18 +46,18 @@ Provider Adapter Stage: PR35 - Provider Adapter Contract Package was verified an
 
 Launch Runbook Stage: PR34 - Production Launch And Rollback Runbook remains verified and must stay connected to launch checks.
 
-PR52 adds a production release evidence archive. It gives release owners a static release-evidence verifier, a safe env-mode verifier for sanitized post-deploy release evidence bundles, and a GitHub Actions example that binds release provenance, launch manifest, production readiness, production canary, rollback ownership, operator coverage, and safety facts without calling production services or reading secrets.
+PR53 adds a production change approval gate. It gives release owners a static change-approval verifier, a safe env-mode verifier for sanitized change approval packages, and a GitHub Actions example that binds approvals, freeze window, rollback owner, kill-switch readiness, rollback drill, operator coverage, communication readiness, and safety facts without calling production services or reading secrets.
 
-### PR52 Scope
+### PR53 Scope
 
-- Add `npm run verify:production-release-evidence` for static post-deploy evidence archive checks.
-- Add `npm run verify:production-release-evidence:safe` to verify sanitized `smart-cs-agent.production-release-evidence.v1` evidence from `SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE`.
-- Add `docs/deploy/production-release-evidence.md`.
-- Add `docs/deploy/production-release-evidence.yml.example` as a release-evidence GitHub Actions template.
-- Connect release evidence checks into production readiness, release provenance docs, launch runbook, and `verify:production-launch`.
-- Keep the release evidence gate archive-only: no API calls, no database calls, no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in release evidence commands or CI examples.
+- Add `npm run verify:production-change-approval` for static change approval package checks.
+- Add `npm run verify:production-change-approval:safe` to verify sanitized `smart-cs-agent.production-change-approval.v1` evidence from `SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE`.
+- Add `docs/deploy/production-change-approval.md`.
+- Add `docs/deploy/production-change-approval.yml.example` as a change-approval GitHub Actions template.
+- Connect change approval checks into production readiness, release evidence docs, launch runbook, and `verify:production-launch`.
+- Keep the change approval gate archive-only: no API calls, no database calls, no registry login, no image push, no GitHub secrets, no runtime secrets, no tenant IDs, no provider credentials, no customer data, and no real channel or provider actions in change approval commands or CI examples.
 
-### Out Of Scope For PR52
+### Out Of Scope For PR53
 
 - Multi-channel production rollout.
 - Publishing images to a registry.
@@ -137,10 +139,11 @@ PR52 adds a production release evidence archive. It gives release owners a stati
 - [x] PR50 production image security evidence gate.
 - [x] PR51 production release provenance and promotion boundary.
 - [x] PR52 production release evidence archive.
+- [x] PR53 production change approval gate.
 
 ## Verification Gate
 
-Do not claim PR52 production release evidence archive complete until these pass:
+Do not claim PR53 production change approval gate complete until these pass:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -186,6 +189,9 @@ Do not claim PR52 production release evidence archive complete until these pass:
 - `node --check scripts/verify-production-release-evidence.mjs`
 - `node --test scripts/verify-production-release-evidence.test.mjs`
 - `npm.cmd run verify:production-release-evidence`
+- `node --check scripts/verify-production-change-approval.mjs`
+- `node --test scripts/verify-production-change-approval.test.mjs`
+- `npm.cmd run verify:production-change-approval`
 - `npm.cmd run verify:provider-adapters`
 - `npm.cmd run verify:provider-readonly`
 - `npm.cmd run verify:provider-read-contract`

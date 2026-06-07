@@ -34,6 +34,8 @@
     "verify:production-release-provenance:safe": "node scripts/verify-production-release-provenance.mjs --from-env",
     "verify:production-release-evidence": "node scripts/verify-production-release-evidence.mjs",
     "verify:production-release-evidence:safe": "node scripts/verify-production-release-evidence.mjs --from-env",
+    "verify:production-change-approval": "node scripts/verify-production-change-approval.mjs",
+    "verify:production-change-approval:safe": "node scripts/verify-production-change-approval.mjs --from-env",
     "verify:production-launch": "node scripts/verify-production-launch.mjs",
     "verify:provider-adapters": "node scripts/verify-provider-adapters.mjs",
     "verify:provider-readonly": "node scripts/verify-provider-readonly.mjs",

@@ -29,6 +29,10 @@ const files = {
     "docs/deploy/production-release-evidence.md",
   productionReleaseEvidenceWorkflow:
     "docs/deploy/production-release-evidence.yml.example",
+  productionChangeApproval:
+    "docs/deploy/production-change-approval.md",
+  productionChangeApprovalWorkflow:
+    "docs/deploy/production-change-approval.yml.example",
   productionAlertingVerifier: "scripts/verify-production-alerting.mjs",
   productionDeployArtifactsVerifier:
     "scripts/verify-production-deploy-artifacts.mjs",
@@ -42,6 +46,8 @@ const files = {
     "scripts/verify-production-release-provenance.mjs",
   productionReleaseEvidenceVerifier:
     "scripts/verify-production-release-evidence.mjs",
+  productionChangeApprovalVerifier:
+    "scripts/verify-production-change-approval.mjs",
   providerAdapterVerifier: "scripts/verify-provider-adapters.mjs",
   providerReadonlyVerifier: "scripts/verify-provider-readonly.mjs",
   providerReadContractVerifier: "scripts/verify-provider-read-contract.mjs",
@@ -90,6 +96,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-release-provenance:safe",
   "verify:production-release-evidence",
   "verify:production-release-evidence:safe",
+  "verify:production-change-approval",
+  "verify:production-change-approval:safe",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -142,6 +150,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-image-security",
   "npm run verify:production-release-provenance",
   "npm run verify:production-release-evidence",
+  "npm run verify:production-change-approval",
   "--max-stale-processing=0",
   "--max-oldest-pending-age-seconds=900",
   "npm run verify:production-alerting",
@@ -171,6 +180,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_RELEASE_PROVENANCE_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE",
   "SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS=true",
+  "SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE",
+  "SMARTCS_PRODUCTION_CHANGE_APPROVAL_REQUIRE_PASS=true",
   "npm run verify:channel-runbook",
 ]);
 
@@ -217,6 +228,15 @@ mustContainAll("launch runbook release evidence", content.launchRunbook, [
   "npm run verify:production-release-evidence:safe",
   "SMARTCS_PRODUCTION_RELEASE_EVIDENCE_FILE",
   "SMARTCS_PRODUCTION_RELEASE_EVIDENCE_REQUIRE_PASS=true",
+]);
+
+mustContainAll("launch runbook change approval", content.launchRunbook, [
+  "docs/deploy/production-change-approval.md",
+  "docs/deploy/production-change-approval.yml.example",
+  "npm run verify:production-change-approval",
+  "npm run verify:production-change-approval:safe",
+  "SMARTCS_PRODUCTION_CHANGE_APPROVAL_FILE",
+  "SMARTCS_PRODUCTION_CHANGE_APPROVAL_REQUIRE_PASS=true",
 ]);
 
 mustContainAll("launch runbook rollback controls", content.launchRunbook, [
@@ -332,6 +352,13 @@ mustContainAll("production readiness references release evidence", content.produ
   "npm run verify:production-release-evidence:safe",
 ]);
 
+mustContainAll("production readiness references change approval", content.productionReadiness, [
+  "PR53 Production Change Approval Gate",
+  "docs/deploy/production-change-approval.yml.example",
+  "npm run verify:production-change-approval",
+  "npm run verify:production-change-approval:safe",
+]);
+
 mustContainAll("channel runbook references launch", content.channelRunbook, [
   "Production launch and rollback",
   "docs/deploy/production-launch-runbook.md",
@@ -387,6 +414,12 @@ mustContainAll("task plan references PR52", content.taskPlan, [
   "production-release-evidence.yml.example",
 ]);
 
+mustContainAll("task plan references PR53", content.taskPlan, [
+  "PR53 - Production Change Approval Gate",
+  "verify:production-change-approval",
+  "production-change-approval.yml.example",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -396,6 +429,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-image-security",
   "verify:production-release-provenance",
   "verify:production-release-evidence",
+  "verify:production-change-approval",
   "verify:production-alerting",
   "verify:provider-adapters",
   "verify:provider-readonly",
@@ -491,6 +525,14 @@ mustContainAll("production release evidence verifier source", content.production
   "deployHealth",
   "rollbackOwnerFingerprint",
 ]);
+mustContainAll("production change approval verifier source", content.productionChangeApprovalVerifier, [
+  "verify:production-change-approval",
+  "smart-cs-agent.production-change-approval.v1",
+  "approvalStatus",
+  "rollbackOwnerFingerprint",
+  "killSwitchReady",
+  "operatorCoverageConfirmed",
+]);
 mustContainAll("production image build docs", content.productionImageBuilds, [
   "PR48 Production Image Build Gate",
   "npm run verify:production-image-builds",
@@ -553,6 +595,20 @@ mustContainAll("production release evidence workflow", content.productionRelease
   "npm run verify:production-release-evidence:safe",
   "actions/upload-artifact@v4",
 ]);
+mustContainAll("production change approval docs", content.productionChangeApproval, [
+  "PR53 Production Change Approval Gate",
+  "npm run verify:production-change-approval",
+  "npm run verify:production-change-approval:safe",
+  "smart-cs-agent.production-change-approval.v1",
+  "does not publish images",
+]);
+mustContainAll("production change approval workflow", content.productionChangeApprovalWorkflow, [
+  "permissions:",
+  "contents: read",
+  "npm run verify:production-change-approval",
+  "npm run verify:production-change-approval:safe",
+  "actions/upload-artifact@v4",
+]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
   "WECOM_SANDBOX_ENABLED=false",
@@ -597,6 +653,8 @@ mustNotContainUnsafeExamples({
   productionReleaseProvenanceWorkflow: content.productionReleaseProvenanceWorkflow,
   productionReleaseEvidence: content.productionReleaseEvidence,
   productionReleaseEvidenceWorkflow: content.productionReleaseEvidenceWorkflow,
+  productionChangeApproval: content.productionChangeApproval,
+  productionChangeApprovalWorkflow: content.productionChangeApprovalWorkflow,
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,
