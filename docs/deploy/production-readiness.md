@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR76 Provider Write Controlled Expansion Closeout Review Gate
+
+Provider write controlled expansion closeout review is now checked by:
+
+```bash
+npm run verify:provider-write-controlled-expansion-closeout-review
+npm run verify:provider-write-controlled-expansion-closeout-review:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1` manual review package under `provider-write-controlled-expansion-closeout-review-artifacts/` plus the PR75 `smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1` package under `provider-write-controlled-expansion-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteControlledExpansionRunLedgerSha256`, requires the review target, expansion scope, launch window, and run summary to match PR75, and checks distinct reviewers, second review, `approved_for_next_expansion_review`, `customerComplaintsStoppedRollout=true`, `rejectedCompensationReviewed=true`, support escalation review, merchant notification review, billing impact review, and no automatic customer-visible replies.
+
+The gate still does not approve the next wave by itself. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR75 Provider Write Controlled Expansion Run Ledger Gate
 
 Provider write controlled expansion run ledger is now checked by:

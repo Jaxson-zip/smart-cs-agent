@@ -2,15 +2,39 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR75 - Provider Write Controlled Expansion Run Ledger Gate
+## Current Stage: PR76 - Provider Write Controlled Expansion Closeout Review Gate
 
 Status: verified locally, pending commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR74 - Provider Write Controlled Expansion Preflight Gate was verified locally and committed as `cb8507c`. Remote push is still waiting for GitHub `workflow` scope authorization.
+Previous Stage: PR75 - Provider Write Controlled Expansion Run Ledger Gate was verified locally and committed as `1575fbe`. Remote push is still waiting for GitHub `workflow` scope authorization.
+
+Historical Stage: PR74 - Provider Write Controlled Expansion Preflight Gate was verified locally and committed as `cb8507c`.
 
 Historical Stage: PR73 - Provider Write Controlled Expansion Approval Gate was verified locally and committed as `db5c19b`.
 
 Historical Stage: PR72 - Provider Write Safe Ledger Assembly Gate was verified locally and committed as `e2e2f35`.
+
+PR76 adds the manual closeout review gate after PR75 controlled expansion run ledger. Release owners can validate sanitized `smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1` evidence under `provider-write-controlled-expansion-closeout-review-artifacts/` plus the PR75 run ledger evidence under `provider-write-controlled-expansion-run-ledger-artifacts/`. Safe mode recomputes `providerWriteControlledExpansionRunLedgerSha256` before accepting the review package. PR76 must remain review-only and no-network: it must not approve the next expansion wave automatically, enable provider writes, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR76 Scope
+
+- Add `npm run verify:provider-write-controlled-expansion-closeout-review` and `npm run verify:provider-write-controlled-expansion-closeout-review:safe`.
+- Validate optional sanitized closeout review evidence under `provider-write-controlled-expansion-closeout-review-artifacts/`.
+- Require a separate PR75 controlled expansion run ledger file under `provider-write-controlled-expansion-run-ledger-artifacts/` and recompute its SHA-256 before accepting `providerWriteControlledExpansionRunLedgerSha256`.
+- Require the same `controlled_multi_merchant` target, change ticket, rollout fingerprint, merchant/action/channel scope, write limits, coupon cap, launch window, and run summary as PR75.
+- Require distinct release, operations, support, and rollback reviewers; second review; `approved_for_next_expansion_review`; complaint closeout; rejected-compensation review; support escalation review; merchant notification review; billing impact review; no outstanding actions; and no automatic customer-visible replies.
+- Connect PR76 to provider write docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR76 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no production database reads, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR76
+
+- Approving the next expansion wave automatically.
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `controlled_multi_merchant`.
 
 PR75 adds the controlled expansion run ledger gate after PR74 preflight and after a concrete `controlled_multi_merchant` launch window closes. Release owners can validate sanitized `smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1` evidence under `provider-write-controlled-expansion-run-ledger-artifacts/` plus the PR74 preflight evidence under `provider-write-controlled-expansion-preflight-artifacts/`. Safe mode also requires the PR74 preflight's PR73 approval evidence, PR73 safe ledger assembly receipt, PR70 draft, PR71 manual review, and PR69 final ledger source files so PR75 can recompute the preflight-to-approval-to-ledger SHA-256 chain before accepting post-window results. PR75 must remain closeout-only and no-network: it must not enable provider writes, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 

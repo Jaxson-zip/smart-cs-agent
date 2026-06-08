@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR76 Provider Write Controlled Expansion Closeout Review Gate
+
+PR76 adds the manual closeout review gate after PR75 controlled expansion run ledger. It validates whether a completed `controlled_multi_merchant` rollout window has been reviewed by release, operations, support, and rollback owners using a sanitized `smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1` package and the PR75 run ledger file.
+
+Run:
+
+```bash
+npm run verify:provider-write-controlled-expansion-closeout-review
+```
+
+Use `npm run verify:provider-write-controlled-expansion-closeout-review:safe` with `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-controlled-expansion-closeout-review-artifacts/` and `provider-write-controlled-expansion-run-ledger-artifacts/`. See `docs/deploy/provider-write-controlled-expansion-closeout-review.md`.
+
+This verifier recomputes `providerWriteControlledExpansionRunLedgerSha256`, requires `approved_for_next_expansion_review`, checks target/scope/window/run summary matches against PR75, requires complaint closeout, rejected-compensation review, support escalation review, merchant notification review, billing impact review, and no automatic customer-visible replies. It does not call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR75 Provider Write Controlled Expansion Run Ledger Gate
 
 PR75 adds the post-window run ledger gate after PR74 controlled expansion preflight. It validates whether a completed `controlled_multi_merchant` rollout window stayed inside its approved preflight scope using a sanitized `smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1` package and the PR74 preflight source chain.

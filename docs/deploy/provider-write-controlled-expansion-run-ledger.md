@@ -75,3 +75,5 @@ npm run verify:provider-write-controlled-expansion-run-ledger:safe
 ```
 
 Passing PR75 does not approve the next expansion by itself. It proves only that the completed controlled expansion window stayed inside its preflight scope, every run was reviewed, failures and complaints were closed out, and no customer-visible automatic reply was sent.
+
+PR76 Provider Write Controlled Expansion Closeout Review Gate follows this ledger with a separate manual review package. Run `verify:provider-write-controlled-expansion-closeout-review` after PR75; the PR76 verifier binds `providerWriteControlledExpansionRunLedgerSha256`, requires `approved_for_next_expansion_review`, and still does not approve the next wave automatically.

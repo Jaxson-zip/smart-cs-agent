@@ -33,6 +33,8 @@ const files = {
     "docs/deploy/provider-write-controlled-expansion-preflight.md",
   providerWriteControlledExpansionRunLedger:
     "docs/deploy/provider-write-controlled-expansion-run-ledger.md",
+  providerWriteControlledExpansionCloseoutReview:
+    "docs/deploy/provider-write-controlled-expansion-closeout-review.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -92,6 +94,8 @@ const files = {
     "scripts/verify-provider-write-controlled-expansion-preflight.mjs",
   providerWriteControlledExpansionRunLedgerVerifier:
     "scripts/verify-provider-write-controlled-expansion-run-ledger.mjs",
+  providerWriteControlledExpansionCloseoutReviewVerifier:
+    "scripts/verify-provider-write-controlled-expansion-closeout-review.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -186,6 +190,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-controlled-expansion-preflight:safe",
   "verify:provider-write-controlled-expansion-run-ledger",
   "verify:provider-write-controlled-expansion-run-ledger:safe",
+  "verify:provider-write-controlled-expansion-closeout-review",
+  "verify:provider-write-controlled-expansion-closeout-review:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -275,6 +281,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-controlled-expansion-preflight:safe",
   "npm run verify:provider-write-controlled-expansion-run-ledger",
   "npm run verify:provider-write-controlled-expansion-run-ledger:safe",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
+  "npm run verify:provider-write-controlled-expansion-closeout-review:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -368,6 +376,9 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_REVIEW_FILE",
   "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_LEDGER_FILE",
   "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -395,6 +406,8 @@ mustContainInOrder(
     "npm run verify:provider-write-controlled-expansion-preflight:safe",
     "npm run verify:provider-write-controlled-expansion-run-ledger",
     "npm run verify:provider-write-controlled-expansion-run-ledger:safe",
+    "npm run verify:provider-write-controlled-expansion-closeout-review",
+    "npm run verify:provider-write-controlled-expansion-closeout-review:safe",
   ],
 );
 
@@ -658,6 +671,14 @@ mustContainAll("production readiness references provider write controlled expans
   "providerWriteControlledExpansionPreflightSha256",
 ]);
 
+mustContainAll("production readiness references provider write controlled expansion closeout review", content.productionReadiness, [
+  "PR76 Provider Write Controlled Expansion Closeout Review Gate",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
+  "npm run verify:provider-write-controlled-expansion-closeout-review:safe",
+  "providerWriteControlledExpansionRunLedgerSha256",
+  "approved_for_next_expansion_review",
+]);
+
 mustContainAll("production readiness references provider write requests", content.productionReadiness, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -882,6 +903,10 @@ mustContainAll("task plan references PR75", content.taskPlan, [
   "PR75 - Provider Write Controlled Expansion Run Ledger Gate",
   "verify:provider-write-controlled-expansion-run-ledger",
 ]);
+mustContainAll("task plan references PR76", content.taskPlan, [
+  "PR76 - Provider Write Controlled Expansion Closeout Review Gate",
+  "verify:provider-write-controlled-expansion-closeout-review",
+]);
 
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
@@ -901,6 +926,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-controlled-expansion-approval",
   "verify:provider-write-controlled-expansion-preflight",
   "verify:provider-write-controlled-expansion-run-ledger",
+  "verify:provider-write-controlled-expansion-closeout-review",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -937,6 +963,8 @@ mustContainAll("production static CI verifier source", content.productionStaticC
   "npm run verify:provider-write-controlled-expansion-preflight",
   "node --test scripts/verify-provider-write-controlled-expansion-run-ledger.test.mjs",
   "npm run verify:provider-write-controlled-expansion-run-ledger",
+  "node --test scripts/verify-provider-write-controlled-expansion-closeout-review.test.mjs",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
 ]);
@@ -1109,6 +1137,26 @@ mustContainAll("provider write controlled expansion run ledger verifier source",
   "validateRunLedgerWithinPreflight",
   "customerComplaintsStoppedRollout",
   "compensationRejected",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "customerVisibleActionsSentByVerifier",
+  "credentialsReadByVerifier",
+]);
+mustContainAll("provider write controlled expansion closeout review verifier source", content.providerWriteControlledExpansionCloseoutReviewVerifier, [
+  "verify:provider-write-controlled-expansion-closeout-review",
+  "provider-write-controlled-expansion-closeout-review-artifacts",
+  "provider-write-controlled-expansion-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1",
+  "smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1",
+  "controlled_multi_merchant",
+  "providerWriteControlledExpansionRunLedgerSha256",
+  "validateReviewRunLedgerBinding",
+  "approved_for_next_expansion_review",
+  "customerComplaintsStoppedRollout",
+  "rejectedCompensationReviewed",
+  "noAutoCustomerReplies",
+  "supportEscalationReviewCompleted",
+  "merchantNotificationReviewCompleted",
   "networkExecutedByVerifier",
   "providerWriteExecutedByVerifier",
   "customerVisibleActionsSentByVerifier",
@@ -1586,6 +1634,30 @@ mustContainAll("provider write controlled expansion run ledger docs", content.pr
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write controlled expansion closeout review docs", content.providerWriteControlledExpansionCloseoutReview, [
+  "PR76 Provider Write Controlled Expansion Closeout Review Gate",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
+  "npm run verify:provider-write-controlled-expansion-closeout-review:safe",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1",
+  "smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1",
+  "provider-write-controlled-expansion-closeout-review-artifacts/",
+  "provider-write-controlled-expansion-run-ledger-artifacts/",
+  "controlled_multi_merchant",
+  "providerWriteControlledExpansionRunLedgerSha256",
+  "approved_for_next_expansion_review",
+  "customerComplaintsStoppedRollout=true",
+  "rejectedCompensationReviewed=true",
+  "noAutoCustomerReplies=true",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not read production databases",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1701,6 +1773,14 @@ mustContainAll("provider write controlled expansion run ledger docs reference", 
   "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_FILE",
   "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_DRAFT_FILE",
 ]);
+mustContainAll("provider write controlled expansion closeout review docs reference", content.providerWriteRequests, [
+  "PR76 Provider Write Controlled Expansion Closeout Review Gate",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
+  "smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1",
+  "providerWriteControlledExpansionRunLedgerSha256",
+  "approved_for_next_expansion_review",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -1785,6 +1865,8 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-controlled-expansion-preflight",
   "node --test scripts/verify-provider-write-controlled-expansion-run-ledger.test.mjs",
   "npm run verify:provider-write-controlled-expansion-run-ledger",
+  "node --test scripts/verify-provider-write-controlled-expansion-closeout-review.test.mjs",
+  "npm run verify:provider-write-controlled-expansion-closeout-review",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1843,6 +1925,15 @@ mustContainAll("progress tracks provider write controlled expansion run ledger",
   "Started PR75 provider write controlled expansion run ledger gate",
 ]);
 
+mustContainAll("task plan tracks provider write controlled expansion closeout review", content.taskPlan, [
+  "PR76 - Provider Write Controlled Expansion Closeout Review Gate",
+  "verify:provider-write-controlled-expansion-closeout-review",
+]);
+
+mustContainAll("progress tracks provider write controlled expansion closeout review", content.progress, [
+  "Started PR76 provider write controlled expansion closeout review gate",
+]);
+
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
@@ -1858,6 +1949,7 @@ mustNotContainUnsafeExamples({
   providerWriteControlledExpansionApproval: content.providerWriteControlledExpansionApproval,
   providerWriteControlledExpansionPreflight: content.providerWriteControlledExpansionPreflight,
   providerWriteControlledExpansionRunLedger: content.providerWriteControlledExpansionRunLedger,
+  providerWriteControlledExpansionCloseoutReview: content.providerWriteControlledExpansionCloseoutReview,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
