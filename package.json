@@ -68,6 +68,8 @@
     "verify:provider-write-live-pilot-run-ledger-draft-export": "node scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs",
     "verify:provider-write-manual-closeout-review": "node scripts/verify-provider-write-manual-closeout-review.mjs",
     "verify:provider-write-manual-closeout-review:safe": "node scripts/verify-provider-write-manual-closeout-review.mjs --from-env --require-pass",
+    "verify:provider-write-safe-ledger-assembly": "node scripts/verify-provider-write-safe-ledger-assembly.mjs",
+    "verify:provider-write-safe-ledger-assembly:safe": "node scripts/verify-provider-write-safe-ledger-assembly.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

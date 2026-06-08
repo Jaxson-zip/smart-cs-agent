@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR72 Provider Write Safe Ledger Assembly Gate
+
+Provider write safe ledger assembly is now checked by:
+
+```bash
+npm run verify:provider-write-safe-ledger-assembly
+npm run verify:provider-write-safe-ledger-assembly:safe
+```
+
+This gate validates that the PR70 `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` draft, the PR71 `smart-cs-agent.provider-write-manual-closeout-review.v1` package, and the PR69 `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` final ledger all describe the same bounded `single_merchant_pilot`. It recomputes draft and review artifact SHA-256 values from file bytes, checks `providerWriteLivePilotRunLedgerDraftSha256`, `providerWriteManualCloseoutReviewSha256`, `auditExportSha256`, and `productionLaunchSha256`, and keeps PR70 draft evidence at `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`.
+
+The gate still does not generate pass evidence, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR71 Provider Write Manual Closeout Review Gate
 
 Provider write manual closeout review evidence is now checked by:

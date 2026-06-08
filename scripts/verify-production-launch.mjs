@@ -25,6 +25,8 @@ const files = {
     "docs/deploy/provider-write-live-pilot-run-ledger.md",
   providerWriteManualCloseoutReview:
     "docs/deploy/provider-write-manual-closeout-review.md",
+  providerWriteSafeLedgerAssembly:
+    "docs/deploy/provider-write-safe-ledger-assembly.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -76,6 +78,8 @@ const files = {
     "scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs",
   providerWriteManualCloseoutReviewVerifier:
     "scripts/verify-provider-write-manual-closeout-review.mjs",
+  providerWriteSafeLedgerAssemblyVerifier:
+    "scripts/verify-provider-write-safe-ledger-assembly.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -161,6 +165,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-live-pilot-run-ledger-draft-export",
   "verify:provider-write-manual-closeout-review",
   "verify:provider-write-manual-closeout-review:safe",
+  "verify:provider-write-safe-ledger-assembly",
+  "verify:provider-write-safe-ledger-assembly:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -238,9 +244,12 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-live-pilot-preflight",
   "npm run verify:provider-write-live-pilot-preflight:safe",
   "npm run verify:provider-write-live-pilot-run-ledger",
+  "npm run verify:provider-write-live-pilot-run-ledger:safe",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "npm run verify:provider-write-manual-closeout-review",
   "npm run verify:provider-write-manual-closeout-review:safe",
+  "npm run verify:provider-write-safe-ledger-assembly",
+  "npm run verify:provider-write-safe-ledger-assembly:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -309,6 +318,10 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_REQUIRE_PASS=true",
   "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_FILE",
   "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_DRAFT_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -323,6 +336,13 @@ mustContainInOrder(
     "npm run verify:provider-write-kill-switch-rehearsal:safe",
     "npm run verify:production-provider-write-approval:safe",
     "npm run verify:provider-write-live-pilot-preflight:safe",
+    "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+    "npm run verify:provider-write-manual-closeout-review",
+    "npm run verify:provider-write-manual-closeout-review:safe",
+    "npm run verify:provider-write-live-pilot-run-ledger\n",
+    "npm run verify:provider-write-live-pilot-run-ledger:safe",
+    "npm run verify:provider-write-safe-ledger-assembly",
+    "npm run verify:provider-write-safe-ledger-assembly:safe",
   ],
 );
 
@@ -631,6 +651,16 @@ mustContainAll("production readiness references provider write manual closeout r
   "npm run verify:provider-write-manual-closeout-review",
   "npm run verify:provider-write-manual-closeout-review:safe",
 ]);
+mustContainAll("production readiness references provider write safe ledger assembly", content.productionReadiness, [
+  "PR72 Provider Write Safe Ledger Assembly Gate",
+  "npm run verify:provider-write-safe-ledger-assembly",
+  "npm run verify:provider-write-safe-ledger-assembly:safe",
+  "providerWriteLivePilotRunLedgerDraftSha256",
+  "providerWriteManualCloseoutReviewSha256",
+  "draftOnly=true",
+  "readyForSafeLedger=false",
+  "canPassPr69SafeLedger=false",
+]);
 
 mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
   "PR64 Provider Write Live Executor Startup Guard",
@@ -772,6 +802,10 @@ mustContainAll("task plan references PR71", content.taskPlan, [
   "PR71 - Provider Write Manual Closeout Review Gate",
   "verify:provider-write-manual-closeout-review",
 ]);
+mustContainAll("task plan references PR72", content.taskPlan, [
+  "PR72 - Provider Write Safe Ledger Assembly Gate",
+  "verify:provider-write-safe-ledger-assembly",
+]);
 
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
@@ -787,6 +821,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-live-pilot-run-ledger",
   "verify:provider-write-live-pilot-run-ledger-draft-export",
   "verify:provider-write-manual-closeout-review",
+  "verify:provider-write-safe-ledger-assembly",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -896,6 +931,26 @@ mustContainAll("provider write manual closeout review verifier source", content.
   "provider-write-manual-closeout-review-artifacts",
   "smart-cs-agent.provider-write-manual-closeout-review.v1",
   "provider write manual closeout review",
+  "approved_for_safe_ledger",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "customerVisibleActionsSentByVerifier",
+]);
+mustContainAll("provider write safe ledger assembly verifier source", content.providerWriteSafeLedgerAssemblyVerifier, [
+  "verify:provider-write-safe-ledger-assembly",
+  "provider-write-live-pilot-run-ledger-draft-artifacts",
+  "provider-write-manual-closeout-review-artifacts",
+  "provider-write-live-pilot-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger.v1",
+  "providerWriteLivePilotRunLedgerDraftSha256",
+  "providerWriteManualCloseoutReviewSha256",
+  "auditExportSha256",
+  "productionLaunchSha256",
+  "draftOnly",
+  "readyForSafeLedger",
+  "canPassPr69SafeLedger",
   "approved_for_safe_ledger",
   "networkExecutedByVerifier",
   "providerWriteExecutedByVerifier",
@@ -1246,6 +1301,31 @@ mustContainAll("provider write manual closeout review docs", content.providerWri
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write safe ledger assembly docs", content.providerWriteSafeLedgerAssembly, [
+  "PR72 Provider Write Safe Ledger Assembly Gate",
+  "npm run verify:provider-write-safe-ledger-assembly",
+  "npm run verify:provider-write-safe-ledger-assembly:safe",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_DRAFT_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger.v1",
+  "providerWriteLivePilotRunLedgerDraftSha256",
+  "providerWriteManualCloseoutReviewSha256",
+  "auditExportSha256",
+  "productionLaunchSha256",
+  "draftOnly=true",
+  "readyForSafeLedger=false",
+  "canPassPr69SafeLedger=false",
+  "approved_for_safe_ledger",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1321,6 +1401,18 @@ mustContainAll("provider write manual closeout review docs reference", content.p
   "smart-cs-agent.provider-write-manual-closeout-review.v1",
   "providerWriteManualCloseoutReviewSha256",
 ]);
+mustContainAll("provider write safe ledger assembly docs reference", content.providerWriteRequests, [
+  "PR72 Provider Write Safe Ledger Assembly Gate",
+  "npm run verify:provider-write-safe-ledger-assembly",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger.v1",
+  "providerWriteLivePilotRunLedgerDraftSha256",
+  "providerWriteManualCloseoutReviewSha256",
+  "draftOnly=true",
+  "readyForSafeLedger=false",
+  "canPassPr69SafeLedger=false",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -1381,6 +1473,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "push:",
   "workflow_dispatch:",
   "npm ci",
+  "node --test scripts/verify-provider-write-safe-ledger-assembly.test.mjs",
   "npm run verify:production-static-ci",
   "npm run verify:production-launch",
   "npm run verify:provider-write-requests",
@@ -1397,6 +1490,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-live-pilot-run-ledger",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "npm run verify:provider-write-manual-closeout-review",
+  "npm run verify:provider-write-safe-ledger-assembly",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1439,6 +1533,7 @@ mustNotContainUnsafeExamples({
   providerWriteLivePilotPreflight: content.providerWriteLivePilotPreflight,
   providerWriteLivePilotRunLedger: content.providerWriteLivePilotRunLedger,
   providerWriteManualCloseoutReview: content.providerWriteManualCloseoutReview,
+  providerWriteSafeLedgerAssembly: content.providerWriteSafeLedgerAssembly,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

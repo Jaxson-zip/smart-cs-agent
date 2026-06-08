@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR72 Provider Write Safe Ledger Assembly Gate
+
+PR72 adds the final safe ledger assembly gate for a bounded live provider write pilot. It checks that PR70 `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` draft evidence, PR71 `smart-cs-agent.provider-write-manual-closeout-review.v1` manual closeout review, and PR69 `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` final ledger evidence are the same `single_merchant_pilot` package before release owners consider expansion.
+
+Run:
+
+```bash
+npm run verify:provider-write-safe-ledger-assembly
+```
+
+Use `npm run verify:provider-write-safe-ledger-assembly:safe` with `SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_DRAFT_FILE`, `SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-safe-ledger-assembly.md`.
+
+This verifier recomputes file SHA-256 bindings for `providerWriteLivePilotRunLedgerDraftSha256` and `providerWriteManualCloseoutReviewSha256`, compares `auditExportSha256` and `productionLaunchSha256`, keeps PR70 at `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`, and requires PR71 `approved_for_safe_ledger`. It does not call provider APIs, execute provider writes, read provider credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR71 Provider Write Manual Closeout Review Gate
 
 PR71 adds the manual closeout review gate for a bounded live provider write pilot. The `smart-cs-agent.provider-write-manual-closeout-review.v1` package must prove that release, operations, and rollback owners reviewed the PR70 draft, sanitized audit export, failed-run notes, rollback actions, and production launch evidence before a PR69 safe ledger can bind the review.

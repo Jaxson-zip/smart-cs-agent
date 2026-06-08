@@ -21,6 +21,7 @@ production-provider-write-approval-artifacts/
 provider-write-dry-run-rehearsal-artifacts/
 provider-write-kill-switch-rehearsal-artifacts/
 provider-write-live-pilot-preflight-artifacts/
+provider-write-live-pilot-run-ledger-draft-artifacts/
 provider-write-live-pilot-run-ledger-artifacts/
 provider-write-manual-closeout-review-artifacts/
 launch-manifest-artifacts/

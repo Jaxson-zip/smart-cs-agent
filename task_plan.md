@@ -2,11 +2,33 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR71 - Provider Write Manual Closeout Review Gate
+## Current Stage: PR72 - Provider Write Safe Ledger Assembly Gate
 
-Status: verified locally and ready for local commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: in progress locally. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR70 - Provider Write Live Pilot Run Ledger Draft Export was verified locally and committed as `3b66b29`. Remote push is still waiting for GitHub `workflow` scope authorization.
+Previous Stage: PR71 - Provider Write Manual Closeout Review Gate was verified locally and committed as `d012c06`. Remote push is still waiting for GitHub `workflow` scope authorization.
+
+PR72 adds the safe ledger assembly gate after PR70 draft export, PR71 manual closeout review, and PR69 final ledger evidence exist. Release owners can validate that sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1`, `smart-cs-agent.provider-write-manual-closeout-review.v1`, and `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` artifacts all describe the same bounded pilot before considering expansion beyond the first `single_merchant_pilot`. PR72 must remain assembly-only and no-network: it must not generate pass evidence, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR72 Scope
+
+- Add `npm run verify:provider-write-safe-ledger-assembly` and `npm run verify:provider-write-safe-ledger-assembly:safe`.
+- Validate sanitized PR70/PR71/PR69 evidence files under `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`.
+- Recompute SHA-256 from local file bytes so PR71 `providerWriteLivePilotRunLedgerDraftSha256` matches the draft file and PR69 `providerWriteManualCloseoutReviewSha256` matches the review file.
+- Require matching `auditExportSha256`, `productionLaunchSha256`, tenant fingerprint, channel, rollout track, launch window, change ticket fingerprint, run counts, and `(requestFingerprint, executionAttemptFingerprint)` pairs.
+- Keep PR70 draft evidence at `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`; require PR71 `approved_for_safe_ledger`; require PR69 manual closeout review verifier proof.
+- Connect PR72 to provider write docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR72 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR72
+
+- Generating PR69 pass evidence automatically.
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `single_merchant_pilot`.
 
 PR71 adds the manual closeout review evidence gate after a bounded live provider write pilot window. Release owners can validate sanitized `smart-cs-agent.provider-write-manual-closeout-review.v1` evidence under `provider-write-manual-closeout-review-artifacts/` before PR69 safe ledger evidence binds `providerWriteManualCloseoutReviewSha256`. PR71 must remain evidence-only and no-network: it must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 

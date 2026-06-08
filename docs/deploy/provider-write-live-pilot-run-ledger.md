@@ -2,6 +2,19 @@
 
 PR69 adds a sanitized post-window evidence gate for the first real provider write pilot. It validates `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` packages exported after a pilot window so release owners can close the loop on what happened, what was reviewed, and whether failures or rollbacks were handled.
 
+## PR72 Provider Write Safe Ledger Assembly Gate
+
+PR72 adds the final assembly check after PR70 draft export, PR71 manual closeout review, and PR69 final ledger evidence exist. Run:
+
+```bash
+npm run verify:provider-write-safe-ledger-assembly
+npm run verify:provider-write-safe-ledger-assembly:safe
+```
+
+The safe verifier reads only sanitized local files from `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. It recomputes SHA-256 from file bytes, checks `providerWriteLivePilotRunLedgerDraftSha256` and `providerWriteManualCloseoutReviewSha256`, verifies matching `auditExportSha256` and `productionLaunchSha256`, and confirms the same tenant fingerprint, channel, rollout track, launch window, change ticket, and run fingerprint pairs. PR70 must remain `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`; PR71 must remain `approved_for_safe_ledger`.
+
+The assembly verifier does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, and does not send customer-visible replies. See `docs/deploy/provider-write-safe-ledger-assembly.md`.
+
 ## PR71 Provider Write Manual Closeout Review Gate
 
 PR71 adds the manual closeout review required before PR69 safe evidence can pass. The review validates `smart-cs-agent.provider-write-manual-closeout-review.v1` packages under `provider-write-manual-closeout-review-artifacts/` and records that release, operations, and rollback owners reviewed every pilot run, failed-run incident note, rollback action, audit export, and evidence binding.

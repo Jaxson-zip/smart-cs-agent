@@ -4,6 +4,8 @@ PR71 adds the manual closeout review gate that must run after a bounded live pro
 
 This gate exists because the PR70 draft export is support-only. A draft can help release owners assemble facts, but it cannot prove that people reviewed every run, checked failed provider mutations, verified rollback actions, and agreed that the pilot is ready for safe ledger binding.
 
+PR72 follows this review by assembling the PR70 draft, this PR71 review, and the PR69 final ledger into one bounded evidence package. Run `npm run verify:provider-write-safe-ledger-assembly` and `npm run verify:provider-write-safe-ledger-assembly:safe` after this review is approved; the PR72 verifier recomputes `providerWriteLivePilotRunLedgerDraftSha256`, checks `providerWriteManualCloseoutReviewSha256`, and confirms the final ledger still binds the same audit export and production launch evidence.
+
 ## Commands
 
 Static repository verification:
