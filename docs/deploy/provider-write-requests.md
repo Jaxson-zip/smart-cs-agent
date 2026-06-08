@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR74 Provider Write Controlled Expansion Preflight Gate
+
+PR74 adds the launch-window preflight gate after PR73 controlled expansion approval. It validates whether a specific `controlled_multi_merchant` rollout window is still inside the approved scope using a sanitized `smart-cs-agent.provider-write-controlled-expansion-preflight.v1` package and the PR73 approval package.
+
+Run:
+
+```bash
+npm run verify:provider-write-controlled-expansion-preflight
+```
+
+Use `npm run verify:provider-write-controlled-expansion-preflight:safe` with `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_APPROVAL_ASSEMBLY_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_APPROVAL_ASSEMBLY_DRAFT_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_APPROVAL_ASSEMBLY_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_APPROVAL_ASSEMBLY_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_PREFLIGHT_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-controlled-expansion-preflight-artifacts/`, `provider-write-controlled-expansion-approval-artifacts/`, `provider-write-safe-ledger-assembly-artifacts/`, `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-controlled-expansion-preflight.md`.
+
+This verifier recomputes the approval file SHA-256 before accepting `providerWriteControlledExpansionApprovalSha256`, recomputes the PR73 safe-ledger assembly receipt before accepting `providerWriteSafeLedgerAssemblySha256`, recomputes the PR70/PR71/PR69 source artifact SHA-256 values before accepting assembly bindings, requires `providerWriteControlledExpansionApprovalVerifierPassed=true`, rejects merchant/action/limit scope that exceeds PR73 approval, requires `freezeWindowActive=true`, `automaticNextWaveEnabled=false`, `rollbackOnAnyFailedMutation=true`, operator coverage, support escalation readiness, merchant notification readiness, and no automatic customer-visible replies. It does not call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR73 Provider Write Controlled Expansion Approval Gate
 
 PR73 adds the controlled expansion approval gate after PR72 safe ledger assembly. It validates whether release owners may consider expanding from `single_merchant_pilot` to `controlled_multi_merchant` using a sanitized `smart-cs-agent.provider-write-controlled-expansion-approval.v1` approval package and a separate safe ledger assembly receipt.

@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR74 Provider Write Controlled Expansion Preflight Gate
+
+Provider write controlled expansion preflight is now checked by:
+
+```bash
+npm run verify:provider-write-controlled-expansion-preflight
+npm run verify:provider-write-controlled-expansion-preflight:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-controlled-expansion-preflight.v1` launch-window package under `provider-write-controlled-expansion-preflight-artifacts/` plus the PR73 `smart-cs-agent.provider-write-controlled-expansion-approval.v1` approval package under `provider-write-controlled-expansion-approval-artifacts/`. Safe mode also requires the PR73 safe-ledger assembly receipt and its PR70 draft, PR71 review, and PR69 ledger source files under `provider-write-safe-ledger-assembly-artifacts/`, `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. It is the preflight after approval and before a specific `controlled_multi_merchant` window can proceed.
+
+The verifier requires `providerWriteControlledExpansionApprovalVerifierPassed=true`, `providerWriteSafeLedgerAssemblyVerifierPassed=true`, recomputes the approval file SHA-256 before accepting `providerWriteControlledExpansionApprovalSha256`, recomputes the PR73 assembly receipt before accepting `providerWriteSafeLedgerAssemblySha256`, recomputes PR70/PR71/PR69 source artifact SHA-256 values before accepting assembly bindings, keeps merchant fingerprints, channels, actions, aggregate limits, per-merchant limits, and coupon caps inside PR73 approval, and checks `freezeWindowActive=true`, `automaticNextWaveEnabled=false`, `rollbackOnAnyFailedMutation=true`, operator coverage, distinct owners, support escalation readiness, merchant notification readiness, alert review, rate-limit review, and no automatic customer-visible replies.
+
+The gate still does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR73 Provider Write Controlled Expansion Approval Gate
 
 Provider write controlled expansion approval is now checked by:

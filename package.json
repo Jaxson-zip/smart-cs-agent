@@ -72,6 +72,8 @@
     "verify:provider-write-safe-ledger-assembly:safe": "node scripts/verify-provider-write-safe-ledger-assembly.mjs --from-env --require-pass",
     "verify:provider-write-controlled-expansion-approval": "node scripts/verify-provider-write-controlled-expansion-approval.mjs",
     "verify:provider-write-controlled-expansion-approval:safe": "node scripts/verify-provider-write-controlled-expansion-approval.mjs --from-env --require-pass",
+    "verify:provider-write-controlled-expansion-preflight": "node scripts/verify-provider-write-controlled-expansion-preflight.mjs",
+    "verify:provider-write-controlled-expansion-preflight:safe": "node scripts/verify-provider-write-controlled-expansion-preflight.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",
