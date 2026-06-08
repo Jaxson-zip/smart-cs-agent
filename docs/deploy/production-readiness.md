@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR73 Provider Write Controlled Expansion Approval Gate
+
+Provider write controlled expansion approval is now checked by:
+
+```bash
+npm run verify:provider-write-controlled-expansion-approval
+npm run verify:provider-write-controlled-expansion-approval:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-controlled-expansion-approval.v1` approval package under `provider-write-controlled-expansion-approval-artifacts/` plus a `smart-cs-agent.provider-write-safe-ledger-assembly.v1` assembly receipt under `provider-write-safe-ledger-assembly-artifacts/`. Safe mode also requires source files from `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. It is the precondition for considering expansion from `single_merchant_pilot` to `controlled_multi_merchant`.
+
+The verifier requires `providerWriteSafeLedgerAssemblyVerifierPassed=true`, recomputes the assembly file SHA-256 before accepting `providerWriteSafeLedgerAssemblySha256`, recomputes PR70/PR71/PR69 source artifact SHA-256 values before accepting the assembly receipt bindings, and checks bounded merchant count, first-pilot allowed actions, aggregate and per-merchant limits, operator coverage, rollback ownership, alert readiness, billing plan, contract review, support SLA, and no automatic customer-visible replies.
+
+The gate still does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR72 Provider Write Safe Ledger Assembly Gate
 
 Provider write safe ledger assembly is now checked by:

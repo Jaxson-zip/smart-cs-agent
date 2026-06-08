@@ -27,6 +27,8 @@ const files = {
     "docs/deploy/provider-write-manual-closeout-review.md",
   providerWriteSafeLedgerAssembly:
     "docs/deploy/provider-write-safe-ledger-assembly.md",
+  providerWriteControlledExpansionApproval:
+    "docs/deploy/provider-write-controlled-expansion-approval.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -80,6 +82,8 @@ const files = {
     "scripts/verify-provider-write-manual-closeout-review.mjs",
   providerWriteSafeLedgerAssemblyVerifier:
     "scripts/verify-provider-write-safe-ledger-assembly.mjs",
+  providerWriteControlledExpansionApprovalVerifier:
+    "scripts/verify-provider-write-controlled-expansion-approval.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -135,6 +139,7 @@ const files = {
   webDockerfile: "apps/web/Dockerfile",
   composeProductionExample: "docker-compose.production.yml.example",
   taskPlan: "task_plan.md",
+  progress: "progress.md",
 };
 
 const content = Object.fromEntries(
@@ -167,6 +172,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-manual-closeout-review:safe",
   "verify:provider-write-safe-ledger-assembly",
   "verify:provider-write-safe-ledger-assembly:safe",
+  "verify:provider-write-controlled-expansion-approval",
+  "verify:provider-write-controlled-expansion-approval:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -322,6 +329,12 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REVIEW_FILE",
   "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_LEDGER_FILE",
   "SMARTCS_PROVIDER_WRITE_SAFE_LEDGER_ASSEMBLY_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_DRAFT_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -343,6 +356,8 @@ mustContainInOrder(
     "npm run verify:provider-write-live-pilot-run-ledger:safe",
     "npm run verify:provider-write-safe-ledger-assembly",
     "npm run verify:provider-write-safe-ledger-assembly:safe",
+    "npm run verify:provider-write-controlled-expansion-approval",
+    "npm run verify:provider-write-controlled-expansion-approval:safe",
   ],
 );
 
@@ -852,6 +867,8 @@ mustContainAll("production launch verifier source", content.productionAlertingVe
 mustContainAll("production static CI verifier source", content.productionStaticCiVerifier, [
   "verify:production-static-ci",
   "production-static-gates.yml",
+  "node --test scripts/verify-provider-write-controlled-expansion-approval.test.mjs",
+  "npm run verify:provider-write-controlled-expansion-approval",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
 ]);
@@ -955,6 +972,27 @@ mustContainAll("provider write safe ledger assembly verifier source", content.pr
   "networkExecutedByVerifier",
   "providerWriteExecutedByVerifier",
   "customerVisibleActionsSentByVerifier",
+]);
+mustContainAll("provider write controlled expansion approval verifier source", content.providerWriteControlledExpansionApprovalVerifier, [
+  "verify:provider-write-controlled-expansion-approval",
+  "provider-write-controlled-expansion-approval-artifacts",
+  "provider-write-safe-ledger-assembly-artifacts",
+  "provider-write-live-pilot-run-ledger-draft-artifacts",
+  "provider-write-manual-closeout-review-artifacts",
+  "provider-write-live-pilot-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-controlled-expansion-approval.v1",
+  "smart-cs-agent.provider-write-safe-ledger-assembly.v1",
+  "single_merchant_pilot",
+  "controlled_multi_merchant",
+  "providerWriteSafeLedgerAssemblyVerifierPassed",
+  "providerWriteSafeLedgerAssemblySha256",
+  "validateAssemblyBinding",
+  "validateAssemblySourceBindings",
+  "createHash",
+  "maxDailyProviderWritesPerMerchant",
+  "noAutomaticCustomerVisibleReplies",
+  "customerVisibleActionsSentByVerifier",
+  "credentialsReadByVerifier",
 ]);
 mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
   "verify:provider-write-live-executor-startup-guard",
@@ -1326,6 +1364,37 @@ mustContainAll("provider write safe ledger assembly docs", content.providerWrite
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write controlled expansion approval docs", content.providerWriteControlledExpansionApproval, [
+  "PR73 Provider Write Controlled Expansion Approval Gate",
+  "npm run verify:provider-write-controlled-expansion-approval",
+  "npm run verify:provider-write-controlled-expansion-approval:safe",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_DRAFT_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-controlled-expansion-approval.v1",
+  "smart-cs-agent.provider-write-safe-ledger-assembly.v1",
+  "provider-write-controlled-expansion-approval-artifacts/",
+  "provider-write-safe-ledger-assembly-artifacts/",
+  "provider-write-live-pilot-run-ledger-draft-artifacts/",
+  "provider-write-manual-closeout-review-artifacts/",
+  "provider-write-live-pilot-run-ledger-artifacts/",
+  "single_merchant_pilot",
+  "controlled_multi_merchant",
+  "providerWriteSafeLedgerAssemblyVerifierPassed=true",
+  "providerWriteSafeLedgerAssemblySha256",
+  "providerWriteLivePilotRunLedgerDraftSha256",
+  "providerWriteManualCloseoutReviewSha256",
+  "providerWriteLivePilotRunLedgerSha256",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not read production databases",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1413,6 +1482,14 @@ mustContainAll("provider write safe ledger assembly docs reference", content.pro
   "readyForSafeLedger=false",
   "canPassPr69SafeLedger=false",
 ]);
+mustContainAll("provider write controlled expansion approval docs reference", content.providerWriteRequests, [
+  "PR73 Provider Write Controlled Expansion Approval Gate",
+  "npm run verify:provider-write-controlled-expansion-approval",
+  "smart-cs-agent.provider-write-controlled-expansion-approval.v1",
+  "controlled_multi_merchant",
+  "providerWriteSafeLedgerAssemblySha256",
+  "SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_DRAFT_FILE",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -1474,6 +1551,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "workflow_dispatch:",
   "npm ci",
   "node --test scripts/verify-provider-write-safe-ledger-assembly.test.mjs",
+  "node --test scripts/verify-provider-write-controlled-expansion-approval.test.mjs",
   "npm run verify:production-static-ci",
   "npm run verify:production-launch",
   "npm run verify:provider-write-requests",
@@ -1491,6 +1569,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "npm run verify:provider-write-manual-closeout-review",
   "npm run verify:provider-write-safe-ledger-assembly",
+  "npm run verify:provider-write-controlled-expansion-approval",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1522,6 +1601,15 @@ mustContainAll("channel runbook verifier source", content.channelRunbookVerifier
   "verify:production-alerting",
 ]);
 
+mustContainAll("task plan tracks provider write controlled expansion approval", content.taskPlan, [
+  "PR73 - Provider Write Controlled Expansion Approval Gate",
+  "verify:provider-write-controlled-expansion-approval",
+]);
+
+mustContainAll("progress tracks provider write controlled expansion approval", content.progress, [
+  "Started PR73 provider write controlled expansion approval gate",
+]);
+
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
@@ -1534,6 +1622,7 @@ mustNotContainUnsafeExamples({
   providerWriteLivePilotRunLedger: content.providerWriteLivePilotRunLedger,
   providerWriteManualCloseoutReview: content.providerWriteManualCloseoutReview,
   providerWriteSafeLedgerAssembly: content.providerWriteSafeLedgerAssembly,
+  providerWriteControlledExpansionApproval: content.providerWriteControlledExpansionApproval,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
@@ -1555,6 +1644,7 @@ mustNotContainUnsafeExamples({
   channelRunbook: content.channelRunbook,
   composeProductionExample: content.composeProductionExample,
   taskPlan: content.taskPlan,
+  progress: content.progress,
 });
 
 if (failures.length > 0) {

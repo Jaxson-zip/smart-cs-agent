@@ -24,6 +24,8 @@ provider-write-live-pilot-preflight-artifacts/
 provider-write-live-pilot-run-ledger-draft-artifacts/
 provider-write-live-pilot-run-ledger-artifacts/
 provider-write-manual-closeout-review-artifacts/
+provider-write-safe-ledger-assembly-artifacts/
+provider-write-controlled-expansion-approval-artifacts/
 launch-manifest-artifacts/
 
 # next.js

@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR73 Provider Write Controlled Expansion Approval Gate
+
+PR73 adds the controlled expansion approval gate after PR72 safe ledger assembly. It validates whether release owners may consider expanding from `single_merchant_pilot` to `controlled_multi_merchant` using a sanitized `smart-cs-agent.provider-write-controlled-expansion-approval.v1` approval package and a separate safe ledger assembly receipt.
+
+Run:
+
+```bash
+npm run verify:provider-write-controlled-expansion-approval
+```
+
+Use `npm run verify:provider-write-controlled-expansion-approval:safe` with `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_DRAFT_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_ASSEMBLY_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_APPROVAL_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-controlled-expansion-approval-artifacts/`, `provider-write-safe-ledger-assembly-artifacts/`, `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-controlled-expansion-approval.md`.
+
+This verifier recomputes the assembly receipt SHA-256 before accepting `providerWriteSafeLedgerAssemblySha256`, recomputes PR70/PR71/PR69 source artifact SHA-256 values before accepting the assembly receipt bindings, requires `providerWriteSafeLedgerAssemblyVerifierPassed=true`, keeps actions limited to `modify_address`, `issue_coupon`, and `urge_logistics`, and checks operator coverage, rollback ownership, alerting, billing plan, contract review, support SLA, merchant notification readiness, and no automatic customer-visible replies. It does not call provider APIs, execute provider writes, read provider credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR72 Provider Write Safe Ledger Assembly Gate
 
 PR72 adds the final safe ledger assembly gate for a bounded live provider write pilot. It checks that PR70 `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` draft evidence, PR71 `smart-cs-agent.provider-write-manual-closeout-review.v1` manual closeout review, and PR69 `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` final ledger evidence are the same `single_merchant_pilot` package before release owners consider expansion.

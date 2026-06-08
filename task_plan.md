@@ -2,11 +2,33 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR72 - Provider Write Safe Ledger Assembly Gate
+## Current Stage: PR73 - Provider Write Controlled Expansion Approval Gate
 
-Status: in progress locally. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: completed locally and ready for commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR71 - Provider Write Manual Closeout Review Gate was verified locally and committed as `d012c06`. Remote push is still waiting for GitHub `workflow` scope authorization.
+Previous Stage: PR72 - Provider Write Safe Ledger Assembly Gate was verified locally and committed as `e2e2f35`. Remote push is still waiting for GitHub `workflow` scope authorization.
+
+PR73 adds the controlled expansion approval gate after PR72 safe ledger assembly. Release owners can validate sanitized `smart-cs-agent.provider-write-controlled-expansion-approval.v1` evidence under `provider-write-controlled-expansion-approval-artifacts/` plus a separate `smart-cs-agent.provider-write-safe-ledger-assembly.v1` receipt under `provider-write-safe-ledger-assembly-artifacts/` before considering expansion from `single_merchant_pilot` to `controlled_multi_merchant`. Safe mode also requires the PR70 draft, PR71 manual review, and PR69 final ledger source files so the verifier can recompute their SHA-256 values before accepting the assembly receipt bindings. PR73 must remain approval-only and no-network: it must not enable provider writes, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR73 Scope
+
+- Add `npm run verify:provider-write-controlled-expansion-approval` and `npm run verify:provider-write-controlled-expansion-approval:safe`.
+- Validate optional sanitized controlled expansion approval evidence under `provider-write-controlled-expansion-approval-artifacts/`.
+- Require a separate safe ledger assembly receipt under `provider-write-safe-ledger-assembly-artifacts/` and recompute its SHA-256 before accepting `providerWriteSafeLedgerAssemblySha256`.
+- Require PR70/PR71/PR69 source files under `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`, then recompute their SHA-256 values before accepting the assembly receipt's internal bindings.
+- Require `fromRolloutTrack=single_merchant_pilot`, `toRolloutTrack=controlled_multi_merchant`, 2-10 merchant fingerprints, allowed first-pilot actions only, aggregate and per-merchant write limits, business-hours-only control, operator coverage, rollback ownership, alert readiness, billing plan, contract review, support SLA, merchant notification readiness, and no automatic customer-visible replies.
+- Connect PR73 to provider write docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR73 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no production database reads, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR73
+
+- Enabling broad provider write rollout automatically.
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `controlled_multi_merchant`.
 
 PR72 adds the safe ledger assembly gate after PR70 draft export, PR71 manual closeout review, and PR69 final ledger evidence exist. Release owners can validate that sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1`, `smart-cs-agent.provider-write-manual-closeout-review.v1`, and `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` artifacts all describe the same bounded pilot before considering expansion beyond the first `single_merchant_pilot`. PR72 must remain assembly-only and no-network: it must not generate pass evidence, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 

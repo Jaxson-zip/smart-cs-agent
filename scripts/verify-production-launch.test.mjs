@@ -34,6 +34,9 @@ test("production launch gate enforces provider write rehearsals before approval 
       "npm run verify:provider-write-kill-switch-rehearsal:safe",
       "npm run verify:production-provider-write-approval:safe",
       "npm run verify:provider-write-live-pilot-preflight:safe",
+      "npm run verify:provider-write-safe-ledger-assembly:safe",
+      "npm run verify:provider-write-controlled-expansion-approval",
+      "npm run verify:provider-write-controlled-expansion-approval:safe",
     ],
     "production launch verifier source",
   );
