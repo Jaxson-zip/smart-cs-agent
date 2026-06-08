@@ -2,11 +2,32 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR70 - Provider Write Live Pilot Run Ledger Draft Export
+## Current Stage: PR71 - Provider Write Manual Closeout Review Gate
 
 Status: verified locally and ready for local commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR69 - Provider Write Live Pilot Run Ledger Gate was verified locally and committed as `fa73bf6`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR70 - Provider Write Live Pilot Run Ledger Draft Export was verified locally and committed as `3b66b29`. Remote push is still waiting for GitHub `workflow` scope authorization.
+
+PR71 adds the manual closeout review evidence gate after a bounded live provider write pilot window. Release owners can validate sanitized `smart-cs-agent.provider-write-manual-closeout-review.v1` evidence under `provider-write-manual-closeout-review-artifacts/` before PR69 safe ledger evidence binds `providerWriteManualCloseoutReviewSha256`. PR71 must remain evidence-only and no-network: it must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR71 Scope
+
+- Add `npm run verify:provider-write-manual-closeout-review` and `npm run verify:provider-write-manual-closeout-review:safe`.
+- Validate optional sanitized manual closeout review evidence under `provider-write-manual-closeout-review-artifacts/`.
+- Require distinct reviewer fingerprints, second review, `approved_for_safe_ledger`, consistent run counts, failed-run incident notes, rollback verification, no automatic customer replies, no outstanding actions, artifact hash bindings, and all safety booleans false.
+- Bind PR71 into PR69 by requiring `providerWriteManualCloseoutReviewVerifierPassed` and `providerWriteManualCloseoutReviewSha256` in the provider write live pilot run ledger gate.
+- Connect PR71 to provider write docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR71 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR71
+
+- Generating PR69 pass evidence automatically.
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `single_merchant_pilot`.
 
 PR70 adds an admin-only provider write live pilot run ledger draft export. Release owners can export sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` facts from existing `ProviderWriteExecutionAttempt` and `ProviderWriteRequest` rows for one tenant/channel/window. PR70 must remain draft-only: `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. It must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
@@ -379,10 +400,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR68 - Provider Write Live Pilot Preflight Gate.
 - [x] PR69 - Provider Write Live Pilot Run Ledger Gate.
 - [x] PR70 - Provider Write Live Pilot Run Ledger Draft Export.
+- [x] PR71 - Provider Write Manual Closeout Review Gate.
 
 ## Verification Gate
 
-PR70 provider write live pilot run ledger draft export is tracked against this gate inventory:
+PR71 provider write manual closeout review gate is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -477,6 +499,13 @@ PR70 provider write live pilot run ledger draft export is tracked against this g
 - `node --test scripts/verify-provider-write-live-pilot-run-ledger.test.mjs`
 - `npm.cmd run verify:provider-write-live-pilot-run-ledger`
 - `npm.cmd run verify:provider-write-live-pilot-run-ledger:safe`
+- `node --check scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs`
+- `node --test scripts/verify-provider-write-live-pilot-run-ledger-draft-export.test.mjs`
+- `npm.cmd run verify:provider-write-live-pilot-run-ledger-draft-export`
+- `node --check scripts/verify-provider-write-manual-closeout-review.mjs`
+- `node --check scripts/verify-provider-write-manual-closeout-review.test.mjs`
+- `node --test scripts/verify-provider-write-manual-closeout-review.test.mjs`
+- `npm.cmd run verify:provider-write-manual-closeout-review`
 - `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
 - `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-startup-guard`
@@ -552,6 +581,19 @@ PR70 provider write live pilot run ledger draft export is tracked against this g
 - `git diff --check` exited 0 with CRLF warnings only.
 - Read-only PR70 reviews found draft semantics gaps; all were fixed by failing closed instead of truncating windows with more than 50 records, requiring `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review`, requiring `pilot_run_records` for empty drafts, scoping request metadata lookup by channel, and constraining draft `policyReason` to a safe enum with unknown values sanitized.
 - PR70 remains draft-only/read-only/no-network: it does not generate PR69 pass evidence, add a `:safe` command, call provider APIs, execute provider writes, read credential material, open/decrypt payload escrow, expose raw provider/customer/idempotency data, or send customer-visible replies.
+
+### PR71 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 218 tests.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 83 tests.
+- `node --test scripts\verify-provider-write-manual-closeout-review.test.mjs` passed with 9 tests, including malformed JSON rejection, unsafe safety flag rejection, weak closeout rejection, path restriction, and unknown positional argument redaction.
+- `npm.cmd run verify:provider-write-manual-closeout-review`, `npm.cmd run verify:provider-write-live-pilot-run-ledger`, `npm.cmd run verify:provider-write-live-pilot-run-ledger-draft-export`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `node --test scripts\verify-provider-write-live-pilot-run-ledger.test.mjs`, `node --test scripts\verify-provider-write-live-pilot-run-ledger-draft-export.test.mjs`, `node --test scripts\verify-production-launch.test.mjs`, and `node --test scripts\verify-production-static-ci.test.mjs` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 180 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only PR71 reviews found no provider-network, credential, payload-escrow, provider-write, or customer-visible execution path. Their P2 findings were fixed by adding malformed JSON and unsafe safety flag tests, asserting second-review and closeout flag failures, and synchronizing PR70/PR69 docs around `manual_closeout_review` and `providerWriteManualCloseoutReviewSha256`.
+- PR71 remains manual closeout evidence-only/no-network: no provider API calls, no provider writes, no credential material reads, no payload escrow opening/decrypting, no raw provider/customer/idempotency data, and no customer-visible replies have been enabled.
 
 ### PR67 Final Verification Notes
 

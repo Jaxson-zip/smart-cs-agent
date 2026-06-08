@@ -76,6 +76,7 @@ jobs:
           node --test scripts/verify-provider-write-live-pilot-preflight.test.mjs
           node --test scripts/verify-provider-write-live-pilot-run-ledger.test.mjs
           node --test scripts/verify-provider-write-live-pilot-run-ledger-draft-export.test.mjs
+          node --test scripts/verify-provider-write-manual-closeout-review.test.mjs
 
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present -- --pretty false
@@ -126,6 +127,7 @@ jobs:
           npm run verify:provider-write-live-pilot-preflight
           npm run verify:provider-write-live-pilot-run-ledger
           npm run verify:provider-write-live-pilot-run-ledger-draft-export
+          npm run verify:provider-write-manual-closeout-review
           npm run verify:provider-credential-boundary
           npm run verify:provider-credential-store
           npm run verify:provider-read-harness

@@ -68,6 +68,7 @@ const EVIDENCE_KEYS = new Set([
   "providerWriteLivePilotPreflightVerifierPassed",
   "productionProviderWriteApprovalVerifierPassed",
   "providerWriteKillSwitchControlPlaneVerifierPassed",
+  "providerWriteManualCloseoutReviewVerifierPassed",
   "auditExportVerified",
   "postPilotReviewCompleted",
   "productionLaunchVerifierPassed",
@@ -78,6 +79,7 @@ const ARTIFACT_BINDING_KEYS = new Set([
   "providerWriteKillSwitchControlPlaneSha256",
   "providerWriteLiveExecutorStartupGuardSha256",
   "providerWriteLiveExecutorControlPlaneSha256",
+  "providerWriteManualCloseoutReviewSha256",
   "productionLaunchSha256",
   "auditExportSha256",
 ]);

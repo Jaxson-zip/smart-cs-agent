@@ -23,6 +23,8 @@ const files = {
     "docs/deploy/provider-write-live-pilot-preflight.md",
   providerWriteLivePilotRunLedger:
     "docs/deploy/provider-write-live-pilot-run-ledger.md",
+  providerWriteManualCloseoutReview:
+    "docs/deploy/provider-write-manual-closeout-review.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -72,6 +74,8 @@ const files = {
     "scripts/verify-provider-write-live-pilot-run-ledger.mjs",
   providerWriteLivePilotRunLedgerDraftExportVerifier:
     "scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs",
+  providerWriteManualCloseoutReviewVerifier:
+    "scripts/verify-provider-write-manual-closeout-review.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -155,6 +159,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-live-pilot-run-ledger",
   "verify:provider-write-live-pilot-run-ledger:safe",
   "verify:provider-write-live-pilot-run-ledger-draft-export",
+  "verify:provider-write-manual-closeout-review",
+  "verify:provider-write-manual-closeout-review:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -233,6 +239,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-live-pilot-preflight:safe",
   "npm run verify:provider-write-live-pilot-run-ledger",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+  "npm run verify:provider-write-manual-closeout-review",
+  "npm run verify:provider-write-manual-closeout-review:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -299,6 +307,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_REQUIRE_PASS=true",
   "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_FILE",
   "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -608,11 +618,18 @@ mustContainAll("production readiness references provider write live pilot run le
   "PR69 Provider Write Live Pilot Run Ledger Gate",
   "npm run verify:provider-write-live-pilot-run-ledger",
   "npm run verify:provider-write-live-pilot-run-ledger:safe",
+  "providerWriteManualCloseoutReviewSha256",
 ]);
 mustContainAll("production readiness references provider write live pilot run ledger draft export", content.productionReadiness, [
   "PR70 Provider Write Live Pilot Run Ledger Draft Export",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "readyForSafeLedger=false",
+  "manual_closeout_review",
+]);
+mustContainAll("production readiness references provider write manual closeout review", content.productionReadiness, [
+  "PR71 Provider Write Manual Closeout Review Gate",
+  "npm run verify:provider-write-manual-closeout-review",
+  "npm run verify:provider-write-manual-closeout-review:safe",
 ]);
 
 mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
@@ -751,6 +768,10 @@ mustContainAll("task plan references PR70", content.taskPlan, [
   "PR70 - Provider Write Live Pilot Run Ledger Draft Export",
   "verify:provider-write-live-pilot-run-ledger-draft-export",
 ]);
+mustContainAll("task plan references PR71", content.taskPlan, [
+  "PR71 - Provider Write Manual Closeout Review Gate",
+  "verify:provider-write-manual-closeout-review",
+]);
 
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
@@ -765,6 +786,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-live-pilot-preflight",
   "verify:provider-write-live-pilot-run-ledger",
   "verify:provider-write-live-pilot-run-ledger-draft-export",
+  "verify:provider-write-manual-closeout-review",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -868,6 +890,16 @@ mustContainAll("provider write live pilot run ledger draft export verifier sourc
   "networkExecutedByExporter: z.literal(false)",
   "providerWriteExecutedByExporter: z.literal(false)",
   "customerVisibleActionsSentByExporter: z.literal(false)",
+]);
+mustContainAll("provider write manual closeout review verifier source", content.providerWriteManualCloseoutReviewVerifier, [
+  "verify:provider-write-manual-closeout-review",
+  "provider-write-manual-closeout-review-artifacts",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "provider write manual closeout review",
+  "approved_for_safe_ledger",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "customerVisibleActionsSentByVerifier",
 ]);
 mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
   "verify:provider-write-live-executor-startup-guard",
@@ -1199,6 +1231,21 @@ mustContainAll("provider write live pilot run ledger draft export docs", content
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
+mustContainAll("provider write manual closeout review docs", content.providerWriteManualCloseoutReview, [
+  "PR71 Provider Write Manual Closeout Review Gate",
+  "npm run verify:provider-write-manual-closeout-review",
+  "npm run verify:provider-write-manual-closeout-review:safe",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
+  "approved_for_safe_ledger",
+  "providerWriteManualCloseoutReviewSha256",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1265,6 +1312,14 @@ mustContainAll("provider write live pilot run ledger draft export docs reference
   "PR70 Provider Write Live Pilot Run Ledger Draft Export",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "ProviderWriteLivePilotRunLedgerDraftSchema",
+  "manual_closeout_review",
+  "providerWriteManualCloseoutReviewSha256",
+]);
+mustContainAll("provider write manual closeout review docs reference", content.providerWriteRequests, [
+  "PR71 Provider Write Manual Closeout Review Gate",
+  "npm run verify:provider-write-manual-closeout-review",
+  "smart-cs-agent.provider-write-manual-closeout-review.v1",
+  "providerWriteManualCloseoutReviewSha256",
 ]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
@@ -1341,6 +1396,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-live-pilot-preflight",
   "npm run verify:provider-write-live-pilot-run-ledger",
   "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+  "npm run verify:provider-write-manual-closeout-review",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1382,6 +1438,7 @@ mustNotContainUnsafeExamples({
   providerWriteKillSwitchRehearsal: content.providerWriteKillSwitchRehearsal,
   providerWriteLivePilotPreflight: content.providerWriteLivePilotPreflight,
   providerWriteLivePilotRunLedger: content.providerWriteLivePilotRunLedger,
+  providerWriteManualCloseoutReview: content.providerWriteManualCloseoutReview,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

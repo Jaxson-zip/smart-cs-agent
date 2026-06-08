@@ -406,6 +406,7 @@ function validLedger() {
       providerWriteLivePilotPreflightVerifierPassed: true,
       productionProviderWriteApprovalVerifierPassed: true,
       providerWriteKillSwitchControlPlaneVerifierPassed: true,
+      providerWriteManualCloseoutReviewVerifierPassed: true,
       auditExportVerified: true,
       postPilotReviewCompleted: true,
       productionLaunchVerifierPassed: true,
@@ -421,6 +422,8 @@ function validLedger() {
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
       providerWriteLiveExecutorControlPlaneSha256:
         "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+      providerWriteManualCloseoutReviewSha256:
+        "4d967a0424625957d0374f7f946b484c3b1a81840edbb195a2bb5ef7e4ee781d",
       productionLaunchSha256:
         "1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53",
       auditExportSha256:

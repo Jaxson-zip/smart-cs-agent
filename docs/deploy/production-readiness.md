@@ -1,5 +1,18 @@
 # Production-Readiness Baseline
 
+## PR71 Provider Write Manual Closeout Review Gate
+
+Provider write manual closeout review evidence is now checked by:
+
+```bash
+npm run verify:provider-write-manual-closeout-review
+npm run verify:provider-write-manual-closeout-review:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-manual-closeout-review.v1` package under `provider-write-manual-closeout-review-artifacts/` after a bounded live provider write pilot window closes. It requires distinct reviewer fingerprints, second review, `approved_for_safe_ledger`, consistent run counts, failed-run incident notes, rollback verification, no outstanding actions, artifact bindings, and explicit proof that no automatic customer-visible replies were sent. It is the human signoff that PR70 draft facts and audit exports were reviewed before a PR69 safe ledger can bind `providerWriteManualCloseoutReviewSha256`.
+
+The gate still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR70 Provider Write Live Pilot Run Ledger Draft Export
 
 Provider write live pilot run ledger draft export is now checked by:
@@ -8,7 +21,7 @@ Provider write live pilot run ledger draft export is now checked by:
 npm run verify:provider-write-live-pilot-run-ledger-draft-export
 ```
 
-This gate verifies the admin-only draft export path for `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1`. The API and Web BFF routes may help release owners collect sanitized request/attempt facts for a bounded tenant/channel window, but the draft must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. It does not replace PR69 safe evidence, does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not expose raw tenant/customer/provider/idempotency data, and does not send customer-visible replies.
+This gate verifies the admin-only draft export path for `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1`. The API and Web BFF routes may help release owners collect sanitized request/attempt facts for a bounded tenant/channel window, but the draft must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. It must still list missing `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review`; it does not replace PR69 safe evidence, does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not expose raw tenant/customer/provider/idempotency data, and does not send customer-visible replies.
 
 ## PR69 Provider Write Live Pilot Run Ledger Gate
 
@@ -19,7 +32,7 @@ npm run verify:provider-write-live-pilot-run-ledger
 npm run verify:provider-write-live-pilot-run-ledger:safe
 ```
 
-This gate validates a sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` package under `provider-write-live-pilot-run-ledger-artifacts/` after a first live provider write pilot window closes. It requires a bounded `single_merchant_pilot`, at least one run record, low-risk first-pilot actions only, run timestamps inside the declared pilot window, consistent succeeded/failed/rolled-back/blocked counts, all-runs-reviewed proof, failed-run incident proof, rollback verification proof for any failed provider mutation, no automatic customer replies, audit export binding, and artifact hash bindings to preflight, approval, control-plane, and production launch evidence. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+This gate validates a sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` package under `provider-write-live-pilot-run-ledger-artifacts/` after a first live provider write pilot window closes. It requires a bounded `single_merchant_pilot`, at least one run record, low-risk first-pilot actions only, run timestamps inside the declared pilot window, consistent succeeded/failed/rolled-back/blocked counts, all-runs-reviewed proof, failed-run incident proof, rollback verification proof for any failed provider mutation, no automatic customer replies, audit export binding, and artifact hash bindings to preflight, approval, control-plane, manual closeout review, and production launch evidence, including `providerWriteManualCloseoutReviewSha256`. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
 ## PR68 Provider Write Live Pilot Preflight Gate
 

@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR71 Provider Write Manual Closeout Review Gate
+
+PR71 adds the manual closeout review gate for a bounded live provider write pilot. The `smart-cs-agent.provider-write-manual-closeout-review.v1` package must prove that release, operations, and rollback owners reviewed the PR70 draft, sanitized audit export, failed-run notes, rollback actions, and production launch evidence before a PR69 safe ledger can bind the review.
+
+Run:
+
+```bash
+npm run verify:provider-write-manual-closeout-review
+```
+
+Use `npm run verify:provider-write-manual-closeout-review:safe` with `SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_FILE` and `SMARTCS_PROVIDER_WRITE_MANUAL_CLOSEOUT_REVIEW_REQUIRE_PASS=true` after release owners export sanitized review evidence under `provider-write-manual-closeout-review-artifacts/`. See `docs/deploy/provider-write-manual-closeout-review.md`.
+
+This verifier checks reviewer independence, second review, run-count consistency, failure/rollback closeout, no automatic customer replies, artifact bindings, and safety booleans. It does not call provider APIs, execute provider writes, read provider credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR70 Provider Write Live Pilot Run Ledger Draft Export
 
 PR70 adds `ProviderWriteLivePilotRunLedgerDraftSchema` and admin-only draft export routes for release owners assembling post-window provider write evidence:
@@ -15,7 +29,7 @@ Run:
 npm run verify:provider-write-live-pilot-run-ledger-draft-export
 ```
 
-The draft is deliberately not a safe ledger. It must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`, and it must continue to list missing `artifact_bindings` and `live_provider_mutation_evidence` until a release owner builds a separate PR69 evidence package. The exporter reads existing sanitized request/attempt facts only; it does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store provider payloads/responses, expose raw tenant/order/logistics/address/idempotency/customer fields, or send customer-visible replies.
+The draft is deliberately not a safe ledger. It must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`, and it must continue to list missing `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review` until a release owner builds a separate PR69 evidence package with `providerWriteManualCloseoutReviewSha256`. The exporter reads existing sanitized request/attempt facts only; it does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store provider payloads/responses, expose raw tenant/order/logistics/address/idempotency/customer fields, or send customer-visible replies.
 
 ## PR69 Provider Write Live Pilot Run Ledger Gate
 
@@ -29,7 +43,7 @@ npm run verify:provider-write-live-pilot-run-ledger
 
 Use `npm run verify:provider-write-live-pilot-run-ledger:safe` with `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_FILE` and `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_REQUIRE_PASS=true` after release owners export sanitized pilot closeout evidence under `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-live-pilot-run-ledger.md`.
 
-This verifier checks run-ledger evidence shape, safe artifact paths, count consistency, low-risk first-pilot action limits, post-pilot review controls, rollback evidence, artifact bindings, docs, static CI wiring, and production launch references. It does not call provider APIs, execute provider writes, read credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+This verifier checks run-ledger evidence shape, safe artifact paths, count consistency, low-risk first-pilot action limits, post-pilot review controls, rollback evidence, artifact bindings including `providerWriteManualCloseoutReviewSha256`, docs, static CI wiring, and production launch references. It does not call provider APIs, execute provider writes, read credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
 ## PR68 Provider Write Live Pilot Preflight Gate
 
