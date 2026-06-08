@@ -88,6 +88,8 @@
     "verify:provider-write-graduated-rollout-closeout-review:safe": "node scripts/verify-provider-write-graduated-rollout-closeout-review.mjs --from-env --require-pass",
     "verify:provider-write-general-availability-approval": "node scripts/verify-provider-write-general-availability-approval.mjs",
     "verify:provider-write-general-availability-approval:safe": "node scripts/verify-provider-write-general-availability-approval.mjs --from-env --require-pass",
+    "verify:provider-write-manual-merchant-activation": "node scripts/verify-provider-write-manual-merchant-activation.mjs",
+    "verify:provider-write-manual-merchant-activation:safe": "node scripts/verify-provider-write-manual-merchant-activation.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

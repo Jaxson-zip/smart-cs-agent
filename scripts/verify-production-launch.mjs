@@ -45,6 +45,8 @@ const files = {
     "docs/deploy/provider-write-graduated-rollout-closeout-review.md",
   providerWriteGeneralAvailabilityApproval:
     "docs/deploy/provider-write-general-availability-approval.md",
+  providerWriteManualMerchantActivation:
+    "docs/deploy/provider-write-manual-merchant-activation.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -116,6 +118,8 @@ const files = {
     "scripts/verify-provider-write-graduated-rollout-closeout-review.mjs",
   providerWriteGeneralAvailabilityApprovalVerifier:
     "scripts/verify-provider-write-general-availability-approval.mjs",
+  providerWriteManualMerchantActivationVerifier:
+    "scripts/verify-provider-write-manual-merchant-activation.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -222,6 +226,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-graduated-rollout-closeout-review:safe",
   "verify:provider-write-general-availability-approval",
   "verify:provider-write-general-availability-approval:safe",
+  "verify:provider-write-manual-merchant-activation",
+  "verify:provider-write-manual-merchant-activation:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -323,6 +329,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
   "npm run verify:provider-write-general-availability-approval",
   "npm run verify:provider-write-general-availability-approval:safe",
+  "npm run verify:provider-write-manual-merchant-activation",
+  "npm run verify:provider-write-manual-merchant-activation:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -438,6 +446,11 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE",
   "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_RUN_LEDGER_FILE",
   "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -477,6 +490,8 @@ mustContainInOrder(
     "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
     "npm run verify:provider-write-general-availability-approval",
     "npm run verify:provider-write-general-availability-approval:safe",
+    "npm run verify:provider-write-manual-merchant-activation",
+    "npm run verify:provider-write-manual-merchant-activation:safe",
   ],
 );
 
@@ -791,6 +806,15 @@ mustContainAll("production readiness references provider write general availabil
   "general_availability",
 ]);
 
+mustContainAll("production readiness references provider write manual merchant activation", content.productionReadiness, [
+  "PR82 Provider Write Manual Merchant Activation Gate",
+  "npm run verify:provider-write-manual-merchant-activation",
+  "npm run verify:provider-write-manual-merchant-activation:safe",
+  "providerWriteGeneralAvailabilityApprovalSha256",
+  "manualApprovalBeforeProviderWrites=true",
+  "general_availability",
+]);
+
 mustContainAll("production readiness references provider write requests", content.productionReadiness, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1087,6 +1111,8 @@ mustContainAll("production static CI verifier source", content.productionStaticC
   "npm run verify:provider-write-graduated-rollout-closeout-review",
   "node --test scripts/verify-provider-write-general-availability-approval.test.mjs",
   "npm run verify:provider-write-general-availability-approval",
+  "node --test scripts/verify-provider-write-manual-merchant-activation.test.mjs",
+  "npm run verify:provider-write-manual-merchant-activation",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
 ]);
@@ -1394,6 +1420,32 @@ mustContainAll("provider write general availability approval verifier source", c
   "automaticActivationEnabled",
   "manualMerchantActivationRequired",
   "manualApprovalBeforeMerchantActivation",
+  "noAutomaticCustomerVisibleReplies",
+  "liveExecutorKillSwitchDefaultOn",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "payloadEscrowOpenedByVerifier",
+  "credentialsReadByVerifier",
+  "customerVisibleActionsSentByVerifier",
+]);
+mustContainAll("provider write manual merchant activation verifier source", content.providerWriteManualMerchantActivationVerifier, [
+  "verify:provider-write-manual-merchant-activation",
+  "provider-write-manual-merchant-activation-artifacts",
+  "provider-write-general-availability-approval-artifacts",
+  "provider-write-graduated-rollout-closeout-review-artifacts",
+  "provider-write-graduated-rollout-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-manual-merchant-activation.v1",
+  "smart-cs-agent.provider-write-general-availability-approval.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "general_availability",
+  "approved_for_manual_activation",
+  "providerWriteGeneralAvailabilityApprovalSha256",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "automaticActivationEnabled",
+  "automaticNextMerchantEnabled",
+  "manualApprovalBeforeProviderWrites",
   "noAutomaticCustomerVisibleReplies",
   "liveExecutorKillSwitchDefaultOn",
   "networkExecutedByVerifier",
@@ -2063,6 +2115,45 @@ mustContainAll("provider write general availability approval docs", content.prov
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write general availability approval docs reference manual merchant activation", content.providerWriteGeneralAvailabilityApproval, [
+  "PR82 Provider Write Manual Merchant Activation Gate",
+  "verify:provider-write-manual-merchant-activation",
+  "providerWriteGeneralAvailabilityApprovalSha256",
+  "manual merchant activation",
+]);
+mustContainAll("provider write manual merchant activation docs", content.providerWriteManualMerchantActivation, [
+  "PR82 Provider Write Manual Merchant Activation Gate",
+  "npm run verify:provider-write-manual-merchant-activation",
+  "npm run verify:provider-write-manual-merchant-activation:safe",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-manual-merchant-activation.v1",
+  "smart-cs-agent.provider-write-general-availability-approval.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "provider-write-manual-merchant-activation-artifacts/",
+  "provider-write-general-availability-approval-artifacts/",
+  "providerWriteGeneralAvailabilityApprovalSha256",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "general_availability",
+  "approved_for_manual_activation",
+  "automaticActivationEnabled=false",
+  "automaticNextMerchantEnabled=false",
+  "manualApprovalBeforeProviderWrites=true",
+  "noAutomaticCustomerVisibleReplies=true",
+  "liveExecutorKillSwitchDefaultOn=true",
+  "does not enable provider writes",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not read production databases",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -2226,6 +2317,14 @@ mustContainAll("provider write general availability approval docs reference", co
   "general_availability",
   "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE",
 ]);
+mustContainAll("provider write manual merchant activation docs reference", content.providerWriteRequests, [
+  "PR82 Provider Write Manual Merchant Activation Gate",
+  "npm run verify:provider-write-manual-merchant-activation",
+  "smart-cs-agent.provider-write-manual-merchant-activation.v1",
+  "providerWriteGeneralAvailabilityApprovalSha256",
+  "manualApprovalBeforeProviderWrites=true",
+  "SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_APPROVAL_FILE",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -2322,6 +2421,8 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-graduated-rollout-closeout-review",
   "node --test scripts/verify-provider-write-general-availability-approval.test.mjs",
   "npm run verify:provider-write-general-availability-approval",
+  "node --test scripts/verify-provider-write-manual-merchant-activation.test.mjs",
+  "npm run verify:provider-write-manual-merchant-activation",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -2434,6 +2535,15 @@ mustContainAll("progress tracks provider write general availability approval", c
   "Started PR81 provider write general availability approval gate",
 ]);
 
+mustContainAll("task plan tracks provider write manual merchant activation", content.taskPlan, [
+  "PR82 - Provider Write Manual Merchant Activation Gate",
+  "verify:provider-write-manual-merchant-activation",
+]);
+
+mustContainAll("progress tracks provider write manual merchant activation", content.progress, [
+  "Started PR82 provider write manual merchant activation gate",
+]);
+
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
@@ -2455,6 +2565,7 @@ mustNotContainUnsafeExamples({
   providerWriteGraduatedRolloutRunLedger: content.providerWriteGraduatedRolloutRunLedger,
   providerWriteGraduatedRolloutCloseoutReview: content.providerWriteGraduatedRolloutCloseoutReview,
   providerWriteGeneralAvailabilityApproval: content.providerWriteGeneralAvailabilityApproval,
+  providerWriteManualMerchantActivation: content.providerWriteManualMerchantActivation,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR82 Provider Write Manual Merchant Activation Gate
+
+Provider write manual merchant activation is now checked by:
+
+```bash
+npm run verify:provider-write-manual-merchant-activation
+npm run verify:provider-write-manual-merchant-activation:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-manual-merchant-activation.v1` package under `provider-write-manual-merchant-activation-artifacts/` plus the PR81 approval package under `provider-write-general-availability-approval-artifacts/`, the PR80 closeout review package under `provider-write-graduated-rollout-closeout-review-artifacts/`, and the PR79 run ledger package under `provider-write-graduated-rollout-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteGeneralAvailabilityApprovalSha256`, rechecks `providerWriteGraduatedRolloutCloseoutReviewSha256`, rechecks `providerWriteGraduatedRolloutRunLedgerSha256`, requires one merchant and one channel inside the PR81 `general_availability` scope, and keeps `automaticActivationEnabled=false`, `automaticNextMerchantEnabled=false`, `manualApprovalBeforeProviderWrites=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`.
+
+The gate remains approval-only and evidence-only. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, activate merchants automatically, activate the next merchant automatically, or send customer-visible replies.
+
 ## PR81 Provider Write General Availability Approval Gate
 
 Provider write general availability approval is now checked by:

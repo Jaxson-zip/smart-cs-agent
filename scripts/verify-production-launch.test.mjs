@@ -44,6 +44,8 @@ test("production launch gate enforces provider write rehearsals before approval 
       "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
       "npm run verify:provider-write-general-availability-approval",
       "npm run verify:provider-write-general-availability-approval:safe",
+      "npm run verify:provider-write-manual-merchant-activation",
+      "npm run verify:provider-write-manual-merchant-activation:safe",
     ],
     "production launch verifier source",
   );

@@ -420,3 +420,15 @@ npm run verify:provider-write-general-availability-approval
 Use `npm run verify:provider-write-general-availability-approval:safe` with `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_REQUIRE_PASS=true` after release owners export sanitized `smart-cs-agent.provider-write-general-availability-approval.v1` evidence under `provider-write-general-availability-approval-artifacts/`.
 
 This verifier recomputes `providerWriteGraduatedRolloutCloseoutReviewSha256`, rechecks the PR80 closeout review's `providerWriteGraduatedRolloutRunLedgerSha256`, and confirms the intended transition into `general_availability` remains manually controlled. It requires `automaticActivationEnabled=false`, `manualMerchantActivationRequired=true`, `manualApprovalBeforeMerchantActivation=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, or send customer-visible replies.
+
+## PR82 Provider Write Manual Merchant Activation Gate
+
+PR82 adds the one-merchant manual activation gate after PR81. Run:
+
+```bash
+npm run verify:provider-write-manual-merchant-activation
+```
+
+Use `npm run verify:provider-write-manual-merchant-activation:safe` with `SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_FILE`, `SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_MANUAL_MERCHANT_ACTIVATION_REQUIRE_PASS=true` after release owners export sanitized `smart-cs-agent.provider-write-manual-merchant-activation.v1` evidence under `provider-write-manual-merchant-activation-artifacts/`.
+
+This verifier recomputes `providerWriteGeneralAvailabilityApprovalSha256`, rechecks the PR81 approval's `providerWriteGraduatedRolloutCloseoutReviewSha256`, and rechecks the PR80 closeout review's `providerWriteGraduatedRolloutRunLedgerSha256`. It keeps `automaticActivationEnabled=false`, `automaticNextMerchantEnabled=false`, `manualApprovalBeforeProviderWrites=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, activate merchants automatically, activate the next merchant automatically, or send customer-visible replies.

@@ -2,11 +2,13 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR81 - Provider Write General Availability Approval Gate
+## Current Stage: PR82 - Provider Write Manual Merchant Activation Gate
 
 Status: in progress locally. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR80 - Provider Write Graduated Rollout Closeout Review Gate was verified locally and committed as `d1dc0e9`. Remote push is still waiting for GitHub `workflow` scope authorization.
+Previous Stage: PR81 - Provider Write General Availability Approval Gate was verified locally and committed as `511f2f7`. Remote push is still waiting for GitHub `workflow` scope authorization.
+
+Historical Stage: PR80 - Provider Write Graduated Rollout Closeout Review Gate was verified locally and committed as `d1dc0e9`. Remote push is still waiting for GitHub `workflow` scope authorization.
 
 Historical Stage: PR79 - Provider Write Graduated Rollout Run Ledger Gate was verified locally and committed as `18a23ab`. Remote push is still waiting for GitHub `workflow` scope authorization.
 
@@ -23,6 +25,29 @@ Historical Stage: PR74 - Provider Write Controlled Expansion Preflight Gate was 
 Historical Stage: PR73 - Provider Write Controlled Expansion Approval Gate was verified locally and committed as `db5c19b`.
 
 Historical Stage: PR72 - Provider Write Safe Ledger Assembly Gate was verified locally and committed as `e2e2f35`.
+
+PR82 adds the manual merchant activation gate after PR81 general availability approval. Release owners can validate sanitized `smart-cs-agent.provider-write-manual-merchant-activation.v1` evidence under `provider-write-manual-merchant-activation-artifacts/` plus the PR81 approval evidence under `provider-write-general-availability-approval-artifacts/`, PR80 closeout review evidence under `provider-write-graduated-rollout-closeout-review-artifacts/`, and PR79 run ledger evidence under `provider-write-graduated-rollout-run-ledger-artifacts/`. Safe mode recomputes `providerWriteGeneralAvailabilityApprovalSha256`, rechecks `providerWriteGraduatedRolloutCloseoutReviewSha256`, and rechecks `providerWriteGraduatedRolloutRunLedgerSha256` before accepting one `general_availability` merchant/channel activation package. PR82 must remain approval-only and no-network: it must not enable provider writes, activate merchants automatically, activate the next merchant automatically, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR82 Scope
+
+- Add `npm run verify:provider-write-manual-merchant-activation` and `npm run verify:provider-write-manual-merchant-activation:safe`.
+- Validate optional sanitized manual merchant activation evidence under `provider-write-manual-merchant-activation-artifacts/`.
+- Require separate PR81 approval, PR80 closeout review, and PR79 run ledger files, then recompute SHA-256 bindings through `providerWriteGeneralAvailabilityApprovalSha256`, `providerWriteGraduatedRolloutCloseoutReviewSha256`, and `providerWriteGraduatedRolloutRunLedgerSha256`.
+- Require one merchant fingerprint and one channel inside the PR81 `general_availability` approval scope, allowed actions within PR81 scope, per-merchant write limits not exceeding PR81, and coupon limits not exceeding PR81.
+- Require `activationStatus=approved_for_manual_activation` in pass mode, distinct reviewers, second review, `automaticActivationEnabled=false`, `automaticNextMerchantEnabled=false`, `manualApprovalBeforeProviderWrites=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`.
+- Connect PR82 to provider write docs, PR81 approval docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR82 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no production database reads, no payload escrow opening, no customer-visible replies, no automatic merchant activation, no automatic next merchant activation, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR82
+
+- Enabling provider writes or `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Automatically activating a merchant.
+- Automatically activating the next merchant.
+- Opening general availability automatically.
+- Live Taobao/Douyin provider write clients.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
 
 PR81 adds the general availability approval gate after PR80 closeout review. Release owners can validate sanitized `smart-cs-agent.provider-write-general-availability-approval.v1` evidence under `provider-write-general-availability-approval-artifacts/` plus the PR80 closeout review evidence under `provider-write-graduated-rollout-closeout-review-artifacts/` and PR79 run ledger evidence under `provider-write-graduated-rollout-run-ledger-artifacts/`. Safe mode recomputes `providerWriteGraduatedRolloutCloseoutReviewSha256` and rechecks the closeout review's `providerWriteGraduatedRolloutRunLedgerSha256` before accepting a `general_availability` approval package. PR81 must remain approval-only and no-network: it must not enable provider writes, open general availability automatically, activate merchants automatically, call provider APIs, execute provider writes, read credential material, read production databases, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 

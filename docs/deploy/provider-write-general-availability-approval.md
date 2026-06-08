@@ -67,3 +67,7 @@ npm run verify:provider-write-general-availability-approval:safe
 ```
 
 Passing PR81 permits a human release owner to continue toward manual merchant activation planning. It still keeps `automaticActivationEnabled=false`, `manualMerchantActivationRequired=true`, `manualApprovalBeforeMerchantActivation=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`.
+
+## Next Gate
+
+PR82 Provider Write Manual Merchant Activation Gate is the required follow-on manual merchant activation step. Run `verify:provider-write-manual-merchant-activation` only after PR81 approval evidence is accepted, and bind each merchant activation package back to PR81 with `providerWriteGeneralAvailabilityApprovalSha256`. PR82 still validates one merchant and one channel at a time; it does not enable provider writes or activate the next merchant automatically.
