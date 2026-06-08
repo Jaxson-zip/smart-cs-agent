@@ -27,6 +27,7 @@ provider-write-manual-closeout-review-artifacts/
 provider-write-safe-ledger-assembly-artifacts/
 provider-write-controlled-expansion-approval-artifacts/
 provider-write-controlled-expansion-preflight-artifacts/
+provider-write-controlled-expansion-run-ledger-artifacts/
 launch-manifest-artifacts/
 
 # next.js

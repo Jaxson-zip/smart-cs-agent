@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR75 Provider Write Controlled Expansion Run Ledger Gate
+
+Provider write controlled expansion run ledger is now checked by:
+
+```bash
+npm run verify:provider-write-controlled-expansion-run-ledger
+npm run verify:provider-write-controlled-expansion-run-ledger:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1` post-window package under `provider-write-controlled-expansion-run-ledger-artifacts/` plus the PR74 `smart-cs-agent.provider-write-controlled-expansion-preflight.v1` package under `provider-write-controlled-expansion-preflight-artifacts/`. Safe mode also requires the PR74 preflight approval file, safe-ledger assembly receipt, PR70 draft, PR71 review, and PR69 ledger source files under `provider-write-controlled-expansion-approval-artifacts/`, `provider-write-safe-ledger-assembly-artifacts/`, `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`.
+
+The verifier requires `providerWriteControlledExpansionPreflightVerifierPassed=true`, recomputes the preflight file SHA-256 before accepting `providerWriteControlledExpansionPreflightSha256`, recomputes the PR73/PR72/PR70/PR71/PR69 source chain before accepting preflight bindings, keeps merchant fingerprints, channels, actions, write limits, coupon caps, and launch-window timestamps inside PR74 preflight, and checks reviewed run counts, failed-run notes, rollback proof, complaint closeout, `customerComplaintsStoppedRollout=true`, and no automatic customer-visible replies.
+
+The gate still does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR74 Provider Write Controlled Expansion Preflight Gate
 
 Provider write controlled expansion preflight is now checked by:

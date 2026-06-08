@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR75 Provider Write Controlled Expansion Run Ledger Gate
+
+PR75 adds the post-window run ledger gate after PR74 controlled expansion preflight. It validates whether a completed `controlled_multi_merchant` rollout window stayed inside its approved preflight scope using a sanitized `smart-cs-agent.provider-write-controlled-expansion-run-ledger.v1` package and the PR74 preflight source chain.
+
+Run:
+
+```bash
+npm run verify:provider-write-controlled-expansion-run-ledger
+```
+
+Use `npm run verify:provider-write-controlled-expansion-run-ledger:safe` with `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_DRAFT_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_PREFLIGHT_APPROVAL_ASSEMBLY_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_CONTROLLED_EXPANSION_RUN_LEDGER_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-controlled-expansion-run-ledger-artifacts/`, `provider-write-controlled-expansion-preflight-artifacts/`, `provider-write-controlled-expansion-approval-artifacts/`, `provider-write-safe-ledger-assembly-artifacts/`, `provider-write-live-pilot-run-ledger-draft-artifacts/`, `provider-write-manual-closeout-review-artifacts/`, and `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-controlled-expansion-run-ledger.md`.
+
+This verifier recomputes the PR74 preflight file SHA-256 before accepting `providerWriteControlledExpansionPreflightSha256`, recomputes the PR73 approval and safe-ledger assembly source chain, requires `providerWriteControlledExpansionPreflightVerifierPassed=true`, checks run counts, failures, rollback proof, complaints, rejected compensation, `customerComplaintsStoppedRollout`, and no automatic customer-visible replies. It does not call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR74 Provider Write Controlled Expansion Preflight Gate
 
 PR74 adds the launch-window preflight gate after PR73 controlled expansion approval. It validates whether a specific `controlled_multi_merchant` rollout window is still inside the approved scope using a sanitized `smart-cs-agent.provider-write-controlled-expansion-preflight.v1` package and the PR73 approval package.
