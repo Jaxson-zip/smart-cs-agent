@@ -2,11 +2,30 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR66 - Provider Write Kill Switch Control Plane
+## Current Stage: PR67 - Provider Write Kill Switch Rehearsal Evidence Gate
 
-Status: verified locally. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: verified locally; commit pending. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR65 - Provider Write Live Executor Control Plane was verified locally and committed as `d5a5580`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR66 - Provider Write Kill Switch Control Plane was verified locally and committed as `60f10bb`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR67 adds a sanitized provider write kill-switch rehearsal evidence gate. Release owners can validate `smart-cs-agent.provider-write-kill-switch-rehearsal.v1` packages under `provider-write-kill-switch-rehearsal-artifacts/` before any real provider write pilot approval can be accepted. PR67 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR67 Scope
+
+- Add `npm run verify:provider-write-kill-switch-rehearsal` and `npm run verify:provider-write-kill-switch-rehearsal:safe`.
+- Validate optional sanitized emergency-stop rehearsal evidence under `provider-write-kill-switch-rehearsal-artifacts/`.
+- Require admin-only control-plane proof, emergency stop engagement, execution blocking with `policyReason=emergency_stop_engaged`, safe release proof, two-person observation, idempotency, audit, no provider credentials, no provider network calls, no payload escrow opening, no provider mutation, and no customer-visible replies in pass evidence.
+- Connect PR67 to provider write docs, production provider write approval, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR67 evidence-only/no-network: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR67
+
+- Live Taobao/Douyin provider write clients.
+- Creating provider write requests or execution attempts from the verifier.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting or decrypting sealed payload escrow bodies.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR66 adds an admin-only emergency-stop control plane for future provider write execution. Admins may read and update safe kill-switch status through API and Web BFF routes, while execution attempts fail closed with `policyReason=emergency_stop_engaged` when the persisted emergency stop is engaged. PR66 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
@@ -295,10 +314,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR64 - Provider Write Live Executor Startup Guard.
 - [x] PR65 - Provider Write Live Executor Control Plane.
 - [x] PR66 - Provider Write Kill Switch Control Plane.
+- [x] PR67 - Provider Write Kill Switch Rehearsal Evidence Gate.
 
 ## Verification Gate
 
-PR66 provider write kill switch control plane is tracked against this gate inventory:
+PR67 provider write kill switch rehearsal evidence gate is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -378,6 +398,11 @@ PR66 provider write kill switch control plane is tracked against this gate inven
 - `node --test scripts/verify-provider-write-dry-run-rehearsal.test.mjs`
 - `npm.cmd run verify:provider-write-dry-run-rehearsal`
 - `npm.cmd run verify:provider-write-dry-run-rehearsal:safe`
+- `node --check scripts/verify-provider-write-kill-switch-rehearsal.mjs`
+- `node --check scripts/verify-provider-write-kill-switch-rehearsal.test.mjs`
+- `node --test scripts/verify-provider-write-kill-switch-rehearsal.test.mjs`
+- `npm.cmd run verify:provider-write-kill-switch-rehearsal`
+- `npm.cmd run verify:provider-write-kill-switch-rehearsal:safe`
 - `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
 - `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-startup-guard`
@@ -415,6 +440,20 @@ PR66 provider write kill switch control plane is tracked against this gate inven
 - `npm.cmd run verify:operator-bootstrap`
 - Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
 - Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
+
+### PR67 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 211 tests when rerun alone from the repository cwd, avoiding the known broad parallel sandbox cwd false failure mode.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 80 tests.
+- `node --check scripts/verify-provider-write-kill-switch-rehearsal.mjs`, `node --check scripts/verify-provider-write-kill-switch-rehearsal.test.mjs`, `node --test scripts/verify-provider-write-kill-switch-rehearsal.test.mjs`, and `npm.cmd run verify:provider-write-kill-switch-rehearsal` passed.
+- `npm.cmd run verify:production-provider-write-approval`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `node --test scripts/verify-production-launch.test.mjs` passed and covers the required safe-mode order: dry-run rehearsal, kill-switch rehearsal, then provider write approval.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 142 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only verification review found no P0. Its P1 findings were fixed by requiring exact workflow `uses:` action allowlisting and rejecting placeholder/repeated-character artifact hashes in kill-switch rehearsal evidence. Low-cost P2 hardening was also added for static CI workflow path boundaries, sensitive workflow env/key markers, kill-switch rehearsal stage ordering, and engage/release state-fingerprint drift.
+- `npm.cmd run lint --workspaces --if-present -- --max-warnings=0` first hit the known broad parallel Codex sandbox cwd / ESLint project-path false failure, then passed when rerun alone from `G:\vibe-coding\smart-cs-agent`.
+- PR67 remains evidence-only/no-network: no provider API calls, no provider writes, no credential material reads, no payload escrow opening/decrypting, no raw provider/customer payload storage, no raw idempotency-key output, and no customer-visible replies have been enabled.
 
 ### PR62 Final Verification Notes
 

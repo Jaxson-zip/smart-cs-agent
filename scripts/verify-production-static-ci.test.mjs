@@ -1,12 +1,13 @@
 import assert from "node:assert";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const workflowFixtureRoot = join(process.cwd(), ".github", "workflows");
 
 test("production static CI verifier passes repository workflow checks", async () => {
   const result = await execVerifier([]);
@@ -16,10 +17,8 @@ test("production static CI verifier passes repository workflow checks", async ()
 });
 
 test("production static CI verifier rejects unsafe workflow content", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "smartcs-static-ci-unsafe-"));
-  const workflowFile = join(dir, "production-static-gates.yml");
-  await writeFile(
-    workflowFile,
+  await withWorkflowFixture(
+    ".static-ci-unsafe-",
     [
       "name: unsafe",
       "permissions:",
@@ -28,6 +27,7 @@ test("production static CI verifier rejects unsafe workflow content", async () =
       "jobs:",
       "  unsafe:",
       "    steps:",
+      "      - uses: docker/login-action@v3",
       "      - run: npm run verify:production-readiness -- --env-file=prod.env",
       "      - run: npm run verify:production-canary -- --api=https://example.com",
       "      - run: node scripts/verify-production-canary.mjs --api=https://example.com",
@@ -37,29 +37,31 @@ test("production static CI verifier rejects unsafe workflow content", async () =
       "      - run: docker login registry.example.com",
       "      - run: curl -sS https://example.com/health?token=actual_provider_token_must_not_leak",
       "      - run: echo ${{ secrets.OPERATOR_API_KEYS }}",
+      "      - env:",
+      "          PROVIDER_TOKEN: actual_provider_token_must_not_leak",
+      "        run: npm ci",
     ].join("\n"),
-    "utf8",
+    async (workflowFile) => {
+      const failed = await execVerifierFailure([`--workflow=${workflowFile}`]);
+
+      assert.match(failed.stderr, /workflow must not request write permissions/);
+      assert.match(failed.stderr, /workflow must not use secrets context/);
+      assert.match(
+        failed.stderr,
+        /workflow must not reference sensitive environment or credential names/,
+      );
+      assert.match(failed.stderr, /workflow action allowlist: contains unapproved action/);
+      assert.match(failed.stderr, /workflow must not run environment-bound production commands/);
+      assert.match(failed.stderr, /workflow must not run deployment or registry commands/);
+      assert.match(failed.stderr, /workflow run command allowlist: contains unapproved run command/);
+      assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+    },
   );
-
-  try {
-    const failed = await execVerifierFailure([`--workflow=${workflowFile}`]);
-
-    assert.match(failed.stderr, /workflow must not request write permissions/);
-    assert.match(failed.stderr, /workflow must not use secrets context/);
-    assert.match(failed.stderr, /workflow must not run environment-bound production commands/);
-    assert.match(failed.stderr, /workflow must not run deployment or registry commands/);
-    assert.match(failed.stderr, /workflow run command allowlist: contains unapproved run command/);
-    assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
 });
 
 test("production static CI verifier rejects direct production script and Docker-backed commands", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "smartcs-static-ci-direct-"));
-  const workflowFile = join(dir, "production-static-gates.yml");
-  await writeFile(
-    workflowFile,
+  await withWorkflowFixture(
+    ".static-ci-direct-",
     [
       "name: smart-cs-agent production static gates",
       "on:",
@@ -75,14 +77,25 @@ test("production static CI verifier rejects direct production script and Docker-
       "      - run: node scripts/verify-production-readiness.mjs --env-file=prod.env",
       "      - run: node scripts/demo/real-channel-webhook-smoke.mjs --secret=actual_provider_token_must_not_leak",
     ].join("\n"),
-    "utf8",
+    async (workflowFile) => {
+      const failed = await execVerifierFailure([`--workflow=${workflowFile}`]);
+
+      assert.match(failed.stderr, /workflow must not run environment-bound production commands/);
+      assert.match(failed.stderr, /workflow run command allowlist: contains unapproved run command/);
+      assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
+    },
   );
+});
+
+test("production static CI verifier rejects workflow paths outside .github/workflows", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "smartcs-static-ci-outside-"));
+  const workflowFile = join(dir, "production-static-gates.yml");
+  await writeFile(workflowFile, "name: unsafe\n", "utf8");
 
   try {
     const failed = await execVerifierFailure([`--workflow=${workflowFile}`]);
 
-    assert.match(failed.stderr, /workflow must not run environment-bound production commands/);
-    assert.match(failed.stderr, /workflow run command allowlist: contains unapproved run command/);
+    assert.match(failed.stderr, /--workflow must be inside \.github\/workflows/);
     assertNoSecretMarkers(`${failed.stdout}\n${failed.stderr}`);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -110,6 +123,19 @@ async function execVerifier(args, env = {}) {
       ...env,
     },
   });
+}
+
+async function withWorkflowFixture(prefix, content, callback) {
+  await mkdir(workflowFixtureRoot, { recursive: true });
+  const dir = await mkdtemp(join(workflowFixtureRoot, prefix));
+  const workflowFile = join(dir, "production-static-gates.yml");
+  await writeFile(workflowFile, content, "utf8");
+
+  try {
+    await callback(workflowFile);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function execVerifierFailure(args, env = {}) {

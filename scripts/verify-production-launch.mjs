@@ -17,6 +17,8 @@ const files = {
     "docs/deploy/production-provider-write-approval.md",
   providerWriteDryRunRehearsal:
     "docs/deploy/provider-write-dry-run-rehearsal.md",
+  providerWriteKillSwitchRehearsal:
+    "docs/deploy/provider-write-kill-switch-rehearsal.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -58,6 +60,8 @@ const files = {
     "scripts/verify-production-provider-write-approval.mjs",
   providerWriteDryRunRehearsalVerifier:
     "scripts/verify-provider-write-dry-run-rehearsal.mjs",
+  providerWriteKillSwitchRehearsalVerifier:
+    "scripts/verify-provider-write-kill-switch-rehearsal.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -134,6 +138,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:production-provider-write-approval:safe",
   "verify:provider-write-dry-run-rehearsal",
   "verify:provider-write-dry-run-rehearsal:safe",
+  "verify:provider-write-kill-switch-rehearsal",
+  "verify:provider-write-kill-switch-rehearsal:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -206,6 +212,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:production-provider-write-approval:safe",
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-dry-run-rehearsal:safe",
+  "npm run verify:provider-write-kill-switch-rehearsal",
+  "npm run verify:provider-write-kill-switch-rehearsal:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -264,6 +272,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PRODUCTION_BRANCH_PROTECTION_REQUIRE_PASS=true",
   "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE",
   "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
@@ -277,6 +287,7 @@ mustContainInOrder(
   extractPreflightCommands(content.launchRunbook),
   [
     "npm run verify:provider-write-dry-run-rehearsal:safe",
+    "npm run verify:provider-write-kill-switch-rehearsal:safe",
     "npm run verify:production-provider-write-approval:safe",
   ],
 );
@@ -421,6 +432,15 @@ mustContainAll("Provider write kill switch control plane", content.launchRunbook
   "emergency_stop_engaged",
 ]);
 
+mustContainAll("Provider write kill switch rehearsal evidence", content.launchRunbook, [
+  "Provider write kill-switch rehearsal evidence",
+  "smart-cs-agent.provider-write-kill-switch-rehearsal.v1",
+  "npm run verify:provider-write-kill-switch-rehearsal",
+  "npm run verify:provider-write-kill-switch-rehearsal:safe",
+  "providerWriteKillSwitchSha256",
+  "emergency_stop_engaged",
+]);
+
 mustContainAll("launch runbook no-secret boundary", content.launchRunbook, [
   "Do not put operator API keys",
   "webhook secrets",
@@ -546,6 +566,12 @@ mustContainAll("production readiness references provider write dry-run rehearsal
   "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
   "npm run verify:provider-write-dry-run-rehearsal",
   "npm run verify:provider-write-dry-run-rehearsal:safe",
+]);
+
+mustContainAll("production readiness references provider write kill-switch rehearsal", content.productionReadiness, [
+  "PR67 Provider Write Kill Switch Rehearsal Evidence Gate",
+  "npm run verify:provider-write-kill-switch-rehearsal",
+  "npm run verify:provider-write-kill-switch-rehearsal:safe",
 ]);
 
 mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
@@ -723,10 +749,12 @@ mustContainAll("production branch protection verifier source", content.productio
 ]);
 mustContainAll("production provider write approval verifier source", content.productionProviderWriteApprovalVerifier, [
   "verify:production-provider-write-approval",
+  "verify:provider-write-kill-switch-rehearsal",
   "production-provider-write-approval-artifacts",
   "human_review_required",
   "approvalStatus",
   "artifactBindings",
+  "providerWriteKillSwitchSha256",
   "providerWriteKillSwitchReady",
   "automaticProviderWritesEnabled",
 ]);
@@ -735,6 +763,16 @@ mustContainAll("provider write dry-run rehearsal verifier source", content.provi
   "provider-write-dry-run-rehearsal-artifacts",
   "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
   "provider write dry-run rehearsal",
+  "providerMutationExecuted",
+  "customerVisibleMessageSent",
+  "payloadEscrowOpened",
+]);
+mustContainAll("provider write kill-switch rehearsal verifier source", content.providerWriteKillSwitchRehearsalVerifier, [
+  "verify:provider-write-kill-switch-rehearsal",
+  "provider-write-kill-switch-rehearsal-artifacts",
+  "smart-cs-agent.provider-write-kill-switch-rehearsal.v1",
+  "provider write kill switch rehearsal",
+  "emergency_stop_engaged",
   "providerMutationExecuted",
   "customerVisibleMessageSent",
   "payloadEscrowOpened",
@@ -1003,10 +1041,12 @@ mustContainAll("production provider write approval docs", content.productionProv
   "PR57 Production Provider Write Approval Gate",
   "npm run verify:production-provider-write-approval",
   "npm run verify:production-provider-write-approval:safe",
+  "npm run verify:provider-write-kill-switch-rehearsal:safe",
   "smart-cs-agent.production-provider-write-approval.v1",
   "human_review_required",
   "approvalStatus",
   "artifactBindings",
+  "providerWriteKillSwitchSha256",
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
@@ -1016,6 +1056,16 @@ mustContainAll("provider write dry-run rehearsal docs", content.providerWriteDry
   "npm run verify:provider-write-dry-run-rehearsal:safe",
   "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
   "SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE",
+  "does not call provider APIs",
+  "does not execute provider writes",
+]);
+mustContainAll("provider write kill-switch rehearsal docs", content.providerWriteKillSwitchRehearsal, [
+  "PR67 Provider Write Kill Switch Rehearsal Evidence Gate",
+  "npm run verify:provider-write-kill-switch-rehearsal",
+  "npm run verify:provider-write-kill-switch-rehearsal:safe",
+  "smart-cs-agent.provider-write-kill-switch-rehearsal.v1",
+  "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE",
+  "providerWriteKillSwitchSha256",
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
@@ -1065,6 +1115,11 @@ mustContainAll("provider write dry-run rehearsal docs reference", content.provid
   "PR63 Provider Write Dry-Run Rehearsal Evidence Gate",
   "npm run verify:provider-write-dry-run-rehearsal",
   "smart-cs-agent.provider-write-dry-run-rehearsal.v1",
+]);
+mustContainAll("provider write kill-switch rehearsal docs reference", content.providerWriteRequests, [
+  "PR67 Provider Write Kill Switch Rehearsal Evidence Gate",
+  "npm run verify:provider-write-kill-switch-rehearsal",
+  "smart-cs-agent.provider-write-kill-switch-rehearsal.v1",
 ]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
@@ -1133,6 +1188,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
+  "npm run verify:provider-write-kill-switch-rehearsal",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1171,6 +1227,7 @@ mustNotContainUnsafeExamples({
   productionBranchProtection: content.productionBranchProtection,
   productionProviderWriteApproval: content.productionProviderWriteApproval,
   providerWriteDryRunRehearsal: content.providerWriteDryRunRehearsal,
+  providerWriteKillSwitchRehearsal: content.providerWriteKillSwitchRehearsal,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

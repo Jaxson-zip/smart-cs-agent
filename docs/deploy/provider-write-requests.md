@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR67 Provider Write Kill Switch Rehearsal Evidence Gate
+
+PR67 adds a sanitized evidence gate for rehearsing provider write emergency stop behavior before any real provider write pilot approval can be accepted. The `smart-cs-agent.provider-write-kill-switch-rehearsal.v1` package proves that admins can engage the emergency stop, that execution attempts fail closed with `policyReason=emergency_stop_engaged`, and that releasing the persisted emergency stop does not enable real provider writes.
+
+Run:
+
+```bash
+npm run verify:provider-write-kill-switch-rehearsal
+```
+
+Use `npm run verify:provider-write-kill-switch-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE` and `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true` after release owners export sanitized rehearsal evidence under `provider-write-kill-switch-rehearsal-artifacts/`. See `docs/deploy/provider-write-kill-switch-rehearsal.md`.
+
+This verifier checks evidence shape, safe artifact paths, admin-only control-plane proof, idempotency, audit trail, execution blocking, release safety, docs, static CI wiring, production provider write approval wiring, and production launch references. It does not call provider APIs, execute provider writes, read credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR66 Provider Write Kill Switch Control Plane
 
 PR66 adds an admin-only emergency-stop control plane for future provider write execution. It records sanitized `ProviderWriteKillSwitchEvent` rows, exposes only `ProviderWriteKillSwitchStatusSchema`, and makes provider write execution attempts fail closed with `policyReason=emergency_stop_engaged` when the persisted emergency stop is engaged. Releasing the persisted emergency stop does not change environment variables and does not enable real provider writes.

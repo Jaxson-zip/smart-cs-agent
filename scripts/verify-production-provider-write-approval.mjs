@@ -189,6 +189,9 @@ function verifyStaticArtifacts(content) {
     "approvalStatus",
     "artifactBindings",
     "provider write kill switch",
+    "verify:provider-write-kill-switch-rehearsal",
+    "provider-write-kill-switch-rehearsal-artifacts",
+    "providerWriteKillSwitchSha256",
     "does not call provider APIs",
     "does not execute provider writes",
     "does not send customer-visible replies",
@@ -211,9 +214,12 @@ function verifyStaticArtifacts(content) {
   mustContainAll("launch runbook references provider write approval", content.launchRunbook, [
     "npm run verify:production-provider-write-approval",
     "npm run verify:production-provider-write-approval:safe",
+    "npm run verify:provider-write-kill-switch-rehearsal:safe",
     "docs/deploy/production-provider-write-approval.md",
     "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
     "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
+    "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE",
+    "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true",
   ]);
 
   mustContainAll("production readiness references provider write approval", content.productionReadiness, [
@@ -224,6 +230,7 @@ function verifyStaticArtifacts(content) {
 
   mustContainAll("production launch verifier references provider write approval", content.productionLaunchVerifier, [
     "verify:production-provider-write-approval",
+    "verify:provider-write-kill-switch-rehearsal",
     "production-provider-write-approval.md",
     "production-provider-write-approval-artifacts",
   ]);
@@ -240,6 +247,7 @@ function verifyStaticArtifacts(content) {
     "production provider write approval verifier rejects approval paths outside the artifact directory",
     "production provider write approval verifier redacts unknown argument values",
     "assertNoSecretMarkers",
+    "providerWriteKillSwitchSha256",
   ]);
 
   mustContainAll("task plan references PR57", content.taskPlan, [

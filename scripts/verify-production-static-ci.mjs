@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const workflowRoot = resolve(repoRoot, ".github/workflows");
 const failures = [];
 
 const REQUIRED_RUN_COMMANDS = [
@@ -34,6 +35,7 @@ const REQUIRED_RUN_COMMANDS = [
   "node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs",
   "node --test scripts/verify-provider-write-live-executor-control-plane.test.mjs",
   "node --test scripts/verify-provider-write-kill-switch-control-plane.test.mjs",
+  "node --test scripts/verify-provider-write-kill-switch-rehearsal.test.mjs",
   "npm run typecheck --workspaces --if-present -- --pretty false",
   "npm run lint --workspaces --if-present -- --max-warnings=0",
   "npm run build --workspaces --if-present",
@@ -66,12 +68,20 @@ const REQUIRED_RUN_COMMANDS = [
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
+  "npm run verify:provider-write-kill-switch-rehearsal",
   "npm run verify:provider-credential-boundary",
   "npm run verify:provider-credential-store",
   "npm run verify:provider-read-harness",
 ];
 
 const ALLOWED_RUN_COMMANDS = new Set(REQUIRED_RUN_COMMANDS);
+const REQUIRED_USES_ACTIONS = [
+  "actions/checkout@v4",
+  "actions/setup-node@v4",
+];
+const ALLOWED_USES_ACTIONS = new Set(REQUIRED_USES_ACTIONS);
+const SENSITIVE_WORKFLOW_KEY_PATTERN =
+  /\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY|PROVIDER_[A-Z0-9_]*KEY|WEBHOOK_[A-Z0-9_]*SECRET)[A-Z0-9_]*\b/;
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -113,6 +123,7 @@ function readStaticContent(workflowPath) {
 
 function verifyStaticCi(content) {
   const workflowRunCommands = extractWorkflowRunCommands(content.workflow);
+  const workflowUsesActions = extractWorkflowUsesActions(content.workflow);
   const workflowRunCommandText = workflowRunCommands.join("\n");
 
   mustContainAll("package scripts", content.packageJson, [
@@ -138,6 +149,8 @@ function verifyStaticCi(content) {
 
   mustContainAllRunCommands("workflow run command allowlist", workflowRunCommands, REQUIRED_RUN_COMMANDS);
   mustOnlyContainAllowedRunCommands("workflow run command allowlist", workflowRunCommands);
+  mustContainAllUsesActions("workflow action allowlist", workflowUsesActions, REQUIRED_USES_ACTIONS);
+  mustOnlyContainAllowedUsesActions("workflow action allowlist", workflowUsesActions);
 
   mustNotContainAny("workflow unsafe permissions", content.workflow, [
     "contents: write",
@@ -160,6 +173,7 @@ function verifyStaticCi(content) {
     "PROVIDER_CREDENTIALS",
     "DATABASE_URL",
   ], "workflow must not use secrets context");
+  mustNotContainSensitiveWorkflowMarkers(content.workflow);
 
   mustNotContainAny("workflow environment-bound commands", workflowRunCommandText, [
     "verify:production-readiness",
@@ -271,7 +285,12 @@ function readSafeWorkflowPath(value) {
     !/[^/\s\\]+:[^/\s\\]+@/.test(value) &&
     !/^\\\\/.test(value)
   ) {
-    return resolve(repoRoot, value);
+    const resolved = resolve(repoRoot, value);
+    if (isPathInside(workflowRoot, resolved)) {
+      return resolved;
+    }
+    failures.push("--workflow must be inside .github/workflows");
+    return undefined;
   }
   failures.push("--workflow must be a safe local path");
   return undefined;
@@ -314,12 +333,35 @@ function mustOnlyContainAllowedRunCommands(label, commands) {
   }
 }
 
+function mustContainAllUsesActions(label, actions, requiredActions) {
+  const actionSet = new Set(actions);
+  for (const action of requiredActions) {
+    if (!actionSet.has(action)) {
+      failures.push(`${label}: missing exact action ${action}`);
+    }
+  }
+}
+
+function mustOnlyContainAllowedUsesActions(label, actions) {
+  for (const action of actions) {
+    if (!ALLOWED_USES_ACTIONS.has(action)) {
+      failures.push(`${label}: contains unapproved action`);
+    }
+  }
+}
+
 function mustNotContainAny(label, haystack, needles, message) {
   for (const needle of needles) {
     if (haystack.includes(needle)) {
       failures.push(message ?? `${label}: unexpectedly contains ${needle}`);
       return;
     }
+  }
+}
+
+function mustNotContainSensitiveWorkflowMarkers(workflow) {
+  if (SENSITIVE_WORKFLOW_KEY_PATTERN.test(workflow)) {
+    failures.push("workflow must not reference sensitive environment or credential names");
   }
 }
 
@@ -346,6 +388,20 @@ function extractWorkflowRunCommands(workflow) {
   }
 
   return commands;
+}
+
+function extractWorkflowUsesActions(workflow) {
+  const actions = [];
+  const lines = workflow.split(/\r?\n/);
+
+  for (const line of lines) {
+    const match = /^\s*(?:-\s*)?uses:\s*(.*)$/.exec(line);
+    if (match && match[1].trim().length > 0) {
+      actions.push(normalizeRunCommand(match[1]));
+    }
+  }
+
+  return actions;
 }
 
 function collectBlockRunCommands(lines, startIndex, runIndent, commands) {
@@ -381,6 +437,16 @@ function normalizeRunCommand(value) {
     return trimmed.slice(1, -1);
   }
   return trimmed;
+}
+
+function isPathInside(parent, child) {
+  const childRelativePath = relative(parent, child);
+  return (
+    childRelativePath === "" ||
+    (childRelativePath.length > 0 &&
+      !childRelativePath.startsWith("..") &&
+      !isAbsolute(childRelativePath))
+  );
 }
 
 function redactArgument(value) {

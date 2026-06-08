@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR67 Provider Write Kill Switch Rehearsal Evidence Gate
+
+Provider write kill-switch rehearsal evidence is now checked by:
+
+```bash
+npm run verify:provider-write-kill-switch-rehearsal
+npm run verify:provider-write-kill-switch-rehearsal:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-kill-switch-rehearsal.v1` package under `provider-write-kill-switch-rehearsal-artifacts/`. It proves only that emergency stop engagement, `emergency_stop_engaged` execution blocking, release safety, idempotency, audit, and two-person observation were rehearsed with fingerprints and hashes. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR66 Provider Write Kill Switch Control Plane
 
 Provider write emergency-stop control-plane safety is now checked by:

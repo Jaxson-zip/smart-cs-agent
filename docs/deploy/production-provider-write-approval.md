@@ -24,6 +24,8 @@ The `:safe` command hard-requires pass evidence. It fails closed when `SMARTCS_P
 
 Before the approval package is accepted, run `npm run verify:provider-write-dry-run-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_FILE` pointing at a file under `provider-write-dry-run-rehearsal-artifacts/` and `SMARTCS_PROVIDER_WRITE_DRY_RUN_REHEARSAL_REQUIRE_PASS=true`. The approval package binds that rehearsal through `dryRunRehearsalSha256`.
 
+Before the approval package is accepted, also run `npm run verify:provider-write-kill-switch-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE` pointing at a file under `provider-write-kill-switch-rehearsal-artifacts/` and `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true`. The approval package binds that emergency-stop rehearsal through `providerWriteKillSwitchSha256`.
+
 ## Required Evidence Shape
 
 The provider write approval package should include:
@@ -49,6 +51,7 @@ Run this gate after:
 
 ```bash
 npm run verify:provider-write-dry-run-rehearsal:safe
+npm run verify:provider-write-kill-switch-rehearsal:safe
 npm run verify:production-branch-protection
 npm run verify:production-launch
 ```

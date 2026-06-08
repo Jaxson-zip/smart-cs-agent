@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-test("production launch gate enforces provider write dry-run before approval safe mode", () => {
+test("production launch gate enforces provider write rehearsals before approval safe mode", () => {
   const launchRunbook = readFileSync(
     "docs/deploy/production-launch-runbook.md",
     "utf8",
@@ -16,6 +16,7 @@ test("production launch gate enforces provider write dry-run before approval saf
     extractPreflightCommands(launchRunbook),
     [
       "npm run verify:provider-write-dry-run-rehearsal:safe",
+      "npm run verify:provider-write-kill-switch-rehearsal:safe",
       "npm run verify:production-provider-write-approval:safe",
     ],
     "launch runbook preflight commands",
@@ -29,6 +30,7 @@ test("production launch gate enforces provider write dry-run before approval saf
     extractVerifierOrderingBlock(verifierSource),
     [
       "npm run verify:provider-write-dry-run-rehearsal:safe",
+      "npm run verify:provider-write-kill-switch-rehearsal:safe",
       "npm run verify:production-provider-write-approval:safe",
     ],
     "production launch verifier source",
