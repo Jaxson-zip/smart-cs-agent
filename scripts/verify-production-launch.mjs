@@ -41,6 +41,8 @@ const files = {
     "docs/deploy/provider-write-graduated-rollout-preflight.md",
   providerWriteGraduatedRolloutRunLedger:
     "docs/deploy/provider-write-graduated-rollout-run-ledger.md",
+  providerWriteGraduatedRolloutCloseoutReview:
+    "docs/deploy/provider-write-graduated-rollout-closeout-review.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -108,6 +110,8 @@ const files = {
     "scripts/verify-provider-write-graduated-rollout-preflight.mjs",
   providerWriteGraduatedRolloutRunLedgerVerifier:
     "scripts/verify-provider-write-graduated-rollout-run-ledger.mjs",
+  providerWriteGraduatedRolloutCloseoutReviewVerifier:
+    "scripts/verify-provider-write-graduated-rollout-closeout-review.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -210,6 +214,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-graduated-rollout-preflight:safe",
   "verify:provider-write-graduated-rollout-run-ledger",
   "verify:provider-write-graduated-rollout-run-ledger:safe",
+  "verify:provider-write-graduated-rollout-closeout-review",
+  "verify:provider-write-graduated-rollout-closeout-review:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -307,6 +313,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-graduated-rollout-preflight:safe",
   "npm run verify:provider-write-graduated-rollout-run-ledger",
   "npm run verify:provider-write-graduated-rollout-run-ledger:safe",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -453,6 +461,8 @@ mustContainInOrder(
     "npm run verify:provider-write-graduated-rollout-preflight:safe",
     "npm run verify:provider-write-graduated-rollout-run-ledger",
     "npm run verify:provider-write-graduated-rollout-run-ledger:safe",
+    "npm run verify:provider-write-graduated-rollout-closeout-review",
+    "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
   ],
 );
 
@@ -750,6 +760,15 @@ mustContainAll("production readiness references provider write graduated rollout
   "graduated_multi_merchant",
 ]);
 
+mustContainAll("production readiness references provider write graduated rollout closeout review", content.productionReadiness, [
+  "PR80 Provider Write Graduated Rollout Closeout Review Gate",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "approved_for_general_availability_review",
+  "graduated_multi_merchant",
+]);
+
 mustContainAll("production readiness references provider write requests", content.productionReadiness, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1042,6 +1061,8 @@ mustContainAll("production static CI verifier source", content.productionStaticC
   "npm run verify:provider-write-graduated-rollout-preflight",
   "node --test scripts/verify-provider-write-graduated-rollout-run-ledger.test.mjs",
   "npm run verify:provider-write-graduated-rollout-run-ledger",
+  "node --test scripts/verify-provider-write-graduated-rollout-closeout-review.test.mjs",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
 ]);
@@ -1307,6 +1328,28 @@ mustContainAll("provider write graduated rollout run ledger verifier source", co
   "customerComplaintsStoppedRollout",
   "compensationRejectionsStoppedRollout",
   "noAutoCustomerReplies",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "customerVisibleActionsSentByVerifier",
+  "credentialsReadByVerifier",
+]);
+mustContainAll("provider write graduated rollout closeout review verifier source", content.providerWriteGraduatedRolloutCloseoutReviewVerifier, [
+  "verify:provider-write-graduated-rollout-closeout-review",
+  "provider-write-graduated-rollout-closeout-review-artifacts",
+  "provider-write-graduated-rollout-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "graduated_multi_merchant",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "approved_for_general_availability_review",
+  "rejected_needs_investigation",
+  "graduatedRolloutRunLedgerVerifierPassed",
+  "compensationRejectionsStoppedRollout",
+  "merchantNotificationCompleted",
+  "billingImpactReviewed",
+  "supportSlaMaintained",
+  "merchantNotificationReviewed",
+  "supportSlaReviewed",
   "networkExecutedByVerifier",
   "providerWriteExecutedByVerifier",
   "customerVisibleActionsSentByVerifier",
@@ -1914,6 +1957,34 @@ mustContainAll("provider write graduated rollout run ledger docs", content.provi
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write graduated rollout closeout review docs", content.providerWriteGraduatedRolloutCloseoutReview, [
+  "PR80 Provider Write Graduated Rollout Closeout Review Gate",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
+  "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "provider-write-graduated-rollout-closeout-review-artifacts/",
+  "provider-write-graduated-rollout-run-ledger-artifacts/",
+  "graduated_multi_merchant",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "approved_for_general_availability_review",
+  "rejected_needs_investigation",
+  "customerComplaintsStoppedRollout=true",
+  "compensationRejectionsStoppedRollout=true",
+  "merchantNotificationCompleted=true",
+  "billingImpactReviewed=true",
+  "supportSlaMaintained=true",
+  "noAutoCustomerReplies=true",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not read production databases",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -2061,6 +2132,14 @@ mustContainAll("provider write graduated rollout run ledger docs reference", con
   "graduated_multi_merchant",
   "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_FILE",
 ]);
+mustContainAll("provider write graduated rollout closeout review docs reference", content.providerWriteRequests, [
+  "PR80 Provider Write Graduated Rollout Closeout Review Gate",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "approved_for_general_availability_review",
+  "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -2149,6 +2228,12 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-controlled-expansion-closeout-review",
   "node --test scripts/verify-provider-write-graduated-rollout-approval.test.mjs",
   "npm run verify:provider-write-graduated-rollout-approval",
+  "node --test scripts/verify-provider-write-graduated-rollout-preflight.test.mjs",
+  "npm run verify:provider-write-graduated-rollout-preflight",
+  "node --test scripts/verify-provider-write-graduated-rollout-run-ledger.test.mjs",
+  "npm run verify:provider-write-graduated-rollout-run-ledger",
+  "node --test scripts/verify-provider-write-graduated-rollout-closeout-review.test.mjs",
+  "npm run verify:provider-write-graduated-rollout-closeout-review",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -2243,6 +2328,15 @@ mustContainAll("progress tracks provider write graduated rollout run ledger", co
   "Started PR79 provider write graduated rollout run ledger gate",
 ]);
 
+mustContainAll("task plan tracks provider write graduated rollout closeout review", content.taskPlan, [
+  "PR80 - Provider Write Graduated Rollout Closeout Review Gate",
+  "verify:provider-write-graduated-rollout-closeout-review",
+]);
+
+mustContainAll("progress tracks provider write graduated rollout closeout review", content.progress, [
+  "Started PR80 provider write graduated rollout closeout review gate",
+]);
+
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
@@ -2262,6 +2356,7 @@ mustNotContainUnsafeExamples({
   providerWriteGraduatedRolloutApproval: content.providerWriteGraduatedRolloutApproval,
   providerWriteGraduatedRolloutPreflight: content.providerWriteGraduatedRolloutPreflight,
   providerWriteGraduatedRolloutRunLedger: content.providerWriteGraduatedRolloutRunLedger,
+  providerWriteGraduatedRolloutCloseoutReview: content.providerWriteGraduatedRolloutCloseoutReview,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

@@ -69,3 +69,5 @@ npm run verify:provider-write-graduated-rollout-run-ledger:safe
 ```
 
 Passing PR79 is still not global launch approval. Any next wave needs a separate release decision and must keep provider writes guarded by the existing live executor and kill-switch control planes.
+
+PR80 Provider Write Graduated Rollout Closeout Review Gate follows this ledger. It uses `verify:provider-write-graduated-rollout-closeout-review` to bind `providerWriteGraduatedRolloutRunLedgerSha256` to this PR79 package and requires `approved_for_general_availability_review` before any later general availability approval can be considered.

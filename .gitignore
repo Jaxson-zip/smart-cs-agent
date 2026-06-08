@@ -32,6 +32,7 @@ provider-write-controlled-expansion-closeout-review-artifacts/
 provider-write-graduated-rollout-approval-artifacts/
 provider-write-graduated-rollout-preflight-artifacts/
 provider-write-graduated-rollout-run-ledger-artifacts/
+provider-write-graduated-rollout-closeout-review-artifacts/
 launch-manifest-artifacts/
 
 # next.js

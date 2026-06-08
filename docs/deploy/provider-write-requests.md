@@ -398,3 +398,13 @@ npm run verify:provider-write-requests
 ```
 
 This verifier checks the shared contract, Prisma model and migration, config parser, adapter policy, Ops service queue behavior, API/BFF routes, sanitized tests, docs, launch runbook, and task plan.
+
+## PR80 Provider Write Graduated Rollout Closeout Review Gate
+
+PR80 adds a manual closeout review gate for the completed `graduated_multi_merchant` window. Run:
+
+```bash
+npm run verify:provider-write-graduated-rollout-closeout-review
+```
+
+Safe mode validates sanitized `smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1` evidence and binds `providerWriteGraduatedRolloutRunLedgerSha256` to the PR79 run ledger through `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_RUN_LEDGER_FILE`. Passing PR80 means the review decision is `approved_for_general_availability_review`; it still does not execute provider writes, enable automatic customer-visible replies, or approve general availability by itself.

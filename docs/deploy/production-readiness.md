@@ -287,6 +287,17 @@ npm run verify:production-branch-protection:safe
 
 The gate defines the sanitized branch protection evidence required before commercial launch: the production branch must be protected, `Static production gates` must be configured as a required status check, pull request review controls must be enabled, stale reviews must be dismissed, code owner and last-push approval must be required, force pushes and deletions must be disabled, and bypass actors must be empty. This verifier still does not call the GitHub API, mutate branch protection, read GitHub secrets, deploy, publish images, call real channel webhooks, execute provider reads or writes, or send customer-visible replies.
 
+## PR80 Provider Write Graduated Rollout Closeout Review Gate
+
+Provider write graduated rollout closeout review is now checked by:
+
+```bash
+npm run verify:provider-write-graduated-rollout-closeout-review
+npm run verify:provider-write-graduated-rollout-closeout-review:safe
+```
+
+The safe command validates sanitized `smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1` evidence, recomputes `providerWriteGraduatedRolloutRunLedgerSha256` from the PR79 `smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1` file, and requires `approved_for_general_availability_review` for `graduated_multi_merchant`. This gate still does not call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, or send customer-visible replies.
+
 ## PR55 Production Static CI Gate
 
 Production static CI is now checked by:
