@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR77 Provider Write Graduated Rollout Approval Gate
+
+Provider write graduated rollout approval is now checked by:
+
+```bash
+npm run verify:provider-write-graduated-rollout-approval
+npm run verify:provider-write-graduated-rollout-approval:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-graduated-rollout-approval.v1` approval package under `provider-write-graduated-rollout-approval-artifacts/` plus the PR76 `smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1` package under `provider-write-controlled-expansion-closeout-review-artifacts/` and the PR75 run ledger package under `provider-write-controlled-expansion-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteControlledExpansionCloseoutReviewSha256`, rechecks PR76's `providerWriteControlledExpansionRunLedgerSha256`, requires `fromRolloutTrack=controlled_multi_merchant`, `toRolloutTrack=graduated_multi_merchant`, bounded merchant/action/write/coupon scope, `automaticNextWaveEnabled=false`, distinct approvers, operational owner coverage, billing and merchant notification readiness, and `noAutomaticCustomerVisibleReplies=true`.
+
+The gate remains approval-only. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR76 Provider Write Controlled Expansion Closeout Review Gate
 
 Provider write controlled expansion closeout review is now checked by:

@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR77 Provider Write Graduated Rollout Approval Gate
+
+PR77 adds the approval-only gate after PR76 controlled expansion closeout review. It validates whether release owners may consider a bounded transition to `graduated_multi_merchant` using a sanitized `smart-cs-agent.provider-write-graduated-rollout-approval.v1` package, the PR76 closeout review file, and the PR75 run ledger file.
+
+Run:
+
+```bash
+npm run verify:provider-write-graduated-rollout-approval
+```
+
+Use `npm run verify:provider-write-graduated-rollout-approval:safe` with `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_APPROVAL_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_APPROVAL_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_APPROVAL_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-graduated-rollout-approval-artifacts/`, `provider-write-controlled-expansion-closeout-review-artifacts/`, and `provider-write-controlled-expansion-run-ledger-artifacts/`. See `docs/deploy/provider-write-graduated-rollout-approval.md`.
+
+This verifier recomputes `providerWriteControlledExpansionCloseoutReviewSha256`, rechecks the closeout review's `providerWriteControlledExpansionRunLedgerSha256`, requires `automaticNextWaveEnabled=false`, keeps actions limited to low-risk provider write actions, and requires `noAutomaticCustomerVisibleReplies=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR76 Provider Write Controlled Expansion Closeout Review Gate
 
 PR76 adds the manual closeout review gate after PR75 controlled expansion run ledger. It validates whether a completed `controlled_multi_merchant` rollout window has been reviewed by release, operations, support, and rollback owners using a sanitized `smart-cs-agent.provider-write-controlled-expansion-closeout-review.v1` package and the PR75 run ledger file.

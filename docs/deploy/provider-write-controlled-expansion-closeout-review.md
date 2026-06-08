@@ -65,3 +65,5 @@ npm run verify:provider-write-controlled-expansion-closeout-review:safe
 ```
 
 Passing PR76 does not approve the next wave by itself. It only proves the post-window closeout is clean enough for a separate next-expansion approval gate.
+
+PR77 Provider Write Graduated Rollout Approval Gate follows this review. It uses `verify:provider-write-graduated-rollout-approval` to bind `providerWriteControlledExpansionCloseoutReviewSha256` to this PR76 package before any `graduated_multi_merchant` approval can be considered.
