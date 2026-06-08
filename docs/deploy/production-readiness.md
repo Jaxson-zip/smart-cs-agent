@@ -1,5 +1,15 @@
 # Production-Readiness Baseline
 
+## PR70 Provider Write Live Pilot Run Ledger Draft Export
+
+Provider write live pilot run ledger draft export is now checked by:
+
+```bash
+npm run verify:provider-write-live-pilot-run-ledger-draft-export
+```
+
+This gate verifies the admin-only draft export path for `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1`. The API and Web BFF routes may help release owners collect sanitized request/attempt facts for a bounded tenant/channel window, but the draft must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. It does not replace PR69 safe evidence, does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not expose raw tenant/customer/provider/idempotency data, and does not send customer-visible replies.
+
 ## PR69 Provider Write Live Pilot Run Ledger Gate
 
 Provider write live pilot run ledger evidence is now checked by:

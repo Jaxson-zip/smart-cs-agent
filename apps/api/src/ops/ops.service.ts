@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { Injectable, Optional } from "@nestjs/common";
+import { BadRequestException, Injectable, Optional } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   ProviderReadResponseSchema,
   ProviderWriteExecutionAttemptListItemSchema,
   ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteKillSwitchStatusSchema,
+  ProviderWriteLivePilotRunLedgerDraftSchema,
   ProviderWriteResponseSchema,
   type AgentCaseDecision,
   type CompensationDeclinedRequest,
@@ -24,6 +25,7 @@ import {
   type ProviderWriteKillSwitchAction,
   type ProviderWriteKillSwitchReasonCode,
   type ProviderWriteKillSwitchStatus,
+  type ProviderWriteLivePilotRunLedgerDraft,
   type ProviderWriteKillSwitchUpdateRequest,
   type ProviderWriteLiveExecutorStatus,
   type ProviderWriteRequest,
@@ -287,6 +289,125 @@ export class OpsService {
     })) as ProviderWriteExecutionAttemptRecord[];
 
     return attempts.map(toSanitizedProviderWriteExecutionAttempt);
+  }
+
+  async getProviderWriteLivePilotRunLedgerDraft(
+    input: ProviderWriteLivePilotRunLedgerDraftInput,
+  ): Promise<ProviderWriteLivePilotRunLedgerDraft> {
+    const measuredAt = input.now ?? new Date();
+    const durationMinutes = Math.round(
+      (input.to.getTime() - input.from.getTime()) / 60_000,
+    );
+
+    if (!this.prisma) {
+      return emptyProviderWriteLivePilotRunLedgerDraft(input, measuredAt);
+    }
+
+    const attempts = (await this.prisma.providerWriteExecutionAttempt.findMany({
+      where: {
+        tenantId: input.tenantId,
+        channel: input.channel,
+        createdAt: { gte: input.from, lte: input.to },
+      },
+      orderBy: { createdAt: "asc" },
+      take: PROVIDER_WRITE_LIVE_PILOT_LEDGER_DRAFT_RUN_LIMIT + 1,
+    })) as ProviderWriteExecutionAttemptRecord[];
+    if (attempts.length > PROVIDER_WRITE_LIVE_PILOT_LEDGER_DRAFT_RUN_LIMIT) {
+      throw new BadRequestException(
+        "Provider write live pilot run ledger draft window contains too many run records",
+      );
+    }
+
+    const requestEntries = await Promise.all(
+      attempts.map(async (attempt) => {
+        const request = (await this.prisma?.providerWriteRequest.findFirst({
+          where: {
+            tenantId: input.tenantId,
+            id: attempt.providerWriteRequestId,
+            channel: input.channel,
+          },
+        })) as ProviderWriteRequestRecord | null | undefined;
+        return [attempt.providerWriteRequestId, request ?? null] as const;
+      }),
+    );
+    const requestsById = new Map(requestEntries);
+    const runRecords = attempts.map((attempt) =>
+      toProviderWriteLivePilotRunLedgerDraftRun(
+        attempt,
+        requestsById.get(attempt.providerWriteRequestId) ?? null,
+      ),
+    );
+    const failedRuns = attempts.filter((attempt) => attempt.status === "failed");
+    const allRunsReviewed = attempts.every((attempt) => {
+      const request = requestsById.get(attempt.providerWriteRequestId);
+      return Boolean(request?.reviewFingerprint && request.reviewerOperatorId);
+    });
+    const failedRunsHaveIncidentNotes = failedRuns.every((attempt) =>
+      Boolean(attempt.policyReason),
+    );
+    const noAutoCustomerReplies = attempts.every(
+      (attempt) => attempt.customerVisibleMessageSent === false,
+    );
+
+    return ProviderWriteLivePilotRunLedgerDraftSchema.parse({
+      schemaVersion:
+        "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+      generatedAt: measuredAt.toISOString(),
+      target: {
+        tenantFingerprint: shortHashFor("provider_write_ledger_tenant", input.tenantId),
+        channel: input.channel,
+        rolloutTrack: "single_merchant_pilot",
+        changeTicketFingerprint: input.changeTicket
+          ? shortHashFor(
+              "provider_write_ledger_change_ticket",
+              input.changeTicket,
+            )
+          : null,
+      },
+      launchWindow: {
+        startsAt: input.from.toISOString(),
+        endsAt: input.to.toISOString(),
+        closedAt: measuredAt.toISOString(),
+        durationMinutes,
+        freezeWindowActive: input.freezeWindowActive,
+      },
+      summary: {
+        totalRuns: attempts.length,
+        dryRunRecordedRuns: attempts.filter(
+          (attempt) => attempt.status === "dry_run_recorded",
+        ).length,
+        blockedRuns: attempts.filter((attempt) => attempt.status === "blocked")
+          .length,
+        failedRuns: failedRuns.length,
+        allRunsReviewed,
+        failedRunsHaveIncidentNotes,
+        rollbackActionsVerified: false,
+        noAutoCustomerReplies,
+        readyForSafeLedger: false,
+        missingSafeLedgerInputs: providerWriteLedgerDraftMissingInputs(
+          attempts.length,
+        ),
+      },
+      runRecords,
+      evidenceReadiness: {
+        draftOnly: true,
+        requiresArtifactBindings: true,
+        canPassPr69SafeLedger: false,
+      },
+      safety: {
+        secretsInDraft: false,
+        rawTenantIdsInDraft: false,
+        customerDataInDraft: false,
+        providerPayloadsInDraft: false,
+        providerResponsesInDraft: false,
+        rawIdempotencyKeysInDraft: false,
+        networkExecutedByExporter: false,
+        providerWriteExecutedByExporter: false,
+        payloadEscrowOpenedByExporter: false,
+        credentialsReadByExporter: false,
+        customerVisibleActionsSentByExporter: false,
+      },
+    });
   }
 
   ingestMessage(): AgentCaseDecision {
@@ -1525,6 +1646,16 @@ type ListProviderWriteExecutionAttemptsInput = {
   providerWriteRequestId?: string;
 };
 
+type ProviderWriteLivePilotRunLedgerDraftInput = {
+  tenantId: string;
+  channel: "taobao" | "douyin";
+  from: Date;
+  to: Date;
+  now?: Date;
+  freezeWindowActive: boolean;
+  changeTicket?: string;
+};
+
 type ProviderReadSummaryInput = {
   tenantId: string;
   from?: Date;
@@ -1532,6 +1663,7 @@ type ProviderReadSummaryInput = {
   now?: Date;
 };
 
+const PROVIDER_WRITE_LIVE_PILOT_LEDGER_DRAFT_RUN_LIMIT = 50;
 const PROVIDER_READ_SUMMARY_WINDOW_MS = 24 * 60 * 60_000;
 
 function providerReadMetadata(request: ProviderReadRequest): ProviderReadMetadata {
@@ -2055,6 +2187,139 @@ function toSanitizedProviderWriteExecutionAttempt(
   });
 }
 
+function emptyProviderWriteLivePilotRunLedgerDraft(
+  input: ProviderWriteLivePilotRunLedgerDraftInput,
+  measuredAt: Date,
+): ProviderWriteLivePilotRunLedgerDraft {
+  return ProviderWriteLivePilotRunLedgerDraftSchema.parse({
+    schemaVersion:
+      "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+    generatedAt: measuredAt.toISOString(),
+    target: {
+      tenantFingerprint: shortHashFor("provider_write_ledger_tenant", input.tenantId),
+      channel: input.channel,
+      rolloutTrack: "single_merchant_pilot",
+      changeTicketFingerprint: input.changeTicket
+        ? shortHashFor("provider_write_ledger_change_ticket", input.changeTicket)
+        : null,
+    },
+    launchWindow: {
+      startsAt: input.from.toISOString(),
+      endsAt: input.to.toISOString(),
+      closedAt: measuredAt.toISOString(),
+      durationMinutes: Math.round(
+        (input.to.getTime() - input.from.getTime()) / 60_000,
+      ),
+      freezeWindowActive: input.freezeWindowActive,
+    },
+    summary: {
+      totalRuns: 0,
+      dryRunRecordedRuns: 0,
+      blockedRuns: 0,
+      failedRuns: 0,
+      allRunsReviewed: true,
+      failedRunsHaveIncidentNotes: true,
+      rollbackActionsVerified: false,
+      noAutoCustomerReplies: true,
+      readyForSafeLedger: false,
+      missingSafeLedgerInputs: providerWriteLedgerDraftMissingInputs(0),
+    },
+    runRecords: [],
+    evidenceReadiness: {
+      draftOnly: true,
+      requiresArtifactBindings: true,
+      canPassPr69SafeLedger: false,
+    },
+    safety: {
+      secretsInDraft: false,
+      rawTenantIdsInDraft: false,
+      customerDataInDraft: false,
+      providerPayloadsInDraft: false,
+      providerResponsesInDraft: false,
+      rawIdempotencyKeysInDraft: false,
+      networkExecutedByExporter: false,
+      providerWriteExecutedByExporter: false,
+      payloadEscrowOpenedByExporter: false,
+      credentialsReadByExporter: false,
+      customerVisibleActionsSentByExporter: false,
+    },
+  });
+}
+
+function toProviderWriteLivePilotRunLedgerDraftRun(
+  attempt: ProviderWriteExecutionAttemptRecord,
+  request: ProviderWriteRequestRecord | null,
+) {
+  const requestFingerprint = fingerprint(request?.requestHash ?? attempt.requestHash);
+  const executionAttemptFingerprint = fingerprint(attempt.attemptFingerprint);
+  return {
+    runFingerprint: sha256(
+      stableJson({
+        kind: "provider_write_live_pilot_run_ledger_draft_run",
+        requestFingerprint,
+        executionAttemptFingerprint,
+        createdAt: attempt.createdAt?.toISOString() ?? "",
+      }),
+    ),
+    requestFingerprint,
+    executionAttemptFingerprint,
+    operatorFingerprint: attempt.operatorId
+      ? shortHashFor("provider_write_ledger_operator", attempt.operatorId)
+      : null,
+    reviewerFingerprint: request?.reviewerOperatorId
+      ? shortHashFor(
+          "provider_write_ledger_reviewer",
+          request.reviewerOperatorId,
+        )
+      : null,
+    rollbackOwnerFingerprint: null,
+    action: attempt.action,
+    riskLevel: "low",
+    status: attempt.status,
+    networkExecution: "not_started",
+    providerMutationExecuted: false,
+    customerVisibleMessageSent: false,
+    payloadEscrowOpened: false,
+    providerPayloadStored: false,
+    providerResponseStored: false,
+    policyReason: sanitizeProviderWriteLedgerDraftPolicyReason(
+      attempt.policyReason,
+    ),
+    createdAt: attempt.createdAt?.toISOString() ?? "",
+    completedAt:
+      attempt.updatedAt?.toISOString() ??
+      attempt.createdAt?.toISOString() ??
+      "",
+  };
+}
+
+function providerWriteLedgerDraftMissingInputs(runCount: number) {
+  const missing = [
+    "artifact_bindings",
+    "live_provider_mutation_evidence",
+    "manual_closeout_review",
+  ];
+  if (runCount === 0) missing.unshift("pilot_run_records");
+  return missing;
+}
+
+const PROVIDER_WRITE_LEDGER_DRAFT_POLICY_REASONS = new Set([
+  "request_not_approved",
+  "emergency_stop_engaged",
+  "unsupported_payload_escrow_state",
+  "execution_kill_switch_enabled",
+]);
+
+function sanitizeProviderWriteLedgerDraftPolicyReason(
+  policyReason?: string | null,
+) {
+  if (!policyReason) return null;
+  if (PROVIDER_WRITE_LEDGER_DRAFT_POLICY_REASONS.has(policyReason)) {
+    return policyReason;
+  }
+  return "other_sanitized_policy_reason";
+}
+
 function sanitizeLookupKeys(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { hasOrderId: false, hasLogisticsId: false };
@@ -2086,6 +2351,10 @@ function sanitizePayloadKeys(value: unknown) {
 
 function fingerprint(hash?: string) {
   return typeof hash === "string" ? hash.slice(0, 12) : "";
+}
+
+function shortHashFor(kind: string, value: string) {
+  return fingerprint(sha256(stableJson({ kind, value })));
 }
 
 function summarizeProviderReadRuns(

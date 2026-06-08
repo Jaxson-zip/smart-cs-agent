@@ -41,6 +41,11 @@ const content = Object.fromEntries(
     readRequired(label, relativePath),
   ]),
 );
+const sharedExecutionAttemptContractsSlice = sliceBetween(
+  content.sharedContracts,
+  "export const ProviderWriteExecutionAttemptStatusSchema",
+  "export const ProviderWriteExecutionAttemptListItemSchema",
+);
 const executionSlice = [
   sliceBetween(
     content.opsService,
@@ -78,7 +83,7 @@ mustContainAll("package scripts", content.packageJson, [
   "scripts/verify-provider-write-execution-attempts.mjs",
 ]);
 
-mustContainAll("shared execution attempt contracts", content.sharedContracts, [
+mustContainAll("shared execution attempt contracts", sharedExecutionAttemptContractsSlice, [
   "ProviderWriteExecutionAttemptStatusSchema",
   "\"dry_run_recorded\"",
   "\"blocked\"",
@@ -90,7 +95,7 @@ mustContainAll("shared execution attempt contracts", content.sharedContracts, [
   "customerVisibleMessageSent: z.literal(false)",
   "payloadEscrowOpened: z.literal(false)",
 ]);
-mustNotContainAny("shared execution attempt unsafe free text", content.sharedContracts, [
+mustNotContainAny("shared execution attempt unsafe free text", sharedExecutionAttemptContractsSlice, [
   "executionNote: z.string",
   "providerPayload",
   "providerResponse",

@@ -2,11 +2,31 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR69 - Provider Write Live Pilot Run Ledger Gate
+## Current Stage: PR70 - Provider Write Live Pilot Run Ledger Draft Export
 
 Status: verified locally and ready for local commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR68 - Provider Write Live Pilot Preflight Gate was verified locally and committed as `490b41f`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR69 - Provider Write Live Pilot Run Ledger Gate was verified locally and committed as `fa73bf6`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR70 adds an admin-only provider write live pilot run ledger draft export. Release owners can export sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` facts from existing `ProviderWriteExecutionAttempt` and `ProviderWriteRequest` rows for one tenant/channel/window. PR70 must remain draft-only: `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. It must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR70 Scope
+
+- Add `ProviderWriteLivePilotRunLedgerDraftSchema`, API route `GET /v2/provider-writes/live-pilot-run-ledger/draft`, and Web BFF route `GET /api/operator/provider-writes/live-pilot-run-ledger/draft`.
+- Derive draft records from existing sanitized provider write execution attempts and reviewed requests, scoped by authenticated tenant, requested channel, and a bounded 15-120 minute window.
+- Keep the draft unable to satisfy PR69 safe evidence by requiring missing `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review`, plus `pilot_run_records` when no runs exist.
+- Add `npm run verify:provider-write-live-pilot-run-ledger-draft-export` and wire it to static CI, production launch, provider docs, public API surface, task tracking, and progress notes.
+- Keep PR70 no-network/read-only: no provider API calls, no provider write execution, no credential reads, no payload escrow opening, no raw payload/response/idempotency/tenant/customer fields, and no customer-visible replies.
+
+### Out Of Scope For PR70
+
+- Generating PR69 pass evidence or adding a `:safe` mode.
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Reading production databases from a verifier or exporting raw audit payloads.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `single_merchant_pilot`.
 
 PR69 adds a sanitized provider write live pilot run ledger gate. Release owners can validate `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` packages under `provider-write-live-pilot-run-ledger-artifacts/` after a bounded first real provider write pilot window closes. PR69 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
@@ -358,10 +378,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR67 - Provider Write Kill Switch Rehearsal Evidence Gate.
 - [x] PR68 - Provider Write Live Pilot Preflight Gate.
 - [x] PR69 - Provider Write Live Pilot Run Ledger Gate.
+- [x] PR70 - Provider Write Live Pilot Run Ledger Draft Export.
 
 ## Verification Gate
 
-PR69 provider write live pilot run ledger gate is tracked against this gate inventory:
+PR70 provider write live pilot run ledger draft export is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -518,6 +539,19 @@ PR69 provider write live pilot run ledger gate is tracked against this gate inve
 - `git diff --check` exited 0 with CRLF warnings only.
 - Read-only PR69 review found three safe-ledger semantics gaps; all were fixed by requiring at least one run record when ledger evidence is required, requiring run timestamps inside the pilot window, and requiring rollback verification for failed provider mutations.
 - PR69 remains post-window evidence-only/no-network: the verifier may attest sanitized facts from an approved bounded pilot, but it does not call provider APIs, execute provider writes, read credential material, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR70 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 218 tests.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 83 tests.
+- `npm.cmd run verify:provider-write-live-pilot-run-ledger-draft-export` passed.
+- `node --test scripts\verify-provider-write-live-pilot-run-ledger-draft-export.test.mjs` passed with 4 tests.
+- `node --test scripts\*.test.mjs` passed with 171 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `npm.cmd run verify:production-static-ci` and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only PR70 reviews found draft semantics gaps; all were fixed by failing closed instead of truncating windows with more than 50 records, requiring `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review`, requiring `pilot_run_records` for empty drafts, scoping request metadata lookup by channel, and constraining draft `policyReason` to a safe enum with unknown values sanitized.
+- PR70 remains draft-only/read-only/no-network: it does not generate PR69 pass evidence, add a `:safe` command, call provider APIs, execute provider writes, read credential material, open/decrypt payload escrow, expose raw provider/customer/idempotency data, or send customer-visible replies.
 
 ### PR67 Final Verification Notes
 

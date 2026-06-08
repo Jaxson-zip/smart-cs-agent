@@ -2,6 +2,22 @@
 
 PR69 adds a sanitized post-window evidence gate for the first real provider write pilot. It validates `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` packages exported after a pilot window so release owners can close the loop on what happened, what was reviewed, and whether failures or rollbacks were handled.
 
+## PR70 Provider Write Live Pilot Run Ledger Draft Export
+
+PR70 adds an admin-only draft exporter for release owners who need to assemble PR69 evidence from runtime records. It returns `schemaVersion=smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1` through `GET /v2/provider-writes/live-pilot-run-ledger/draft` and the Web BFF route `GET /api/operator/provider-writes/live-pilot-run-ledger/draft`.
+
+Run:
+
+```bash
+npm run verify:provider-write-live-pilot-run-ledger-draft-export
+```
+
+The draft export is not PR69 pass evidence. It must always keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`. A release owner must still bind approved artifacts, real provider mutation evidence, and manual closeout review before producing a separate PR69 safe ledger package. Drafts must keep `missingSafeLedgerInputs` populated with `artifact_bindings`, `live_provider_mutation_evidence`, and `manual_closeout_review`; empty windows also include `pilot_run_records`.
+
+The exporter reads existing sanitized `ProviderWriteExecutionAttempt` and `ProviderWriteRequest` facts for one tenant, one channel, and a bounded 15-120 minute window. It uses fingerprints rather than raw identifiers and must not include raw tenant IDs, order IDs, logistics IDs, addresses, customer messages, raw idempotency keys, provider payloads, provider responses, credential refs, tokens, operator API keys, or secrets.
+
+The draft exporter does not call provider APIs, does not execute provider writes, does not read provider credentials, does not open payload escrow, does not decrypt payload escrow, and does not send customer-visible replies.
+
 ## Commands
 
 Static repository verification:

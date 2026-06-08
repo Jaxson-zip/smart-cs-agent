@@ -320,6 +320,176 @@ export const ProviderWriteExecutionAttemptListItemSchema = z
   })
   .strict();
 
+export const ProviderWriteLivePilotRunLedgerDraftMissingInputSchema = z.enum([
+  "pilot_run_records",
+  "artifact_bindings",
+  "live_provider_mutation_evidence",
+  "manual_closeout_review",
+]);
+
+export const ProviderWriteLivePilotRunLedgerDraftPolicyReasonSchema = z.enum([
+  "request_not_approved",
+  "emergency_stop_engaged",
+  "unsupported_payload_escrow_state",
+  "execution_kill_switch_enabled",
+  "other_sanitized_policy_reason",
+]);
+
+export const ProviderWriteLivePilotRunLedgerDraftRunSchema = z
+  .object({
+    runFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    requestFingerprint: z.string().regex(/^[a-f0-9]{12}$/),
+    executionAttemptFingerprint: z.string().regex(/^[a-f0-9]{12}$/),
+    operatorFingerprint: z.string().regex(/^[a-f0-9]{12}$/).nullable(),
+    reviewerFingerprint: z.string().regex(/^[a-f0-9]{12}$/).nullable(),
+    rollbackOwnerFingerprint: z.string().regex(/^[a-f0-9]{12}$/).nullable(),
+    action: ProviderWriteActionSchema,
+    riskLevel: z.literal("low"),
+    status: ProviderWriteExecutionAttemptStatusSchema,
+    networkExecution: z.literal("not_started"),
+    providerMutationExecuted: z.literal(false),
+    customerVisibleMessageSent: z.literal(false),
+    payloadEscrowOpened: z.literal(false),
+    providerPayloadStored: z.literal(false),
+    providerResponseStored: z.literal(false),
+    policyReason: ProviderWriteLivePilotRunLedgerDraftPolicyReasonSchema.nullable(),
+    createdAt: z.string(),
+    completedAt: z.string(),
+  })
+  .strict();
+
+export const ProviderWriteLivePilotRunLedgerDraftSchema = z
+  .object({
+    schemaVersion: z.literal(
+      "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+    ),
+    generatedAt: z.string(),
+    target: z
+      .object({
+        tenantFingerprint: z.string().regex(/^[a-f0-9]{12}$/),
+        channel: z.enum(["taobao", "douyin"]),
+        rolloutTrack: z.literal("single_merchant_pilot"),
+        changeTicketFingerprint: z.string().regex(/^[a-f0-9]{12}$/).nullable(),
+      })
+      .strict(),
+    launchWindow: z
+      .object({
+        startsAt: z.string(),
+        endsAt: z.string(),
+        closedAt: z.string(),
+        durationMinutes: z.number().int().min(15).max(120),
+        freezeWindowActive: z.boolean(),
+      })
+      .strict(),
+    summary: z
+      .object({
+        totalRuns: z.number().int().min(0).max(50),
+        dryRunRecordedRuns: z.number().int().min(0).max(50),
+        blockedRuns: z.number().int().min(0).max(50),
+        failedRuns: z.number().int().min(0).max(50),
+        allRunsReviewed: z.boolean(),
+        failedRunsHaveIncidentNotes: z.boolean(),
+        rollbackActionsVerified: z.literal(false),
+        noAutoCustomerReplies: z.boolean(),
+        readyForSafeLedger: z.literal(false),
+        missingSafeLedgerInputs: z.array(
+          ProviderWriteLivePilotRunLedgerDraftMissingInputSchema,
+        ),
+      })
+      .strict(),
+    runRecords: z
+      .array(ProviderWriteLivePilotRunLedgerDraftRunSchema)
+      .max(50),
+    evidenceReadiness: z
+      .object({
+        draftOnly: z.literal(true),
+        requiresArtifactBindings: z.literal(true),
+        canPassPr69SafeLedger: z.literal(false),
+      })
+      .strict(),
+    safety: z
+      .object({
+        secretsInDraft: z.literal(false),
+        rawTenantIdsInDraft: z.literal(false),
+        customerDataInDraft: z.literal(false),
+        providerPayloadsInDraft: z.literal(false),
+        providerResponsesInDraft: z.literal(false),
+        rawIdempotencyKeysInDraft: z.literal(false),
+        networkExecutedByExporter: z.literal(false),
+        providerWriteExecutedByExporter: z.literal(false),
+        payloadEscrowOpenedByExporter: z.literal(false),
+        credentialsReadByExporter: z.literal(false),
+        customerVisibleActionsSentByExporter: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((draft, ctx) => {
+    const missingInputs = new Set(draft.summary.missingSafeLedgerInputs);
+    for (const requiredInput of [
+      "artifact_bindings",
+      "live_provider_mutation_evidence",
+      "manual_closeout_review",
+    ] as const) {
+      if (!missingInputs.has(requiredInput)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["summary", "missingSafeLedgerInputs"],
+          message: `missingSafeLedgerInputs must include ${requiredInput}`,
+        });
+      }
+    }
+
+    if (draft.runRecords.length === 0 && !missingInputs.has("pilot_run_records")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summary", "missingSafeLedgerInputs"],
+        message: "empty drafts must include pilot_run_records as missing input",
+      });
+    }
+
+    if (draft.summary.totalRuns !== draft.runRecords.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summary", "totalRuns"],
+        message: "totalRuns must match runRecords length",
+      });
+    }
+
+    const dryRunRecordedRuns = draft.runRecords.filter(
+      (run) => run.status === "dry_run_recorded",
+    ).length;
+    if (draft.summary.dryRunRecordedRuns !== dryRunRecordedRuns) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summary", "dryRunRecordedRuns"],
+        message: "dryRunRecordedRuns must match runRecords",
+      });
+    }
+
+    const blockedRuns = draft.runRecords.filter(
+      (run) => run.status === "blocked",
+    ).length;
+    if (draft.summary.blockedRuns !== blockedRuns) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summary", "blockedRuns"],
+        message: "blockedRuns must match runRecords",
+      });
+    }
+
+    const failedRuns = draft.runRecords.filter(
+      (run) => run.status === "failed",
+    ).length;
+    if (draft.summary.failedRuns !== failedRuns) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summary", "failedRuns"],
+        message: "failedRuns must match runRecords",
+      });
+    }
+  });
+
 export const ProviderWriteLiveExecutorMissingGateSchema = z.enum([
   "dry_run_rehearsal_evidence",
   "provider_write_approval_evidence",
@@ -479,6 +649,9 @@ export type ProviderWriteExecutionAttemptResponse = z.infer<
 >;
 export type ProviderWriteExecutionAttemptListItem = z.infer<
   typeof ProviderWriteExecutionAttemptListItemSchema
+>;
+export type ProviderWriteLivePilotRunLedgerDraft = z.infer<
+  typeof ProviderWriteLivePilotRunLedgerDraftSchema
 >;
 export type ProviderWriteLiveExecutorMissingGate = z.infer<
   typeof ProviderWriteLiveExecutorMissingGateSchema

@@ -65,6 +65,7 @@
     "verify:provider-write-live-pilot-preflight:safe": "node scripts/verify-provider-write-live-pilot-preflight.mjs --from-env --require-pass",
     "verify:provider-write-live-pilot-run-ledger": "node scripts/verify-provider-write-live-pilot-run-ledger.mjs",
     "verify:provider-write-live-pilot-run-ledger:safe": "node scripts/verify-provider-write-live-pilot-run-ledger.mjs --from-env --require-pass",
+    "verify:provider-write-live-pilot-run-ledger-draft-export": "node scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

@@ -20,6 +20,7 @@ import {
   GET as getProviderWriteKillSwitchStatus,
   POST as updateProviderWriteKillSwitch,
 } from "./provider-writes/kill-switch/status/route";
+import { GET as getProviderWriteLivePilotRunLedgerDraft } from "./provider-writes/live-pilot-run-ledger/draft/route";
 import { GET as getProviderWriteLiveExecutorStatus } from "./provider-writes/live-executor/status/route";
 import {
   GET as listProviderWriteRequests,
@@ -1969,6 +1970,174 @@ describe("operator BFF routes", () => {
     });
   });
 
+  it("lets admin sessions export sanitized provider write live pilot run ledger drafts through the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let proxiedUrl = "";
+    let proxiedHeaders = new Headers();
+
+    globalThis.fetch = async (input, init) => {
+      proxiedUrl = String(input);
+      proxiedHeaders = new Headers(init?.headers);
+      return Response.json(providerWriteLivePilotRunLedgerDraft());
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const response = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao&from=2026-06-08T00:00:00.000Z&to=2026-06-08T00:30:00.000Z&freezeWindowActive=true&changeTicket=CHG-12345",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(
+      proxiedUrl,
+      "http://api.internal:4100/v2/provider-writes/live-pilot-run-ledger/draft?channel=taobao&from=2026-06-08T00:00:00.000Z&to=2026-06-08T00:30:00.000Z&freezeWindowActive=true&changeTicket=CHG-12345",
+    );
+    assert.strictEqual(proxiedHeaders.get("authorization"), "Bearer admin_api_key");
+    const body = await response.json();
+    assert.strictEqual(
+      body.schemaVersion,
+      "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+    );
+    assert.strictEqual(body.evidenceReadiness.draftOnly, true);
+    assert.strictEqual(body.evidenceReadiness.canPassPr69SafeLedger, false);
+    assert.strictEqual(body.summary.readyForSafeLedger, false);
+    assert.strictEqual(body.safety.networkExecutedByExporter, false);
+    assert.strictEqual(JSON.stringify(body).includes("admin_api_key"), false);
+  });
+
+  it("blocks non-admin sessions from exporting provider write live pilot run ledger drafts in the BFF", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"agent","password":"secret","tenantId":"tenant_1","operatorId":"operator_1","role":"operator","apiKey":"operator_api_key"}]';
+    let fetchCalled = false;
+
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return Response.json(providerWriteLivePilotRunLedgerDraft());
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "agent",
+        password: "secret",
+      }),
+    );
+    const response = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao",
+        {
+          headers: { cookie: loginResponse.headers.get("set-cookie") ?? "" },
+        },
+      ),
+    );
+
+    assert.strictEqual(response.status, 403);
+    assert.deepStrictEqual(await response.json(), {
+      error: "Provider write operations require admin permission",
+    });
+    assert.strictEqual(fetchCalled, false);
+  });
+
+  it("rejects unsafe or pass-shaped provider write live pilot run ledger drafts", async () => {
+    process.env.API_URL = "http://api.internal:4100";
+    process.env.OPERATOR_SESSION_SECRET = "test_secret";
+    process.env.OPERATOR_SESSION_ACCOUNTS =
+      '[{"username":"admin","password":"secret","tenantId":"tenant_1","operatorId":"admin_1","role":"admin","apiKey":"admin_api_key"}]';
+    let responseIndex = 0;
+
+    globalThis.fetch = async () => {
+      responseIndex += 1;
+      if (responseIndex === 1) {
+        return Response.json({
+          ...providerWriteLivePilotRunLedgerDraft(),
+          operatorApiKey: "admin_api_key_must_not_leak",
+          providerPayload: { rawOrderId: "order_1" },
+        });
+      }
+      if (responseIndex === 2) {
+        const rawTenantDraft = providerWriteLivePilotRunLedgerDraft();
+        rawTenantDraft.target.tenantFingerprint = "tenant_1";
+        return Response.json(rawTenantDraft);
+      }
+      if (responseIndex === 3) {
+        const sensitivePolicyReasonDraft = providerWriteLivePilotRunLedgerDraft();
+        return Response.json({
+          ...sensitivePolicyReasonDraft,
+          runRecords: sensitivePolicyReasonDraft.runRecords.map((run) => ({
+            ...run,
+            policyReason: "secret://provider-write-credential-ref",
+          })),
+        });
+      }
+      const passShapedDraft = providerWriteLivePilotRunLedgerDraft();
+      passShapedDraft.summary.readyForSafeLedger = true;
+      passShapedDraft.evidenceReadiness.canPassPr69SafeLedger = true;
+      return Response.json(passShapedDraft);
+    };
+
+    const loginResponse = await loginOperator(
+      jsonRequest("http://localhost/api/operator/login", {
+        username: "admin",
+        password: "secret",
+      }),
+    );
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+    const unsafe = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao",
+        { headers: { cookie } },
+      ),
+    );
+    const rawTenant = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao",
+        { headers: { cookie } },
+      ),
+    );
+    const sensitivePolicyReason = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao",
+        { headers: { cookie } },
+      ),
+    );
+    const passShaped = await getProviderWriteLivePilotRunLedgerDraft(
+      new Request(
+        "http://localhost/api/operator/provider-writes/live-pilot-run-ledger/draft?channel=taobao",
+        { headers: { cookie } },
+      ),
+    );
+
+    assert.strictEqual(unsafe.status, 502);
+    assert.deepStrictEqual(await unsafe.json(), {
+      error: "Provider write live pilot run ledger draft response is invalid",
+    });
+    assert.strictEqual(rawTenant.status, 502);
+    assert.deepStrictEqual(await rawTenant.json(), {
+      error: "Provider write live pilot run ledger draft response is invalid",
+    });
+    assert.strictEqual(sensitivePolicyReason.status, 502);
+    assert.deepStrictEqual(await sensitivePolicyReason.json(), {
+      error: "Provider write live pilot run ledger draft response is invalid",
+    });
+    assert.strictEqual(passShaped.status, 502);
+    assert.deepStrictEqual(await passShaped.json(), {
+      error: "Provider write live pilot run ledger draft response is invalid",
+    });
+  });
+
   it("lets admin sessions read and update provider write kill switch status through the BFF", async () => {
     process.env.API_URL = "http://api.internal:4100";
     process.env.OPERATOR_SESSION_SECRET = "test_secret";
@@ -3067,6 +3236,84 @@ function jsonRequestWithCookie(
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
   });
+}
+
+function providerWriteLivePilotRunLedgerDraft() {
+  return {
+    schemaVersion:
+      "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+    generatedAt: "2026-06-08T00:31:00.000Z",
+    target: {
+      tenantFingerprint: "abcdef123456",
+      channel: "taobao",
+      rolloutTrack: "single_merchant_pilot",
+      changeTicketFingerprint: "123456abcdef",
+    },
+    launchWindow: {
+      startsAt: "2026-06-08T00:00:00.000Z",
+      endsAt: "2026-06-08T00:30:00.000Z",
+      closedAt: "2026-06-08T00:31:00.000Z",
+      durationMinutes: 30,
+      freezeWindowActive: true,
+    },
+    summary: {
+      totalRuns: 1,
+      dryRunRecordedRuns: 1,
+      blockedRuns: 0,
+      failedRuns: 0,
+      allRunsReviewed: true,
+      failedRunsHaveIncidentNotes: true,
+      rollbackActionsVerified: false,
+      noAutoCustomerReplies: true,
+      readyForSafeLedger: false,
+      missingSafeLedgerInputs: [
+        "artifact_bindings",
+        "live_provider_mutation_evidence",
+        "manual_closeout_review",
+      ],
+    },
+    runRecords: [
+      {
+        runFingerprint:
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        requestFingerprint: "abcdef123456",
+        executionAttemptFingerprint: "123456abcdef",
+        operatorFingerprint: "fedcba654321",
+        reviewerFingerprint: "654321fedcba",
+        rollbackOwnerFingerprint: null,
+        action: "issue_coupon",
+        riskLevel: "low",
+        status: "dry_run_recorded",
+        networkExecution: "not_started",
+        providerMutationExecuted: false,
+        customerVisibleMessageSent: false,
+        payloadEscrowOpened: false,
+        providerPayloadStored: false,
+        providerResponseStored: false,
+        policyReason: null,
+        createdAt: "2026-06-08T00:10:00.000Z",
+        completedAt: "2026-06-08T00:10:03.000Z",
+      },
+    ],
+    evidenceReadiness: {
+      draftOnly: true,
+      requiresArtifactBindings: true,
+      canPassPr69SafeLedger: false,
+    },
+    safety: {
+      secretsInDraft: false,
+      rawTenantIdsInDraft: false,
+      customerDataInDraft: false,
+      providerPayloadsInDraft: false,
+      providerResponsesInDraft: false,
+      rawIdempotencyKeysInDraft: false,
+      networkExecutedByExporter: false,
+      providerWriteExecutedByExporter: false,
+      payloadEscrowOpenedByExporter: false,
+      credentialsReadByExporter: false,
+      customerVisibleActionsSentByExporter: false,
+    },
+  };
 }
 
 function restoreEnv(key: string, value: string | undefined) {

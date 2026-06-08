@@ -10,6 +10,7 @@ import type {
   IntegrationStatus,
   ProviderReadRequest,
   ProviderWriteKillSwitchUpdateRequest,
+  ProviderWriteLivePilotRunLedgerDraft,
   ProviderWriteRequest,
 } from "@smart-cs-agent/shared";
 import { ProviderAdapterRegistry } from "../adapters/provider-adapter-registry.service";
@@ -405,6 +406,174 @@ describe("OpsController", () => {
       () =>
         controller.listProviderWriteExecutionAttempts(
           {},
+          { authorization: "Bearer operator_key_123" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof ForbiddenException);
+        assert.strictEqual(error.getStatus(), 403);
+        return true;
+      },
+    );
+  });
+
+  it("lets admin operators export provider write live pilot run ledger drafts", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    let capturedInput:
+      | {
+          tenantId: string;
+          channel: string;
+          from: Date;
+          to: Date;
+          freezeWindowActive: boolean;
+          changeTicket?: string;
+        }
+      | undefined;
+    const draft: ProviderWriteLivePilotRunLedgerDraft = {
+      schemaVersion:
+        "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+      generatedAt: "2026-06-08T11:15:00.000Z",
+      target: {
+        tenantFingerprint: "abcdef123456",
+        channel: "taobao",
+        rolloutTrack: "single_merchant_pilot",
+        changeTicketFingerprint: "123456abcdef",
+      },
+      launchWindow: {
+        startsAt: "2026-06-08T10:00:00.000Z",
+        endsAt: "2026-06-08T11:00:00.000Z",
+        closedAt: "2026-06-08T11:15:00.000Z",
+        durationMinutes: 60,
+        freezeWindowActive: true,
+      },
+      summary: {
+        totalRuns: 0,
+        dryRunRecordedRuns: 0,
+        blockedRuns: 0,
+        failedRuns: 0,
+        allRunsReviewed: true,
+        failedRunsHaveIncidentNotes: true,
+        rollbackActionsVerified: false,
+        noAutoCustomerReplies: true,
+        readyForSafeLedger: false,
+        missingSafeLedgerInputs: [
+          "pilot_run_records",
+          "artifact_bindings",
+          "live_provider_mutation_evidence",
+          "manual_closeout_review",
+        ],
+      },
+      runRecords: [],
+      evidenceReadiness: {
+        draftOnly: true,
+        requiresArtifactBindings: true,
+        canPassPr69SafeLedger: false,
+      },
+      safety: {
+        secretsInDraft: false,
+        rawTenantIdsInDraft: false,
+        customerDataInDraft: false,
+        providerPayloadsInDraft: false,
+        providerResponsesInDraft: false,
+        rawIdempotencyKeysInDraft: false,
+        networkExecutedByExporter: false,
+        providerWriteExecutedByExporter: false,
+        payloadEscrowOpenedByExporter: false,
+        credentialsReadByExporter: false,
+        customerVisibleActionsSentByExporter: false,
+      },
+    };
+    const controller = new OpsController({
+      getProviderWriteLivePilotRunLedgerDraft: (input: typeof capturedInput) => {
+        capturedInput = input;
+        return draft;
+      },
+    } as unknown as OpsService);
+
+    const response = await controller.getProviderWriteLivePilotRunLedgerDraft(
+      {
+        channel: "taobao",
+        from: "2026-06-08T10:00:00.000Z",
+        to: "2026-06-08T11:00:00.000Z",
+        freezeWindowActive: "true",
+        changeTicket: "chg-20260608-live-pilot",
+      },
+      { authorization: "Bearer admin_key_123" },
+    );
+
+    assert.strictEqual(capturedInput?.tenantId, "tenant_1");
+    assert.strictEqual(capturedInput?.channel, "taobao");
+    assert.strictEqual(
+      capturedInput?.from.toISOString(),
+      "2026-06-08T10:00:00.000Z",
+    );
+    assert.strictEqual(
+      capturedInput?.to.toISOString(),
+      "2026-06-08T11:00:00.000Z",
+    );
+    assert.strictEqual(capturedInput?.freezeWindowActive, true);
+    assert.strictEqual(capturedInput?.changeTicket, "chg-20260608-live-pilot");
+    assert.strictEqual(response.schemaVersion, draft.schemaVersion);
+  });
+
+  it("rejects invalid provider write live pilot run ledger draft windows", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "admin_key_123",
+        tenantId: "tenant_1",
+        operatorId: "admin_1",
+        role: "admin",
+      },
+    ]);
+    const controller = new OpsController({
+      getProviderWriteLivePilotRunLedgerDraft: () => {
+        throw new Error("must not export invalid live pilot ledger windows");
+      },
+    } as unknown as OpsService);
+
+    await assert.rejects(
+      () =>
+        controller.getProviderWriteLivePilotRunLedgerDraft(
+          {
+            channel: "taobao",
+            from: "2026-06-08T10:00:00.000Z",
+            to: "2026-06-08T13:00:00.000Z",
+          },
+          { authorization: "Bearer admin_key_123" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof BadRequestException);
+        assert.strictEqual(error.getStatus(), 400);
+        return true;
+      },
+    );
+  });
+
+  it("rejects non-admin provider write live pilot run ledger draft export", async () => {
+    process.env.OPERATOR_API_KEYS = JSON.stringify([
+      {
+        key: "operator_key_123",
+        tenantId: "tenant_1",
+        operatorId: "operator_1",
+        role: "operator",
+      },
+    ]);
+    const controller = new OpsController({
+      getProviderWriteLivePilotRunLedgerDraft: () => {
+        throw new Error("must not export provider write live pilot ledger drafts");
+      },
+    } as unknown as OpsService);
+
+    await assert.rejects(
+      () =>
+        controller.getProviderWriteLivePilotRunLedgerDraft(
+          { channel: "taobao" },
           { authorization: "Bearer operator_key_123" },
         ),
       (error: unknown) => {

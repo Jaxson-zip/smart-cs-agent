@@ -40,17 +40,17 @@ const content = Object.fromEntries(
 const serviceListSlice = sliceBetween(
   content.opsService,
   "async listProviderWriteExecutionAttempts",
-  "ingestMessage()",
+  "async getProviderWriteLivePilotRunLedgerDraft",
 );
 const serviceMapperSlice = sliceBetween(
   content.opsService,
   "function toSanitizedProviderWriteExecutionAttempt",
-  "function sanitizeLookupKeys",
+  "function emptyProviderWriteLivePilotRunLedgerDraft",
 );
 const sharedListSchemaSlice = sliceBetween(
   content.sharedContracts,
   "export const ProviderWriteExecutionAttemptListItemSchema",
-  "export const CompensationDeclinedRequestSchema",
+  "export const ProviderWriteLivePilotRunLedgerDraftMissingInputSchema",
 );
 
 mustContainAll("package scripts", content.packageJson, [

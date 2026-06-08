@@ -70,6 +70,8 @@ const files = {
     "scripts/verify-provider-write-live-pilot-preflight.mjs",
   providerWriteLivePilotRunLedgerVerifier:
     "scripts/verify-provider-write-live-pilot-run-ledger.mjs",
+  providerWriteLivePilotRunLedgerDraftExportVerifier:
+    "scripts/verify-provider-write-live-pilot-run-ledger-draft-export.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -152,6 +154,7 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-live-pilot-preflight:safe",
   "verify:provider-write-live-pilot-run-ledger",
   "verify:provider-write-live-pilot-run-ledger:safe",
+  "verify:provider-write-live-pilot-run-ledger-draft-export",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -229,6 +232,7 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-live-pilot-preflight",
   "npm run verify:provider-write-live-pilot-preflight:safe",
   "npm run verify:provider-write-live-pilot-run-ledger",
+  "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -605,6 +609,11 @@ mustContainAll("production readiness references provider write live pilot run le
   "npm run verify:provider-write-live-pilot-run-ledger",
   "npm run verify:provider-write-live-pilot-run-ledger:safe",
 ]);
+mustContainAll("production readiness references provider write live pilot run ledger draft export", content.productionReadiness, [
+  "PR70 Provider Write Live Pilot Run Ledger Draft Export",
+  "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+  "readyForSafeLedger=false",
+]);
 
 mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
   "PR64 Provider Write Live Executor Startup Guard",
@@ -738,6 +747,10 @@ mustContainAll("task plan references PR69", content.taskPlan, [
   "PR69 - Provider Write Live Pilot Run Ledger Gate",
   "verify:provider-write-live-pilot-run-ledger",
 ]);
+mustContainAll("task plan references PR70", content.taskPlan, [
+  "PR70 - Provider Write Live Pilot Run Ledger Draft Export",
+  "verify:provider-write-live-pilot-run-ledger-draft-export",
+]);
 
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
@@ -751,6 +764,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-payload-escrow-boundary",
   "verify:provider-write-live-pilot-preflight",
   "verify:provider-write-live-pilot-run-ledger",
+  "verify:provider-write-live-pilot-run-ledger-draft-export",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -843,6 +857,17 @@ mustContainAll("provider write live pilot run ledger verifier source", content.p
   "networkExecutedByVerifier",
   "providerWriteExecutedByVerifier",
   "customerVisibleActionsSentByVerifier",
+]);
+mustContainAll("provider write live pilot run ledger draft export verifier source", content.providerWriteLivePilotRunLedgerDraftExportVerifier, [
+  "verify:provider-write-live-pilot-run-ledger-draft-export",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+  "provider write live pilot run ledger draft export",
+  "draftOnly: z.literal(true)",
+  "readyForSafeLedger: z.literal(false)",
+  "canPassPr69SafeLedger: z.literal(false)",
+  "networkExecutedByExporter: z.literal(false)",
+  "providerWriteExecutedByExporter: z.literal(false)",
+  "customerVisibleActionsSentByExporter: z.literal(false)",
 ]);
 mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
   "verify:provider-write-live-executor-startup-guard",
@@ -1162,6 +1187,18 @@ mustContainAll("provider write live pilot run ledger docs", content.providerWrit
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write live pilot run ledger draft export docs", content.providerWriteLivePilotRunLedger, [
+  "PR70 Provider Write Live Pilot Run Ledger Draft Export",
+  "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+  "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+  "GET /v2/provider-writes/live-pilot-run-ledger/draft",
+  "GET /api/operator/provider-writes/live-pilot-run-ledger/draft",
+  "draftOnly=true",
+  "readyForSafeLedger=false",
+  "canPassPr69SafeLedger=false",
+  "does not call provider APIs",
+  "does not execute provider writes",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1224,6 +1261,11 @@ mustContainAll("provider write live pilot run ledger docs reference", content.pr
   "npm run verify:provider-write-live-pilot-run-ledger",
   "smart-cs-agent.provider-write-live-pilot-run-ledger.v1",
 ]);
+mustContainAll("provider write live pilot run ledger draft export docs reference", content.providerWriteRequests, [
+  "PR70 Provider Write Live Pilot Run Ledger Draft Export",
+  "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
+  "ProviderWriteLivePilotRunLedgerDraftSchema",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -1250,6 +1292,7 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /v2/provider-writes/requests/:id/reject",
   "POST /v2/provider-writes/requests/:id/execution-attempts",
   "GET /v2/provider-writes/execution-attempts",
+  "GET /v2/provider-writes/live-pilot-run-ledger/draft",
   "GET /v2/provider-writes/live-executor/status",
   "GET /v2/provider-writes/kill-switch/status",
   "POST /v2/provider-writes/kill-switch/status",
@@ -1259,12 +1302,14 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "POST /api/operator/provider-writes/requests/:id/reject",
   "POST /api/operator/provider-writes/requests/:id/execution-attempts",
   "GET /api/operator/provider-writes/execution-attempts",
+  "GET /api/operator/provider-writes/live-pilot-run-ledger/draft",
   "GET /api/operator/provider-writes/live-executor/status",
   "GET /api/operator/provider-writes/kill-switch/status",
   "POST /api/operator/provider-writes/kill-switch/status",
   "ProviderWriteRequest",
   "ProviderWriteExecutionAttempt",
   "ProviderWriteExecutionAttemptListItem",
+  "ProviderWriteLivePilotRunLedgerDraftSchema",
   "ProviderWriteLiveExecutorStatusSchema",
   "ProviderWriteKillSwitchStatusSchema",
   "idempotencyKeyHash",
@@ -1272,6 +1317,7 @@ mustContainAll("public API provider write routes", content.publicApiSurface, [
   "providerMutationExecuted=false",
   "customerVisibleMessageSent=false",
   "networkExecution=not_started",
+  "canPassPr69SafeLedger=false",
 ]);
 mustContainAll("production static CI workflow", content.productionStaticCiWorkflow, [
   "permissions:",
@@ -1294,6 +1340,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-kill-switch-rehearsal",
   "npm run verify:provider-write-live-pilot-preflight",
   "npm run verify:provider-write-live-pilot-run-ledger",
+  "npm run verify:provider-write-live-pilot-run-ledger-draft-export",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",

@@ -1,5 +1,6 @@
 import assert from "node:assert";
 import { createHash } from "node:crypto";
+import { BadRequestException } from "@nestjs/common";
 import { afterEach, describe, it } from "node:test";
 import {
   CommerceActionSchema,
@@ -11,6 +12,7 @@ import {
   ProviderWriteExecutionAttemptResponseSchema,
   ProviderWriteKillSwitchStatusSchema,
   ProviderWriteKillSwitchUpdateRequestSchema,
+  ProviderWriteLivePilotRunLedgerDraftSchema,
   ProviderWriteLiveExecutorStatusSchema,
   ProviderWriteRequestSchema,
   ProviderWriteRejectionRequestSchema,
@@ -1764,6 +1766,290 @@ describe("OpsService provider adapter contract", () => {
       ),
       false,
     );
+  });
+
+  it("exports a sanitized provider write live pilot run ledger draft", async () => {
+    const persistence = createProviderOperationPersistence();
+    persistence.seedWriteRequest({
+      id: "provider_write_request_1",
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "approved",
+      requestHash: testSha256("request_1"),
+      reviewFingerprint: testSha256("review_1"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_1",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_1",
+      operatorId: "admin_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "dry_run_recorded",
+      idempotencyKeyHash: testSha256("secret_idem_1"),
+      requestHash: testSha256("attempt_request_1"),
+      attemptFingerprint: testSha256("attempt_1"),
+      policyReason: null,
+      createdAt: new Date("2026-06-08T10:15:00.000Z"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_other_tenant",
+      tenantId: "tenant_2",
+      providerWriteRequestId: "provider_write_request_2",
+      operatorId: "admin_2",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "blocked",
+      idempotencyKeyHash: testSha256("secret_idem_2"),
+      requestHash: testSha256("attempt_request_2"),
+      attemptFingerprint: testSha256("attempt_2"),
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-08T10:20:00.000Z"),
+    });
+    const adapter = new PoisonTaobaoAdapter();
+    const service = new OpsService(
+      new ProviderAdapterRegistry(adapter),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const draft = await service.getProviderWriteLivePilotRunLedgerDraft({
+      tenantId: "tenant_1",
+      channel: "taobao",
+      from: new Date("2026-06-08T10:00:00.000Z"),
+      to: new Date("2026-06-08T11:00:00.000Z"),
+      now: new Date("2026-06-08T11:15:00.000Z"),
+      freezeWindowActive: true,
+      changeTicket: "chg-20260608-live-pilot",
+    });
+
+    ProviderWriteLivePilotRunLedgerDraftSchema.parse(draft);
+    assert.strictEqual(
+      draft.schemaVersion,
+      "smart-cs-agent.provider-write-live-pilot-run-ledger-draft.v1",
+    );
+    assert.strictEqual(draft.target.channel, "taobao");
+    assert.match(draft.target.tenantFingerprint, /^[a-f0-9]{12}$/);
+    assert.match(draft.target.changeTicketFingerprint ?? "", /^[a-f0-9]{12}$/);
+    assert.strictEqual(draft.summary.totalRuns, 1);
+    assert.strictEqual(draft.summary.dryRunRecordedRuns, 1);
+    assert.strictEqual(draft.summary.readyForSafeLedger, false);
+    assert.deepStrictEqual(draft.summary.missingSafeLedgerInputs, [
+      "artifact_bindings",
+      "live_provider_mutation_evidence",
+      "manual_closeout_review",
+    ]);
+    assert.strictEqual(draft.runRecords.length, 1);
+    assert.strictEqual(draft.runRecords[0].riskLevel, "low");
+    assert.strictEqual(draft.runRecords[0].status, "dry_run_recorded");
+    assert.strictEqual(draft.runRecords[0].networkExecution, "not_started");
+    assert.strictEqual(draft.runRecords[0].providerMutationExecuted, false);
+    assert.strictEqual(draft.runRecords[0].customerVisibleMessageSent, false);
+    assert.strictEqual(draft.runRecords[0].payloadEscrowOpened, false);
+    assert.match(draft.runRecords[0].runFingerprint, /^[a-f0-9]{64}$/);
+    assert.match(draft.runRecords[0].requestFingerprint, /^[a-f0-9]{12}$/);
+    assert.match(
+      draft.runRecords[0].executionAttemptFingerprint,
+      /^[a-f0-9]{12}$/,
+    );
+    assert.match(draft.runRecords[0].operatorFingerprint ?? "", /^[a-f0-9]{12}$/);
+    assert.match(draft.runRecords[0].reviewerFingerprint ?? "", /^[a-f0-9]{12}$/);
+    assert.strictEqual(draft.evidenceReadiness.draftOnly, true);
+    assert.strictEqual(draft.evidenceReadiness.canPassPr69SafeLedger, false);
+    assert.strictEqual(draft.safety.networkExecutedByExporter, false);
+    assert.strictEqual(draft.safety.providerWriteExecutedByExporter, false);
+    assert.strictEqual(adapter.writeCallCount, 0);
+    const serialized = JSON.stringify(draft);
+    assert.strictEqual(serialized.includes("tenant_1"), false);
+    assert.strictEqual(serialized.includes("provider_write_request_1"), false);
+    assert.strictEqual(serialized.includes("secret_idem_1"), false);
+    assert.strictEqual(serialized.includes("secret_idem_2"), false);
+    assert.strictEqual(serialized.includes("tenant_2"), false);
+
+    const missingLiveEvidence = structuredClone(draft);
+    missingLiveEvidence.summary.missingSafeLedgerInputs = ["artifact_bindings"];
+    assert.throws(() =>
+      ProviderWriteLivePilotRunLedgerDraftSchema.parse(missingLiveEvidence),
+    );
+
+    const unsafePolicyReason = structuredClone(draft);
+    (unsafePolicyReason.runRecords[0] as { policyReason: unknown }).policyReason =
+      "customer mentioned raw order order_123";
+    assert.throws(() =>
+      ProviderWriteLivePilotRunLedgerDraftSchema.parse(unsafePolicyReason),
+    );
+
+    const emptyWithoutPilotRecords = structuredClone(draft);
+    emptyWithoutPilotRecords.summary.totalRuns = 0;
+    emptyWithoutPilotRecords.summary.dryRunRecordedRuns = 0;
+    emptyWithoutPilotRecords.runRecords = [];
+    emptyWithoutPilotRecords.summary.missingSafeLedgerInputs = [
+      "artifact_bindings",
+      "live_provider_mutation_evidence",
+      "manual_closeout_review",
+    ];
+    assert.throws(() =>
+      ProviderWriteLivePilotRunLedgerDraftSchema.parse(emptyWithoutPilotRecords),
+    );
+  });
+
+  it("keeps provider write live pilot run ledger drafts inside the requested channel and window", async () => {
+    const persistence = createProviderOperationPersistence();
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_inside",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_1",
+      operatorId: "admin_1",
+      channel: "taobao",
+      action: "modify_address",
+      status: "blocked",
+      idempotencyKeyHash: testSha256("inside"),
+      requestHash: testSha256("inside_request"),
+      attemptFingerprint: testSha256("inside_attempt"),
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-08T10:30:00.000Z"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_before_window",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_2",
+      operatorId: "admin_1",
+      channel: "taobao",
+      action: "modify_address",
+      status: "blocked",
+      idempotencyKeyHash: testSha256("before"),
+      requestHash: testSha256("before_request"),
+      attemptFingerprint: testSha256("before_attempt"),
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-08T09:30:00.000Z"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_other_channel",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_3",
+      operatorId: "admin_1",
+      channel: "douyin",
+      action: "modify_address",
+      status: "blocked",
+      idempotencyKeyHash: testSha256("other_channel"),
+      requestHash: testSha256("other_channel_request"),
+      attemptFingerprint: testSha256("other_channel_attempt"),
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-08T10:40:00.000Z"),
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const draft = await service.getProviderWriteLivePilotRunLedgerDraft({
+      tenantId: "tenant_1",
+      channel: "taobao",
+      from: new Date("2026-06-08T10:00:00.000Z"),
+      to: new Date("2026-06-08T11:00:00.000Z"),
+      now: new Date("2026-06-08T11:15:00.000Z"),
+      freezeWindowActive: true,
+    });
+
+    assert.strictEqual(draft.summary.totalRuns, 1);
+    assert.strictEqual(draft.summary.blockedRuns, 1);
+    assert.strictEqual(draft.runRecords[0].createdAt, "2026-06-08T10:30:00.000Z");
+    const serialized = JSON.stringify(draft);
+    assert.strictEqual(serialized.includes("attempt_before_window"), false);
+    assert.strictEqual(serialized.includes("attempt_other_channel"), false);
+  });
+
+  it("fails closed instead of truncating provider write live pilot run ledger drafts", async () => {
+    const persistence = createProviderOperationPersistence();
+    for (let index = 0; index < 51; index += 1) {
+      persistence.seedWriteExecutionAttempt({
+        id: `attempt_${index}`,
+        tenantId: "tenant_1",
+        providerWriteRequestId: `provider_write_request_${index}`,
+        operatorId: "admin_1",
+        channel: "taobao",
+        action: "issue_coupon",
+        status: "blocked",
+        idempotencyKeyHash: testSha256(`idempotency_${index}`),
+        requestHash: testSha256(`request_${index}`),
+        attemptFingerprint: testSha256(`attempt_${index}`),
+        policyReason: "execution_kill_switch_enabled",
+        createdAt: new Date(`2026-06-08T10:${String(index).padStart(2, "0")}:00.000Z`),
+      });
+    }
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    await assert.rejects(
+      () =>
+        service.getProviderWriteLivePilotRunLedgerDraft({
+          tenantId: "tenant_1",
+          channel: "taobao",
+          from: new Date("2026-06-08T10:00:00.000Z"),
+          to: new Date("2026-06-08T11:00:00.000Z"),
+          now: new Date("2026-06-08T11:15:00.000Z"),
+          freezeWindowActive: true,
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof BadRequestException);
+        assert.strictEqual(error.getStatus(), 400);
+        return true;
+      },
+    );
+  });
+
+  it("does not import review metadata from provider write requests in another channel", async () => {
+    const persistence = createProviderOperationPersistence();
+    persistence.seedWriteRequest({
+      id: "provider_write_request_cross_channel",
+      tenantId: "tenant_1",
+      operatorId: "operator_1",
+      caseId: "case_1",
+      channel: "douyin",
+      action: "issue_coupon",
+      status: "approved",
+      requestHash: testSha256("request_cross_channel"),
+      reviewFingerprint: testSha256("review_cross_channel"),
+    });
+    persistence.seedWriteExecutionAttempt({
+      id: "attempt_cross_channel",
+      tenantId: "tenant_1",
+      providerWriteRequestId: "provider_write_request_cross_channel",
+      operatorId: "admin_1",
+      channel: "taobao",
+      action: "issue_coupon",
+      status: "blocked",
+      idempotencyKeyHash: testSha256("cross_channel"),
+      requestHash: testSha256("cross_channel_request"),
+      attemptFingerprint: testSha256("cross_channel_attempt"),
+      policyReason: "execution_kill_switch_enabled",
+      createdAt: new Date("2026-06-08T10:30:00.000Z"),
+    });
+    const service = new OpsService(
+      new ProviderAdapterRegistry(),
+      persistence.prisma,
+      persistence.audit,
+    );
+
+    const draft = await service.getProviderWriteLivePilotRunLedgerDraft({
+      tenantId: "tenant_1",
+      channel: "taobao",
+      from: new Date("2026-06-08T10:00:00.000Z"),
+      to: new Date("2026-06-08T11:00:00.000Z"),
+      now: new Date("2026-06-08T11:15:00.000Z"),
+      freezeWindowActive: true,
+    });
+
+    assert.strictEqual(draft.summary.totalRuns, 1);
+    assert.strictEqual(draft.summary.allRunsReviewed, false);
+    assert.strictEqual(draft.runRecords[0].reviewerFingerprint, null);
   });
 
   it("blocks provider reads unless real readonly credentials are configured", async () => {
@@ -3538,8 +3824,13 @@ type ProviderWriteRequestWhere = {
 
 type ProviderWriteExecutionAttemptWhere = {
   tenantId?: string;
+  channel?: string;
   status?: string;
   providerWriteRequestId?: string;
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
 };
 
 function filterWriteRequests(
@@ -3561,11 +3852,18 @@ function filterWriteExecutionAttempts(
 ) {
   return attempts.filter((attempt) => {
     if (where?.tenantId && attempt.tenantId !== where.tenantId) return false;
+    if (where?.channel && attempt.channel !== where.channel) return false;
     if (where?.status && attempt.status !== where.status) return false;
     if (
       where?.providerWriteRequestId &&
       attempt.providerWriteRequestId !== where.providerWriteRequestId
     ) {
+      return false;
+    }
+    if (where?.createdAt?.gte && attempt.createdAt < where.createdAt.gte) {
+      return false;
+    }
+    if (where?.createdAt?.lte && attempt.createdAt > where.createdAt.lte) {
       return false;
     }
     return true;

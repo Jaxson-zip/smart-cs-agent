@@ -59,11 +59,26 @@ const providerWriteExecutionAttemptsQuerySchema = z.object({
   providerWriteRequestId: z.string().min(1).optional(),
 });
 
+const providerWriteLivePilotRunLedgerDraftQuerySchema = z.object({
+  channel: z.enum(["taobao", "douyin"]),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  freezeWindowActive: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  changeTicket: z.string().min(3).max(100).optional(),
+});
+
 const providerReadSummaryQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
 });
 const PROVIDER_READ_SUMMARY_WINDOW_MS = 24 * 60 * 60_000;
+const PROVIDER_WRITE_LIVE_PILOT_LEDGER_WINDOW_MINUTES = {
+  min: 15,
+  max: 120,
+} as const;
 
 @Controller("v2")
 export class OpsController {
@@ -156,6 +171,48 @@ export class OpsController {
       limit: parsed.data.limit,
       status: parsed.data.status,
       providerWriteRequestId: parsed.data.providerWriteRequestId,
+    });
+  }
+
+  @Get("provider-writes/live-pilot-run-ledger/draft")
+  async getProviderWriteLivePilotRunLedgerDraft(
+    @Query() query: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const context = requireRequestContext(headers);
+    requireProviderWriteAdminAccess(context);
+    const parsed = providerWriteLivePilotRunLedgerDraftQuerySchema.safeParse(
+      query ?? {},
+    );
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.format());
+    }
+
+    const to = parsed.data.to ? new Date(parsed.data.to) : new Date();
+    const from = parsed.data.from
+      ? new Date(parsed.data.from)
+      : new Date(
+          to.getTime() -
+            PROVIDER_WRITE_LIVE_PILOT_LEDGER_WINDOW_MINUTES.min * 60_000,
+        );
+    const durationMinutes = (to.getTime() - from.getTime()) / 60_000;
+    if (
+      from > to ||
+      durationMinutes < PROVIDER_WRITE_LIVE_PILOT_LEDGER_WINDOW_MINUTES.min ||
+      durationMinutes > PROVIDER_WRITE_LIVE_PILOT_LEDGER_WINDOW_MINUTES.max
+    ) {
+      throw new BadRequestException(
+        "Provider write live pilot run ledger draft window is invalid",
+      );
+    }
+
+    return this.opsService.getProviderWriteLivePilotRunLedgerDraft({
+      tenantId: context.tenantId,
+      channel: parsed.data.channel,
+      from,
+      to,
+      freezeWindowActive: parsed.data.freezeWindowActive,
+      changeTicket: parsed.data.changeTicket,
     });
   }
 

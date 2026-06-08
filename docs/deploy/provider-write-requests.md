@@ -2,6 +2,21 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR70 Provider Write Live Pilot Run Ledger Draft Export
+
+PR70 adds `ProviderWriteLivePilotRunLedgerDraftSchema` and admin-only draft export routes for release owners assembling post-window provider write evidence:
+
+- `GET /v2/provider-writes/live-pilot-run-ledger/draft`
+- `GET /api/operator/provider-writes/live-pilot-run-ledger/draft`
+
+Run:
+
+```bash
+npm run verify:provider-write-live-pilot-run-ledger-draft-export
+```
+
+The draft is deliberately not a safe ledger. It must keep `draftOnly=true`, `readyForSafeLedger=false`, and `canPassPr69SafeLedger=false`, and it must continue to list missing `artifact_bindings` and `live_provider_mutation_evidence` until a release owner builds a separate PR69 evidence package. The exporter reads existing sanitized request/attempt facts only; it does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store provider payloads/responses, expose raw tenant/order/logistics/address/idempotency/customer fields, or send customer-visible replies.
+
 ## PR69 Provider Write Live Pilot Run Ledger Gate
 
 PR69 adds the sanitized closeout ledger required after a first real provider write pilot window. The `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` package proves which low-risk pilot runs happened, whether they succeeded, failed, rolled back, or were blocked, and whether every run was reviewed against audit evidence without storing raw provider/customer data.
