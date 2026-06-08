@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR69 Provider Write Live Pilot Run Ledger Gate
+
+PR69 adds the sanitized closeout ledger required after a first real provider write pilot window. The `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` package proves which low-risk pilot runs happened, whether they succeeded, failed, rolled back, or were blocked, and whether every run was reviewed against audit evidence without storing raw provider/customer data.
+
+Run:
+
+```bash
+npm run verify:provider-write-live-pilot-run-ledger
+```
+
+Use `npm run verify:provider-write-live-pilot-run-ledger:safe` with `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_FILE` and `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_RUN_LEDGER_REQUIRE_PASS=true` after release owners export sanitized pilot closeout evidence under `provider-write-live-pilot-run-ledger-artifacts/`. See `docs/deploy/provider-write-live-pilot-run-ledger.md`.
+
+This verifier checks run-ledger evidence shape, safe artifact paths, count consistency, low-risk first-pilot action limits, post-pilot review controls, rollback evidence, artifact bindings, docs, static CI wiring, and production launch references. It does not call provider APIs, execute provider writes, read credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR68 Provider Write Live Pilot Preflight Gate
 
 PR68 adds the final sanitized preflight gate before any first real provider write pilot launch window may enable a live executor. The `smart-cs-agent.provider-write-live-pilot-preflight.v1` package proves that the pilot is single merchant, single channel, low risk, bounded, operator-watched, rollback-ready, observable, and bound to prior dry-run rehearsal, kill-switch rehearsal, provider write approval, live executor guard, control-plane, and production launch evidence.

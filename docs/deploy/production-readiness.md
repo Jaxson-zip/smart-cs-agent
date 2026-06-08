@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR69 Provider Write Live Pilot Run Ledger Gate
+
+Provider write live pilot run ledger evidence is now checked by:
+
+```bash
+npm run verify:provider-write-live-pilot-run-ledger
+npm run verify:provider-write-live-pilot-run-ledger:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` package under `provider-write-live-pilot-run-ledger-artifacts/` after a first live provider write pilot window closes. It requires a bounded `single_merchant_pilot`, at least one run record, low-risk first-pilot actions only, run timestamps inside the declared pilot window, consistent succeeded/failed/rolled-back/blocked counts, all-runs-reviewed proof, failed-run incident proof, rollback verification proof for any failed provider mutation, no automatic customer replies, audit export binding, and artifact hash bindings to preflight, approval, control-plane, and production launch evidence. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR68 Provider Write Live Pilot Preflight Gate
 
 Provider write live pilot preflight evidence is now checked by:

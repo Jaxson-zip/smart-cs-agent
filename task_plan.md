@@ -2,11 +2,32 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR68 - Provider Write Live Pilot Preflight Gate
+## Current Stage: PR69 - Provider Write Live Pilot Run Ledger Gate
 
-Status: verified locally and committed. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: verified locally and ready for local commit. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR67 - Provider Write Kill Switch Rehearsal Evidence Gate was verified locally and committed as `8dfb169`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR68 - Provider Write Live Pilot Preflight Gate was verified locally and committed as `490b41f`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR69 adds a sanitized provider write live pilot run ledger gate. Release owners can validate `smart-cs-agent.provider-write-live-pilot-run-ledger.v1` packages under `provider-write-live-pilot-run-ledger-artifacts/` after a bounded first real provider write pilot window closes. PR69 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR69 Scope
+
+- Add `npm run verify:provider-write-live-pilot-run-ledger` and `npm run verify:provider-write-live-pilot-run-ledger:safe`.
+- Validate optional sanitized post-window run ledger evidence under `provider-write-live-pilot-run-ledger-artifacts/`.
+- Require single merchant, single channel, low-risk first-pilot action scope, bounded launch window, closed pilot window, consistent succeeded/failed/rolled-back/blocked totals, all-runs-reviewed proof, failed-run incident proof, rollback verification proof, no automatic customer replies, audit binding, artifact hash bindings, and sanitized run records only.
+- Connect PR69 to provider write docs, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR69 evidence-only/no-network: no verifier-side provider API calls, no verifier-side provider writes, no provider credentials, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR69
+
+- Live Taobao/Douyin provider write clients.
+- Enabling or implementing `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Creating provider write requests, approvals, or execution attempts from the verifier.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting, opening, or decrypting sealed payload escrow bodies.
+- Real refunds, address changes, coupons, logistics edits, or customer-visible replies.
+- Expanding beyond `single_merchant_pilot`.
+- Production canary coverage for provider write execution.
 
 PR68 adds a sanitized provider write live pilot preflight evidence gate. Release owners can validate `smart-cs-agent.provider-write-live-pilot-preflight.v1` packages under `provider-write-live-pilot-preflight-artifacts/` before any launch window enables a first real provider write pilot. PR68 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
@@ -336,10 +357,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR66 - Provider Write Kill Switch Control Plane.
 - [x] PR67 - Provider Write Kill Switch Rehearsal Evidence Gate.
 - [x] PR68 - Provider Write Live Pilot Preflight Gate.
+- [x] PR69 - Provider Write Live Pilot Run Ledger Gate.
 
 ## Verification Gate
 
-PR68 provider write live pilot preflight gate is tracked against this gate inventory:
+PR69 provider write live pilot run ledger gate is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -429,6 +451,11 @@ PR68 provider write live pilot preflight gate is tracked against this gate inven
 - `node --test scripts/verify-provider-write-live-pilot-preflight.test.mjs`
 - `npm.cmd run verify:provider-write-live-pilot-preflight`
 - `npm.cmd run verify:provider-write-live-pilot-preflight:safe`
+- `node --check scripts/verify-provider-write-live-pilot-run-ledger.mjs`
+- `node --check scripts/verify-provider-write-live-pilot-run-ledger.test.mjs`
+- `node --test scripts/verify-provider-write-live-pilot-run-ledger.test.mjs`
+- `npm.cmd run verify:provider-write-live-pilot-run-ledger`
+- `npm.cmd run verify:provider-write-live-pilot-run-ledger:safe`
 - `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
 - `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-startup-guard`
@@ -478,6 +505,19 @@ PR68 provider write live pilot preflight gate is tracked against this gate inven
 - `git diff --check` exited 0 with CRLF warnings only.
 - Read-only verifier review found no blocking issues. Its optional schema-consistency finding was fixed by requiring `providerWriteKillSwitchControlPlaneSha256` alongside the kill-switch control-plane pass boolean.
 - PR68 remains evidence-only/no-network: no provider API calls, no provider writes, no credential material reads, no payload escrow opening/decrypting, no raw provider/customer payload storage, no raw idempotency-key output, and no customer-visible replies have been enabled.
+
+### PR69 Final Verification Notes
+
+- `node --check scripts/verify-provider-write-live-pilot-run-ledger.mjs`, `node --check scripts/verify-provider-write-live-pilot-run-ledger.test.mjs`, and `node --check scripts/verify-production-launch.mjs` passed.
+- `node --test scripts/verify-provider-write-live-pilot-run-ledger.test.mjs` passed with 13 tests, including safe evidence acceptance, safe-mode missing-evidence failure, empty-ledger rejection, launch-window timestamp rejection, and failed-provider-mutation rollback-proof rejection.
+- `npm.cmd run verify:provider-write-live-pilot-run-ledger`, `npm.cmd run verify:production-static-ci`, and `npm.cmd run verify:production-launch` passed.
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 211 tests.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 80 tests.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 167 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only PR69 review found three safe-ledger semantics gaps; all were fixed by requiring at least one run record when ledger evidence is required, requiring run timestamps inside the pilot window, and requiring rollback verification for failed provider mutations.
+- PR69 remains post-window evidence-only/no-network: the verifier may attest sanitized facts from an approved bounded pilot, but it does not call provider APIs, execute provider writes, read credential material, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
 ### PR67 Final Verification Notes
 
