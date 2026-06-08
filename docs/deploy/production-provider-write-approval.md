@@ -26,6 +26,8 @@ Before the approval package is accepted, run `npm run verify:provider-write-dry-
 
 Before the approval package is accepted, also run `npm run verify:provider-write-kill-switch-rehearsal:safe` with `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_FILE` pointing at a file under `provider-write-kill-switch-rehearsal-artifacts/` and `SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true`. The approval package binds that emergency-stop rehearsal through `providerWriteKillSwitchSha256`.
 
+Before a launch window enables a live provider write pilot, run `npm run verify:provider-write-live-pilot-preflight:safe` with `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_FILE` pointing at a file under `provider-write-live-pilot-preflight-artifacts/` and `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_REQUIRE_PASS=true`. The live pilot preflight package binds this approval through `productionProviderWriteApprovalSha256` and proves operator watch, rollback, observability, and bounded first-pilot scope for that launch window.
+
 ## Required Evidence Shape
 
 The provider write approval package should include:

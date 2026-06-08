@@ -19,6 +19,8 @@ const files = {
     "docs/deploy/provider-write-dry-run-rehearsal.md",
   providerWriteKillSwitchRehearsal:
     "docs/deploy/provider-write-kill-switch-rehearsal.md",
+  providerWriteLivePilotPreflight:
+    "docs/deploy/provider-write-live-pilot-preflight.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -62,6 +64,8 @@ const files = {
     "scripts/verify-provider-write-dry-run-rehearsal.mjs",
   providerWriteKillSwitchRehearsalVerifier:
     "scripts/verify-provider-write-kill-switch-rehearsal.mjs",
+  providerWriteLivePilotPreflightVerifier:
+    "scripts/verify-provider-write-live-pilot-preflight.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -140,6 +144,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-dry-run-rehearsal:safe",
   "verify:provider-write-kill-switch-rehearsal",
   "verify:provider-write-kill-switch-rehearsal:safe",
+  "verify:provider-write-live-pilot-preflight",
+  "verify:provider-write-live-pilot-preflight:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -214,6 +220,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-dry-run-rehearsal:safe",
   "npm run verify:provider-write-kill-switch-rehearsal",
   "npm run verify:provider-write-kill-switch-rehearsal:safe",
+  "npm run verify:provider-write-live-pilot-preflight",
+  "npm run verify:provider-write-live-pilot-preflight:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -276,6 +284,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_KILL_SWITCH_REHEARSAL_REQUIRE_PASS=true",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_FILE",
   "SMARTCS_PRODUCTION_PROVIDER_WRITE_APPROVAL_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_FILE",
+  "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -289,6 +299,7 @@ mustContainInOrder(
     "npm run verify:provider-write-dry-run-rehearsal:safe",
     "npm run verify:provider-write-kill-switch-rehearsal:safe",
     "npm run verify:production-provider-write-approval:safe",
+    "npm run verify:provider-write-live-pilot-preflight:safe",
   ],
 );
 
@@ -574,6 +585,12 @@ mustContainAll("production readiness references provider write kill-switch rehea
   "npm run verify:provider-write-kill-switch-rehearsal:safe",
 ]);
 
+mustContainAll("production readiness references provider write live pilot preflight", content.productionReadiness, [
+  "PR68 Provider Write Live Pilot Preflight Gate",
+  "npm run verify:provider-write-live-pilot-preflight",
+  "npm run verify:provider-write-live-pilot-preflight:safe",
+]);
+
 mustContainAll("production readiness references provider write live executor startup guard", content.productionReadiness, [
   "PR64 Provider Write Live Executor Startup Guard",
   "npm run verify:provider-write-live-executor-startup-guard",
@@ -697,6 +714,11 @@ mustContainAll("task plan references PR63", content.taskPlan, [
   "verify:provider-write-dry-run-rehearsal",
 ]);
 
+mustContainAll("task plan references PR68", content.taskPlan, [
+  "PR68 - Provider Write Live Pilot Preflight Gate",
+  "verify:provider-write-live-pilot-preflight",
+]);
+
 mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:production-readiness",
   "verify:production-canary",
@@ -707,6 +729,7 @@ mustContainAll("cross-verifier references", content.launchRunbook, [
   "verify:provider-write-execution-attempts",
   "verify:provider-write-execution-attempt-visibility",
   "verify:provider-write-payload-escrow-boundary",
+  "verify:provider-write-live-pilot-preflight",
   "verify:production-deploy-artifacts",
   "verify:production-image-builds",
   "verify:production-container-smoke",
@@ -776,6 +799,17 @@ mustContainAll("provider write kill-switch rehearsal verifier source", content.p
   "providerMutationExecuted",
   "customerVisibleMessageSent",
   "payloadEscrowOpened",
+]);
+mustContainAll("provider write live pilot preflight verifier source", content.providerWriteLivePilotPreflightVerifier, [
+  "verify:provider-write-live-pilot-preflight",
+  "provider-write-live-pilot-preflight-artifacts",
+  "smart-cs-agent.provider-write-live-pilot-preflight.v1",
+  "provider write live pilot preflight",
+  "single_merchant_pilot",
+  "liveExecutorEnabledAtVerification",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "customerVisibleActionsSentByVerifier",
 ]);
 mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
   "verify:provider-write-live-executor-startup-guard",
@@ -1069,6 +1103,19 @@ mustContainAll("provider write kill-switch rehearsal docs", content.providerWrit
   "does not call provider APIs",
   "does not execute provider writes",
 ]);
+mustContainAll("provider write live pilot preflight docs", content.providerWriteLivePilotPreflight, [
+  "PR68 Provider Write Live Pilot Preflight Gate",
+  "npm run verify:provider-write-live-pilot-preflight",
+  "npm run verify:provider-write-live-pilot-preflight:safe",
+  "smart-cs-agent.provider-write-live-pilot-preflight.v1",
+  "SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_FILE",
+  "single_merchant_pilot",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1120,6 +1167,11 @@ mustContainAll("provider write kill-switch rehearsal docs reference", content.pr
   "PR67 Provider Write Kill Switch Rehearsal Evidence Gate",
   "npm run verify:provider-write-kill-switch-rehearsal",
   "smart-cs-agent.provider-write-kill-switch-rehearsal.v1",
+]);
+mustContainAll("provider write live pilot preflight docs reference", content.providerWriteRequests, [
+  "PR68 Provider Write Live Pilot Preflight Gate",
+  "npm run verify:provider-write-live-pilot-preflight",
+  "smart-cs-agent.provider-write-live-pilot-preflight.v1",
 ]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
@@ -1189,6 +1241,7 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
   "npm run verify:provider-write-kill-switch-rehearsal",
+  "npm run verify:provider-write-live-pilot-preflight",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -1228,6 +1281,7 @@ mustNotContainUnsafeExamples({
   productionProviderWriteApproval: content.productionProviderWriteApproval,
   providerWriteDryRunRehearsal: content.providerWriteDryRunRehearsal,
   providerWriteKillSwitchRehearsal: content.providerWriteKillSwitchRehearsal,
+  providerWriteLivePilotPreflight: content.providerWriteLivePilotPreflight,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,

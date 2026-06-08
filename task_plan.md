@@ -2,11 +2,31 @@
 
 Goal: move smart-cs-agent from V1.2 sandbox proof toward a deployable commercial service through small, verifiable production-readiness slices.
 
-## Current Stage: PR67 - Provider Write Kill Switch Rehearsal Evidence Gate
+## Current Stage: PR68 - Provider Write Live Pilot Preflight Gate
 
-Status: verified locally; commit pending. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
+Status: verified locally and committed. Remote push remains blocked until GitHub OAuth has `workflow` scope because PR55 added `.github/workflows/production-static-gates.yml`.
 
-Previous Stage: PR66 - Provider Write Kill Switch Control Plane was verified locally and committed as `60f10bb`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+Previous Stage: PR67 - Provider Write Kill Switch Rehearsal Evidence Gate was verified locally and committed as `8dfb169`. Remote push is still waiting for GitHub `workflow` scope authorization because PR55 added `.github/workflows/production-static-gates.yml`.
+
+PR68 adds a sanitized provider write live pilot preflight evidence gate. Release owners can validate `smart-cs-agent.provider-write-live-pilot-preflight.v1` packages under `provider-write-live-pilot-preflight-artifacts/` before any launch window enables a first real provider write pilot. PR68 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
+### PR68 Scope
+
+- Add `npm run verify:provider-write-live-pilot-preflight` and `npm run verify:provider-write-live-pilot-preflight:safe`.
+- Validate optional sanitized live pilot preflight evidence under `provider-write-live-pilot-preflight-artifacts/`.
+- Require single merchant, single channel, low-risk first-pilot action scope, live executor disabled at verification, bounded write limits, human confirmation, idempotency, audit, sealed-metadata-only readiness, no provider mutation during verification, operator coverage, rollback readiness, observability, launch freeze, and artifact hash bindings.
+- Connect PR68 to provider write docs, production provider write approval, production readiness, production launch, static CI, task tracking, and progress notes.
+- Keep PR68 evidence-only/no-network: no provider API calls, no provider credentials, no provider writes, no payload escrow opening, no customer-visible replies, no automatic commerce actions, no raw idempotency keys, and no raw tenant/customer/provider data.
+
+### Out Of Scope For PR68
+
+- Live Taobao/Douyin provider write clients.
+- Enabling `PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED`.
+- Creating provider write requests or execution attempts from the verifier.
+- Reading production databases, operator API keys, provider credentials, vaults, or secret managers.
+- Persisting or decrypting sealed payload escrow bodies.
+- Real address changes, coupons, refunds, logistics edits, or customer-visible replies.
+- Production canary coverage for provider write execution.
 
 PR67 adds a sanitized provider write kill-switch rehearsal evidence gate. Release owners can validate `smart-cs-agent.provider-write-kill-switch-rehearsal.v1` packages under `provider-write-kill-switch-rehearsal-artifacts/` before any real provider write pilot approval can be accepted. PR67 must not call provider APIs, execute provider writes, read credential material, open or decrypt payload escrow, expose credential refs, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
@@ -315,10 +335,11 @@ PR60 adds a no-network provider write execution-attempt safety layer on top of a
 - [x] PR65 - Provider Write Live Executor Control Plane.
 - [x] PR66 - Provider Write Kill Switch Control Plane.
 - [x] PR67 - Provider Write Kill Switch Rehearsal Evidence Gate.
+- [x] PR68 - Provider Write Live Pilot Preflight Gate.
 
 ## Verification Gate
 
-PR67 provider write kill switch rehearsal evidence gate is tracked against this gate inventory:
+PR68 provider write live pilot preflight gate is tracked against this gate inventory:
 
 - `npm.cmd run db:generate`
 - `npm.cmd run db:migrate:deploy`
@@ -403,6 +424,11 @@ PR67 provider write kill switch rehearsal evidence gate is tracked against this 
 - `node --test scripts/verify-provider-write-kill-switch-rehearsal.test.mjs`
 - `npm.cmd run verify:provider-write-kill-switch-rehearsal`
 - `npm.cmd run verify:provider-write-kill-switch-rehearsal:safe`
+- `node --check scripts/verify-provider-write-live-pilot-preflight.mjs`
+- `node --check scripts/verify-provider-write-live-pilot-preflight.test.mjs`
+- `node --test scripts/verify-provider-write-live-pilot-preflight.test.mjs`
+- `npm.cmd run verify:provider-write-live-pilot-preflight`
+- `npm.cmd run verify:provider-write-live-pilot-preflight:safe`
 - `node --check scripts/verify-provider-write-live-executor-startup-guard.mjs`
 - `node --test scripts/verify-provider-write-live-executor-startup-guard.test.mjs`
 - `npm.cmd run verify:provider-write-live-executor-startup-guard`
@@ -440,6 +466,18 @@ PR67 provider write kill switch rehearsal evidence gate is tracked against this 
 - `npm.cmd run verify:operator-bootstrap`
 - Config gate check: `loadApiConfig()` rejects production real-channel intake when secrets, `REAL_CHANNEL_WEBHOOK_ALLOWLIST`, positive rate limit, explicit freshness window, or queue thresholds are missing, and accepts it only when all gates are configured.
 - Production readiness verifier check: a dangerous production env file fails, a fully configured production env file with `REAL_CHANNEL_WEBHOOK_ALLOWLIST` passes with `--require-real-channel`, and the script does not print secret values.
+
+### PR68 Final Verification Notes
+
+- `npm.cmd run test --workspace @smart-cs-agent/api` passed with 211 tests when rerun alone from the repository cwd, avoiding the known broad parallel sandbox cwd false failure mode.
+- `npm.cmd run test --workspace @smart-cs-agent/web` passed with 80 tests.
+- `node --check scripts/verify-provider-write-live-pilot-preflight.mjs`, `node --check scripts/verify-provider-write-live-pilot-preflight.test.mjs`, `node --test scripts/verify-provider-write-live-pilot-preflight.test.mjs`, and `npm.cmd run verify:provider-write-live-pilot-preflight` passed. The PR68 verifier tests passed with 12 tests after adding explicit `providerWriteKillSwitchControlPlaneSha256` artifact binding coverage.
+- `npm.cmd run verify:production-static-ci`, `npm.cmd run verify:production-launch`, and `node --test scripts/verify-production-launch.test.mjs` passed.
+- `npm.cmd run typecheck --workspaces --if-present -- --pretty false`, `npm.cmd run lint --workspaces --if-present -- --max-warnings=0`, and `npm.cmd run build --workspaces --if-present` passed.
+- `node --test scripts\*.test.mjs` passed with 154 pass / 1 skipped. The skipped case is the existing Windows symlink-permission test.
+- `git diff --check` exited 0 with CRLF warnings only.
+- Read-only verifier review found no blocking issues. Its optional schema-consistency finding was fixed by requiring `providerWriteKillSwitchControlPlaneSha256` alongside the kill-switch control-plane pass boolean.
+- PR68 remains evidence-only/no-network: no provider API calls, no provider writes, no credential material reads, no payload escrow opening/decrypting, no raw provider/customer payload storage, no raw idempotency-key output, and no customer-visible replies have been enabled.
 
 ### PR67 Final Verification Notes
 

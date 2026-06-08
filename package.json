@@ -61,6 +61,8 @@
     "verify:provider-write-kill-switch-control-plane": "node scripts/verify-provider-write-kill-switch-control-plane.mjs",
     "verify:provider-write-kill-switch-rehearsal": "node scripts/verify-provider-write-kill-switch-rehearsal.mjs",
     "verify:provider-write-kill-switch-rehearsal:safe": "node scripts/verify-provider-write-kill-switch-rehearsal.mjs --from-env --require-pass",
+    "verify:provider-write-live-pilot-preflight": "node scripts/verify-provider-write-live-pilot-preflight.mjs",
+    "verify:provider-write-live-pilot-preflight:safe": "node scripts/verify-provider-write-live-pilot-preflight.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

@@ -20,6 +20,7 @@ production-branch-protection-artifacts/
 production-provider-write-approval-artifacts/
 provider-write-dry-run-rehearsal-artifacts/
 provider-write-kill-switch-rehearsal-artifacts/
+provider-write-live-pilot-preflight-artifacts/
 launch-manifest-artifacts/
 
 # next.js

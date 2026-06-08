@@ -1,5 +1,16 @@
 # Production-Readiness Baseline
 
+## PR68 Provider Write Live Pilot Preflight Gate
+
+Provider write live pilot preflight evidence is now checked by:
+
+```bash
+npm run verify:provider-write-live-pilot-preflight
+npm run verify:provider-write-live-pilot-preflight:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-live-pilot-preflight.v1` package under `provider-write-live-pilot-preflight-artifacts/` before a launch window may enable a first real provider write pilot. The first pilot must stay `single_merchant_pilot`, single channel, low risk, limited to first-pilot actions, watched by operators for at least 60 minutes, bound to prior dry-run rehearsal, kill-switch rehearsal, production provider write approval, live executor guard, control-plane, and production launch evidence. It still does not call provider APIs, execute provider writes, read provider credentials, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR67 Provider Write Kill Switch Rehearsal Evidence Gate
 
 Provider write kill-switch rehearsal evidence is now checked by:

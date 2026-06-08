@@ -73,6 +73,7 @@ jobs:
           node --test scripts/verify-provider-write-live-executor-control-plane.test.mjs
           node --test scripts/verify-provider-write-kill-switch-control-plane.test.mjs
           node --test scripts/verify-provider-write-kill-switch-rehearsal.test.mjs
+          node --test scripts/verify-provider-write-live-pilot-preflight.test.mjs
 
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present -- --pretty false
@@ -120,6 +121,7 @@ jobs:
           npm run verify:provider-write-live-executor-control-plane
           npm run verify:provider-write-kill-switch-control-plane
           npm run verify:provider-write-kill-switch-rehearsal
+          npm run verify:provider-write-live-pilot-preflight
           npm run verify:provider-credential-boundary
           npm run verify:provider-credential-store
           npm run verify:provider-read-harness

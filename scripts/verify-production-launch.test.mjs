@@ -18,6 +18,7 @@ test("production launch gate enforces provider write rehearsals before approval 
       "npm run verify:provider-write-dry-run-rehearsal:safe",
       "npm run verify:provider-write-kill-switch-rehearsal:safe",
       "npm run verify:production-provider-write-approval:safe",
+      "npm run verify:provider-write-live-pilot-preflight:safe",
     ],
     "launch runbook preflight commands",
   );
@@ -32,6 +33,7 @@ test("production launch gate enforces provider write rehearsals before approval 
       "npm run verify:provider-write-dry-run-rehearsal:safe",
       "npm run verify:provider-write-kill-switch-rehearsal:safe",
       "npm run verify:production-provider-write-approval:safe",
+      "npm run verify:provider-write-live-pilot-preflight:safe",
     ],
     "production launch verifier source",
   );

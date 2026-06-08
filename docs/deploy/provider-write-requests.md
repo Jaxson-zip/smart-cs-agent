@@ -2,6 +2,20 @@
 
 This stage adds the internal queue boundary for future human-reviewed provider writes. It still does not call provider APIs, does not execute provider writes, does not read provider credentials, does not store provider payloads, and does not send customer-visible replies.
 
+## PR68 Provider Write Live Pilot Preflight Gate
+
+PR68 adds the final sanitized preflight gate before any first real provider write pilot launch window may enable a live executor. The `smart-cs-agent.provider-write-live-pilot-preflight.v1` package proves that the pilot is single merchant, single channel, low risk, bounded, operator-watched, rollback-ready, observable, and bound to prior dry-run rehearsal, kill-switch rehearsal, provider write approval, live executor guard, control-plane, and production launch evidence.
+
+Run:
+
+```bash
+npm run verify:provider-write-live-pilot-preflight
+```
+
+Use `npm run verify:provider-write-live-pilot-preflight:safe` with `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_FILE` and `SMARTCS_PROVIDER_WRITE_LIVE_PILOT_PREFLIGHT_REQUIRE_PASS=true` after release owners export sanitized preflight evidence under `provider-write-live-pilot-preflight-artifacts/`. See `docs/deploy/provider-write-live-pilot-preflight.md`.
+
+This verifier checks evidence shape, safe artifact paths, first-pilot action/risk limits, runtime controls, operator coverage, rollback, observability, artifact bindings, docs, static CI wiring, and production launch ordering. It does not call provider APIs, execute provider writes, read credentials, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR67 Provider Write Kill Switch Rehearsal Evidence Gate
 
 PR67 adds a sanitized evidence gate for rehearsing provider write emergency stop behavior before any real provider write pilot approval can be accepted. The `smart-cs-agent.provider-write-kill-switch-rehearsal.v1` package proves that admins can engage the emergency stop, that execution attempts fail closed with `policyReason=emergency_stop_engaged`, and that releasing the persisted emergency stop does not enable real provider writes.
