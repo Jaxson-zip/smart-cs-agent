@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR78 Provider Write Graduated Rollout Preflight Gate
+
+Provider write graduated rollout preflight is now checked by:
+
+```bash
+npm run verify:provider-write-graduated-rollout-preflight
+npm run verify:provider-write-graduated-rollout-preflight:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-graduated-rollout-preflight.v1` launch-window package under `provider-write-graduated-rollout-preflight-artifacts/` plus the PR77 approval package under `provider-write-graduated-rollout-approval-artifacts/`, the PR76 closeout review package under `provider-write-controlled-expansion-closeout-review-artifacts/`, and the PR75 run ledger package under `provider-write-controlled-expansion-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteGraduatedRolloutApprovalSha256`, requires `providerWriteGraduatedRolloutApprovalVerifierPassed=true`, rechecks the PR76/PR75 binding chain, requires `rolloutTrack=graduated_multi_merchant`, bounded merchant/action/write/coupon scope, `freezeWindowActive=true`, `automaticNextWaveEnabled=false`, `manualApprovalBeforeNextWave=true`, rollback and rejected-compensation stops, commercial readiness, distinct operations owners, and `noAutomaticCustomerVisibleReplies=true`.
+
+The gate remains preflight-only. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR77 Provider Write Graduated Rollout Approval Gate
 
 Provider write graduated rollout approval is now checked by:

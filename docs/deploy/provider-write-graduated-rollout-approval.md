@@ -67,3 +67,7 @@ npm run verify:provider-write-graduated-rollout-approval:safe
 ```
 
 Passing PR77 still requires a separate future launch-window preflight before any real graduated rollout window can proceed.
+
+## PR78 Follow-On
+
+PR78 Provider Write Graduated Rollout Preflight Gate follows this approval gate. Run `verify:provider-write-graduated-rollout-preflight` with sanitized `smart-cs-agent.provider-write-graduated-rollout-preflight.v1` evidence that binds `providerWriteGraduatedRolloutApprovalSha256` to the PR77 approval file before any concrete `graduated_multi_merchant` launch window is considered ready.
