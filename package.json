@@ -82,6 +82,8 @@
     "verify:provider-write-graduated-rollout-approval:safe": "node scripts/verify-provider-write-graduated-rollout-approval.mjs --from-env --require-pass",
     "verify:provider-write-graduated-rollout-preflight": "node scripts/verify-provider-write-graduated-rollout-preflight.mjs",
     "verify:provider-write-graduated-rollout-preflight:safe": "node scripts/verify-provider-write-graduated-rollout-preflight.mjs --from-env --require-pass",
+    "verify:provider-write-graduated-rollout-run-ledger": "node scripts/verify-provider-write-graduated-rollout-run-ledger.mjs",
+    "verify:provider-write-graduated-rollout-run-ledger:safe": "node scripts/verify-provider-write-graduated-rollout-run-ledger.mjs --from-env --require-pass",
     "verify:provider-credential-boundary": "node scripts/verify-provider-credential-boundary.mjs",
     "verify:provider-credential-store": "node scripts/verify-provider-credential-store.mjs",
     "verify:provider-read-harness": "node scripts/verify-provider-read-harness.mjs",

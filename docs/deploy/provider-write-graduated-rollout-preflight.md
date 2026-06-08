@@ -69,3 +69,5 @@ npm run verify:provider-write-graduated-rollout-preflight:safe
 ```
 
 Passing PR78 is still not a global launch. Each future launch window must provide its own sanitized evidence and must keep provider writes disabled until the live executor is explicitly enabled through the existing guarded control plane.
+
+PR79 Provider Write Graduated Rollout Run Ledger Gate follows this preflight after the selected window closes. It uses `verify:provider-write-graduated-rollout-run-ledger` and recomputes `providerWriteGraduatedRolloutPreflightSha256` before accepting post-window run evidence.

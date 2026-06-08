@@ -16,6 +16,20 @@ Use `npm run verify:provider-write-graduated-rollout-preflight:safe` with `SMART
 
 This verifier recomputes `providerWriteGraduatedRolloutApprovalSha256`, rechecks PR77's `providerWriteControlledExpansionCloseoutReviewSha256`, rechecks PR76's `providerWriteControlledExpansionRunLedgerSha256`, keeps the launch scope inside the approved merchant/action/write/coupon limits, requires `freezeWindowActive=true`, `automaticNextWaveEnabled=false`, `manualApprovalBeforeNextWave=true`, rollback and rejected-compensation stops, and `noAutomaticCustomerVisibleReplies=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
 
+## PR79 Provider Write Graduated Rollout Run Ledger Gate
+
+PR79 adds the post-window run ledger gate after PR78 graduated rollout preflight. It validates whether a completed `graduated_multi_merchant` window stayed inside the approved scope using a sanitized `smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1` package, the PR78 preflight file, the PR77 approval file, the PR76 closeout review file, and the PR75 run ledger file.
+
+Run:
+
+```bash
+npm run verify:provider-write-graduated-rollout-run-ledger
+```
+
+Use `npm run verify:provider-write-graduated-rollout-run-ledger:safe` with `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_REQUIRE_PASS=true` after release owners export sanitized evidence under `provider-write-graduated-rollout-run-ledger-artifacts/`, `provider-write-graduated-rollout-preflight-artifacts/`, `provider-write-graduated-rollout-approval-artifacts/`, `provider-write-controlled-expansion-closeout-review-artifacts/`, and `provider-write-controlled-expansion-run-ledger-artifacts/`. See `docs/deploy/provider-write-graduated-rollout-run-ledger.md`.
+
+This verifier recomputes `providerWriteGraduatedRolloutPreflightSha256`, checks `providerWriteGraduatedRolloutPreflightVerifierPassed=true`, rechecks `providerWriteGraduatedRolloutApprovalSha256`, `providerWriteControlledExpansionCloseoutReviewSha256`, and `providerWriteControlledExpansionRunLedgerSha256`, validates run totals and per-run scope, and requires `customerComplaintsStoppedRollout=true`, `compensationRejectionsStoppedRollout=true`, `merchantNotificationCompleted=true`, `billingImpactReviewed=true`, `supportSlaMaintained=true`, and `noAutoCustomerReplies=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open/decrypt payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR77 Provider Write Graduated Rollout Approval Gate
 
 PR77 adds the approval-only gate after PR76 controlled expansion closeout review. It validates whether release owners may consider a bounded transition to `graduated_multi_merchant` using a sanitized `smart-cs-agent.provider-write-graduated-rollout-approval.v1` package, the PR76 closeout review file, and the PR75 run ledger file.

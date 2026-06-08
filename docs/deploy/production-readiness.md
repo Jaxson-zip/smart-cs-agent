@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR79 Provider Write Graduated Rollout Run Ledger Gate
+
+Provider write graduated rollout run ledger is now checked by:
+
+```bash
+npm run verify:provider-write-graduated-rollout-run-ledger
+npm run verify:provider-write-graduated-rollout-run-ledger:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1` post-window package under `provider-write-graduated-rollout-run-ledger-artifacts/` plus the PR78 preflight package under `provider-write-graduated-rollout-preflight-artifacts/`, the PR77 approval package under `provider-write-graduated-rollout-approval-artifacts/`, the PR76 closeout review package under `provider-write-controlled-expansion-closeout-review-artifacts/`, and the PR75 run ledger package under `provider-write-controlled-expansion-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteGraduatedRolloutPreflightSha256`, requires `providerWriteGraduatedRolloutPreflightVerifierPassed=true`, rechecks the PR77/PR76/PR75 binding chain, requires `rolloutTrack=graduated_multi_merchant`, bounded merchant/action/write/coupon scope, reviewed run totals, failed-run rollback proof, `customerComplaintsStoppedRollout=true`, `compensationRejectionsStoppedRollout=true`, `merchantNotificationCompleted=true`, `billingImpactReviewed=true`, `supportSlaMaintained=true`, and `noAutoCustomerReplies=true`.
+
+The gate remains post-window closeout-only. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, store raw provider/customer payloads, expose raw idempotency keys, or send customer-visible replies.
+
 ## PR78 Provider Write Graduated Rollout Preflight Gate
 
 Provider write graduated rollout preflight is now checked by:
