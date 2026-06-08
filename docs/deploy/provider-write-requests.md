@@ -408,3 +408,15 @@ npm run verify:provider-write-graduated-rollout-closeout-review
 ```
 
 Safe mode validates sanitized `smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1` evidence and binds `providerWriteGraduatedRolloutRunLedgerSha256` to the PR79 run ledger through `SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_RUN_LEDGER_FILE`. Passing PR80 means the review decision is `approved_for_general_availability_review`; it still does not execute provider writes, enable automatic customer-visible replies, or approve general availability by itself.
+
+## PR81 Provider Write General Availability Approval Gate
+
+PR81 adds the approval-only gate after PR80. Run:
+
+```bash
+npm run verify:provider-write-general-availability-approval
+```
+
+Use `npm run verify:provider-write-general-availability-approval:safe` with `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_FILE`, `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE`, `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_RUN_LEDGER_FILE`, and `SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_REQUIRE_PASS=true` after release owners export sanitized `smart-cs-agent.provider-write-general-availability-approval.v1` evidence under `provider-write-general-availability-approval-artifacts/`.
+
+This verifier recomputes `providerWriteGraduatedRolloutCloseoutReviewSha256`, rechecks the PR80 closeout review's `providerWriteGraduatedRolloutRunLedgerSha256`, and confirms the intended transition into `general_availability` remains manually controlled. It requires `automaticActivationEnabled=false`, `manualMerchantActivationRequired=true`, `manualApprovalBeforeMerchantActivation=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, or send customer-visible replies.

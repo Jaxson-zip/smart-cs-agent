@@ -86,6 +86,7 @@ jobs:
           node --test scripts/verify-provider-write-graduated-rollout-preflight.test.mjs
           node --test scripts/verify-provider-write-graduated-rollout-run-ledger.test.mjs
           node --test scripts/verify-provider-write-graduated-rollout-closeout-review.test.mjs
+          node --test scripts/verify-provider-write-general-availability-approval.test.mjs
 
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present -- --pretty false
@@ -146,6 +147,7 @@ jobs:
           npm run verify:provider-write-graduated-rollout-preflight
           npm run verify:provider-write-graduated-rollout-run-ledger
           npm run verify:provider-write-graduated-rollout-closeout-review
+          npm run verify:provider-write-general-availability-approval
           npm run verify:provider-credential-boundary
           npm run verify:provider-credential-store
           npm run verify:provider-read-harness

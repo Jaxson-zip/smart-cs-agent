@@ -65,3 +65,14 @@ npm run verify:provider-write-graduated-rollout-closeout-review:safe
 ```
 
 Passing PR80 does not open general availability by itself. It only proves the graduated rollout closeout is clean enough for a separate general availability approval gate.
+
+## PR81 Follow-On
+
+PR81 Provider Write General Availability Approval Gate consumes this PR80 closeout review through `providerWriteGraduatedRolloutCloseoutReviewSha256` before any `general_availability` approval package can pass:
+
+```bash
+npm run verify:provider-write-general-availability-approval
+npm run verify:provider-write-general-availability-approval:safe
+```
+
+PR81 still requires a separate sanitized approval file and rechecks this closeout review's PR79 run-ledger binding. Passing PR80 is therefore only an input to PR81, not an automatic GA launch.

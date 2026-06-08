@@ -33,6 +33,7 @@ provider-write-graduated-rollout-approval-artifacts/
 provider-write-graduated-rollout-preflight-artifacts/
 provider-write-graduated-rollout-run-ledger-artifacts/
 provider-write-graduated-rollout-closeout-review-artifacts/
+provider-write-general-availability-approval-artifacts/
 launch-manifest-artifacts/
 
 # next.js

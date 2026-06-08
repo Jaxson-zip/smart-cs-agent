@@ -1,5 +1,20 @@
 # Production-Readiness Baseline
 
+## PR81 Provider Write General Availability Approval Gate
+
+Provider write general availability approval is now checked by:
+
+```bash
+npm run verify:provider-write-general-availability-approval
+npm run verify:provider-write-general-availability-approval:safe
+```
+
+This gate validates a sanitized `smart-cs-agent.provider-write-general-availability-approval.v1` package under `provider-write-general-availability-approval-artifacts/` plus the PR80 closeout review package under `provider-write-graduated-rollout-closeout-review-artifacts/` and the PR79 run ledger package under `provider-write-graduated-rollout-run-ledger-artifacts/`.
+
+The verifier recomputes `providerWriteGraduatedRolloutCloseoutReviewSha256`, rechecks the closeout review's `providerWriteGraduatedRolloutRunLedgerSha256`, requires `fromRolloutTrack=graduated_multi_merchant`, `toRolloutTrack=general_availability`, distinct reviewers, second review, commercial readiness, `automaticActivationEnabled=false`, `manualMerchantActivationRequired=true`, `manualApprovalBeforeMerchantActivation=true`, `noAutomaticCustomerVisibleReplies=true`, and `liveExecutorKillSwitchDefaultOn=true`.
+
+The gate remains approval-only. It does not enable provider writes, call provider APIs, execute provider writes, read provider credentials, read production databases, open payload escrow, activate merchants automatically, open general availability automatically, or send customer-visible replies.
+
 ## PR79 Provider Write Graduated Rollout Run Ledger Gate
 
 Provider write graduated rollout run ledger is now checked by:

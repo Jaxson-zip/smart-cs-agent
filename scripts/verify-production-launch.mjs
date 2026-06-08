@@ -43,6 +43,8 @@ const files = {
     "docs/deploy/provider-write-graduated-rollout-run-ledger.md",
   providerWriteGraduatedRolloutCloseoutReview:
     "docs/deploy/provider-write-graduated-rollout-closeout-review.md",
+  providerWriteGeneralAvailabilityApproval:
+    "docs/deploy/provider-write-general-availability-approval.md",
   providerWriteRequests:
     "docs/deploy/provider-write-requests.md",
   publicApiSurface:
@@ -112,6 +114,8 @@ const files = {
     "scripts/verify-provider-write-graduated-rollout-run-ledger.mjs",
   providerWriteGraduatedRolloutCloseoutReviewVerifier:
     "scripts/verify-provider-write-graduated-rollout-closeout-review.mjs",
+  providerWriteGeneralAvailabilityApprovalVerifier:
+    "scripts/verify-provider-write-general-availability-approval.mjs",
   providerWriteLiveExecutorStartupGuardVerifier:
     "scripts/verify-provider-write-live-executor-startup-guard.mjs",
   providerWriteLiveExecutorControlPlaneVerifier:
@@ -216,6 +220,8 @@ mustContainAll("package scripts", content.packageJson, [
   "verify:provider-write-graduated-rollout-run-ledger:safe",
   "verify:provider-write-graduated-rollout-closeout-review",
   "verify:provider-write-graduated-rollout-closeout-review:safe",
+  "verify:provider-write-general-availability-approval",
+  "verify:provider-write-general-availability-approval:safe",
   "verify:provider-write-live-executor-startup-guard",
   "verify:provider-write-live-executor-control-plane",
   "verify:provider-write-kill-switch-control-plane",
@@ -315,6 +321,8 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "npm run verify:provider-write-graduated-rollout-run-ledger:safe",
   "npm run verify:provider-write-graduated-rollout-closeout-review",
   "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
+  "npm run verify:provider-write-general-availability-approval",
+  "npm run verify:provider-write-general-availability-approval:safe",
   "npm run verify:provider-write-live-executor-startup-guard",
   "npm run verify:provider-write-live-executor-control-plane",
   "npm run verify:provider-write-kill-switch-control-plane",
@@ -426,6 +434,10 @@ mustContainAll("launch runbook preflight", content.launchRunbook, [
   "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_CLOSEOUT_REVIEW_FILE",
   "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_PREFLIGHT_RUN_LEDGER_FILE",
   "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_RUN_LEDGER_REQUIRE_PASS=true",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_REQUIRE_PASS=true",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED=false",
   "PROVIDER_WRITE_DRY_RUN_REHEARSAL_SHA256",
   "PROVIDER_WRITE_APPROVAL_SHA256",
@@ -463,6 +475,8 @@ mustContainInOrder(
     "npm run verify:provider-write-graduated-rollout-run-ledger:safe",
     "npm run verify:provider-write-graduated-rollout-closeout-review",
     "npm run verify:provider-write-graduated-rollout-closeout-review:safe",
+    "npm run verify:provider-write-general-availability-approval",
+    "npm run verify:provider-write-general-availability-approval:safe",
   ],
 );
 
@@ -769,6 +783,14 @@ mustContainAll("production readiness references provider write graduated rollout
   "graduated_multi_merchant",
 ]);
 
+mustContainAll("production readiness references provider write general availability approval", content.productionReadiness, [
+  "PR81 Provider Write General Availability Approval Gate",
+  "npm run verify:provider-write-general-availability-approval",
+  "npm run verify:provider-write-general-availability-approval:safe",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "general_availability",
+]);
+
 mustContainAll("production readiness references provider write requests", content.productionReadiness, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -1063,6 +1085,8 @@ mustContainAll("production static CI verifier source", content.productionStaticC
   "npm run verify:provider-write-graduated-rollout-run-ledger",
   "node --test scripts/verify-provider-write-graduated-rollout-closeout-review.test.mjs",
   "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "node --test scripts/verify-provider-write-general-availability-approval.test.mjs",
+  "npm run verify:provider-write-general-availability-approval",
   "workflow must not use secrets context",
   "workflow must not run environment-bound production commands",
 ]);
@@ -1354,6 +1378,29 @@ mustContainAll("provider write graduated rollout closeout review verifier source
   "providerWriteExecutedByVerifier",
   "customerVisibleActionsSentByVerifier",
   "credentialsReadByVerifier",
+]);
+mustContainAll("provider write general availability approval verifier source", content.providerWriteGeneralAvailabilityApprovalVerifier, [
+  "verify:provider-write-general-availability-approval",
+  "provider-write-general-availability-approval-artifacts",
+  "provider-write-graduated-rollout-closeout-review-artifacts",
+  "provider-write-graduated-rollout-run-ledger-artifacts",
+  "smart-cs-agent.provider-write-general-availability-approval.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "graduated_multi_merchant",
+  "general_availability",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "automaticActivationEnabled",
+  "manualMerchantActivationRequired",
+  "manualApprovalBeforeMerchantActivation",
+  "noAutomaticCustomerVisibleReplies",
+  "liveExecutorKillSwitchDefaultOn",
+  "networkExecutedByVerifier",
+  "providerWriteExecutedByVerifier",
+  "payloadEscrowOpenedByVerifier",
+  "credentialsReadByVerifier",
+  "customerVisibleActionsSentByVerifier",
 ]);
 mustContainAll("provider write live executor startup guard verifier source", content.providerWriteLiveExecutorStartupGuardVerifier, [
   "verify:provider-write-live-executor-startup-guard",
@@ -1985,6 +2032,37 @@ mustContainAll("provider write graduated rollout closeout review docs", content.
   "does not open payload escrow",
   "does not send customer-visible replies",
 ]);
+mustContainAll("provider write general availability approval docs", content.providerWriteGeneralAvailabilityApproval, [
+  "PR81 Provider Write General Availability Approval Gate",
+  "npm run verify:provider-write-general-availability-approval",
+  "npm run verify:provider-write-general-availability-approval:safe",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_RUN_LEDGER_FILE",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_REQUIRE_PASS=true",
+  "smart-cs-agent.provider-write-general-availability-approval.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-closeout-review.v1",
+  "smart-cs-agent.provider-write-graduated-rollout-run-ledger.v1",
+  "provider-write-general-availability-approval-artifacts/",
+  "provider-write-graduated-rollout-closeout-review-artifacts/",
+  "provider-write-graduated-rollout-run-ledger-artifacts/",
+  "graduated_multi_merchant",
+  "general_availability",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "providerWriteGraduatedRolloutRunLedgerSha256",
+  "automaticActivationEnabled=false",
+  "manualMerchantActivationRequired=true",
+  "manualApprovalBeforeMerchantActivation=true",
+  "noAutomaticCustomerVisibleReplies=true",
+  "liveExecutorKillSwitchDefaultOn=true",
+  "does not enable provider writes",
+  "does not call provider APIs",
+  "does not execute provider writes",
+  "does not read provider credentials",
+  "does not read production databases",
+  "does not open payload escrow",
+  "does not send customer-visible replies",
+]);
 mustContainAll("provider write requests docs", content.providerWriteRequests, [
   "PR58 Provider Write Request Queue",
   "ProviderWriteRequest",
@@ -2140,6 +2218,14 @@ mustContainAll("provider write graduated rollout closeout review docs reference"
   "approved_for_general_availability_review",
   "SMARTCS_PROVIDER_WRITE_GRADUATED_ROLLOUT_CLOSEOUT_REVIEW_RUN_LEDGER_FILE",
 ]);
+mustContainAll("provider write general availability approval docs reference", content.providerWriteRequests, [
+  "PR81 Provider Write General Availability Approval Gate",
+  "npm run verify:provider-write-general-availability-approval",
+  "smart-cs-agent.provider-write-general-availability-approval.v1",
+  "providerWriteGraduatedRolloutCloseoutReviewSha256",
+  "general_availability",
+  "SMARTCS_PROVIDER_WRITE_GENERAL_AVAILABILITY_APPROVAL_CLOSEOUT_REVIEW_FILE",
+]);
 mustContainAll("provider write live executor startup guard docs reference", content.providerWriteRequests, [
   "PR64 Provider Write Live Executor Startup Guard",
   "PROVIDER_WRITE_LIVE_EXECUTOR_ENABLED",
@@ -2234,6 +2320,8 @@ mustContainAll("production static CI workflow", content.productionStaticCiWorkfl
   "npm run verify:provider-write-graduated-rollout-run-ledger",
   "node --test scripts/verify-provider-write-graduated-rollout-closeout-review.test.mjs",
   "npm run verify:provider-write-graduated-rollout-closeout-review",
+  "node --test scripts/verify-provider-write-general-availability-approval.test.mjs",
+  "npm run verify:provider-write-general-availability-approval",
 ]);
 mustContainAll("api dockerfile source", content.apiDockerfile, [
   "NODE_ENV=production",
@@ -2337,6 +2425,15 @@ mustContainAll("progress tracks provider write graduated rollout closeout review
   "Started PR80 provider write graduated rollout closeout review gate",
 ]);
 
+mustContainAll("task plan tracks provider write general availability approval", content.taskPlan, [
+  "PR81 - Provider Write General Availability Approval Gate",
+  "verify:provider-write-general-availability-approval",
+]);
+
+mustContainAll("progress tracks provider write general availability approval", content.progress, [
+  "Started PR81 provider write general availability approval gate",
+]);
+
 mustNotContainUnsafeExamples({
   launchRunbook: content.launchRunbook,
   productionReadiness: content.productionReadiness,
@@ -2357,6 +2454,7 @@ mustNotContainUnsafeExamples({
   providerWriteGraduatedRolloutPreflight: content.providerWriteGraduatedRolloutPreflight,
   providerWriteGraduatedRolloutRunLedger: content.providerWriteGraduatedRolloutRunLedger,
   providerWriteGraduatedRolloutCloseoutReview: content.providerWriteGraduatedRolloutCloseoutReview,
+  providerWriteGeneralAvailabilityApproval: content.providerWriteGeneralAvailabilityApproval,
   providerWriteRequests: content.providerWriteRequests,
   publicApiSurface: content.publicApiSurface,
   productionStaticCiWorkflow: content.productionStaticCiWorkflow,
